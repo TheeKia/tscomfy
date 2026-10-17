@@ -36,21 +36,42 @@ const ANY: SocketType = { kind: "any" };
 function combo(
   form: "legacy" | "combo",
   options: readonly (string | number | boolean)[],
+  type: SocketType = named("COMBO"),
 ): InputDef {
   return {
     kind: "combo",
     name: "in",
     ...base,
+    type,
+    socketless: false,
     form,
     options,
     multiselect: false,
     upload: false,
     remote: false,
-    socketless: false,
   };
 }
 
 const int: InputDef = { kind: "int", name: "in", ...base, type: named("INT"), socketless: false };
+const value: InputDef = {
+  kind: "value",
+  name: "in",
+  ...base,
+  type: named("COLOR"),
+  socketless: false,
+  widget: "COLOR",
+};
+const dynamicCombo: InputDef = { kind: "dynamicCombo", name: "in", ...base, options: [] };
+const dynamicGroup: InputDef = {
+  kind: "dynamicGroup",
+  name: "in",
+  ...base,
+  fields: [int],
+  min: 0,
+  max: 20,
+};
+const unknownInput: InputDef = { kind: "unknown", name: "in", ...base, spec: null };
+const optionList = (...options: string[]): OutputType => ({ kind: "combo", options });
 
 export const ACCEPTS_CASES: readonly AcceptsCase[] = [
   {
@@ -237,6 +258,84 @@ export const ACCEPTS_CASES: readonly AcceptsCase[] = [
     name: "unknown specs accept nothing",
     input: { kind: "unknown", name: "in", ...base, spec: null },
     output: output(named("IMAGE")),
+    expected: false,
+  },
+  {
+    name: "option list into a socket typed COMBO",
+    input: socket(named("COMBO")),
+    output: output(optionList("a")),
+    expected: true,
+  },
+  {
+    name: "option list into a COMBO widget on another type",
+    input: combo("combo", ["a"], named("INT")),
+    output: output(optionList("a")),
+    expected: false,
+  },
+  {
+    name: "COMBO output into a COMBO widget on another type",
+    input: combo("combo", ["a"], named("INT")),
+    output: output(named("COMBO")),
+    expected: false,
+  },
+  {
+    name: "union output into a legacy combo",
+    input: combo("legacy", ["a"]),
+    output: output(union("COMBO", "STRING")),
+    expected: false,
+  },
+  {
+    name: "a padded * (named *, not any) into a legacy combo",
+    input: combo("legacy", ["a"]),
+    output: output(named("*")),
+    expected: false,
+  },
+  {
+    name: "MatchType output into a legacy combo",
+    input: combo("legacy", ["a"]),
+    output: output(ANY, "t"),
+    expected: true,
+  },
+  {
+    name: "value widget takes its type",
+    input: value,
+    output: output(named("COLOR")),
+    expected: true,
+  },
+  {
+    name: "value widget rejects another type",
+    input: value,
+    output: output(named("STRING")),
+    expected: false,
+  },
+  {
+    name: "dynamic combo takes its own type",
+    input: dynamicCombo,
+    output: output(named("COMFY_DYNAMICCOMBO_V3")),
+    expected: true,
+  },
+  {
+    name: "dynamic combo rejects an option list",
+    input: dynamicCombo,
+    output: output(optionList("a")),
+    expected: false,
+  },
+  {
+    name: "dynamic groups accept nothing",
+    input: dynamicGroup,
+    output: output(ANY),
+    expected: false,
+  },
+  {
+    name: "dynamic groups reject MatchType outputs too",
+    input: dynamicGroup,
+    output: output(ANY, "t"),
+    expected: false,
+  },
+  {
+    name: "unknown specs reject MatchType outputs too",
+    input: unknownInput,
+    output: output(ANY, "t"),
     expected: false,
   },
 ];

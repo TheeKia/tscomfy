@@ -62,8 +62,8 @@ differences in §7.4.
 | D12 | **No CI for now.** `bun run check` is the single local gate | Your request. Adding CI later means running the same script. |
 | D13 | **The generated runtime schema is a `.ts` module holding `JSON.parse("…")`**, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check. The `JSON.parse` module costs 20 MB and 0.02 s, needs no copy step and no `resolveJsonModule`. **[verified]** |
 | D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
-| D15 | **Schema identity.** `Schema.nodes` is sorted by class type (code-unit order). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
-| D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its core widget registry. INT/FLOAT/STRING/BOOLEAN/COMBO get their own kinds; the other core widgets (COLOR, BOUNDING_BOX, CURVE, …) become a `value` kind holding JSON; everything else, `TYPE:name` types included, is a socket. The socket type stays `type` | This is the only rule that matches which inputs get values in exported prompts. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
+| D15 | **Schema identity.** `Schema.nodes` is built in code-unit order of class type (JavaScript still lists integer-like keys first). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
+| D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its core widget registry. When `type` is primitive (INT/FLOAT/STRING/BOOLEAN/COMBO) the kind follows `type`, because the backend coerces and validates by it, and `widgetType` is recorded. Otherwise a primitive widget gives its kind, another core widget (COLOR, BOUNDING_BOX, CURVE, …) gives a `value` kind holding JSON, and anything else, `TYPE:name` types included, is a socket. The socket type is always `type` | This is the only rule that matches which inputs get values in exported prompts and stays sound. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
 
 ## 4. Architecture
 
@@ -120,7 +120,7 @@ The full model, with JSDoc, is `packages/core/src/schema/types.ts`. In outline:
 type Schema = {
   readonly formatVersion: 1;
   readonly comfyVersion?: string;                    // from /system_stats, passed by the caller; not hashed
-  readonly nodes: { readonly [classType: string]: NodeDef };   // exact class_type keys; sorted (D15); null prototype
+  readonly nodes: { readonly [classType: string]: NodeDef };   // exact class_type keys; code-unit order (D15); null prototype
 };
 
 type NodeDef = {
@@ -136,8 +136,8 @@ type NodeDef = {
 type InputDef =                 // all share name, required, tooltip?, lazy, rawLink
   | SocketInput                 // custom types, "*", comma unions, TYPE:name, forceInput widgets
   | IntInput | FloatInput | StringInput | BooleanInput   // + type (the socket type), socketless, widgetType?
-  | ComboInput                  // form "legacy" | "combo"; options (strings, numbers, booleans; may be empty);
-                                //   multiselect, upload, remote, socketless
+  | ComboInput                  // the same, plus form "legacy" | "combo"; options (strings, numbers, booleans;
+                                //   may be empty); multiselect, upload, remote
   | ValueInput                  // other core frontend widgets (D16): widget, type, default?: JsonValue
   | AutogrowInput               // form "prefix" | "names"; slots (every slot name); min; template (a socket)
   | DynamicComboInput           // options: { key, inputs: InputDef[] }[]   (recursive)
@@ -172,8 +172,9 @@ type OutputDef = {
 `accepts(input, output)` follows the backend's `validate_node_input`, non-strict:
 - `*` on either side passes, also as a member of a comma list.
 - MatchType passes on either side (it is checked at template level instead).
-- An option-list output passes into a `COMBO`-form combo only. A legacy `[[…]]` combo's type is
-  its option list itself, so the backend matches it only against `*` or an identical list.
+- An option-list output passes into an input typed exactly `COMBO` only (a COMBO widget on
+  another type doesn't count). A legacy `[[…]]` combo's type is its option list itself, so the
+  backend matches it only against `*`, MatchType or an identical list.
 - Comma sets pass when they overlap.
 - An Autogrow answers for its slots (the template's type). DynamicGroup inputs and unknown specs
   answer `false`: stricter than the backend, never looser.
@@ -421,8 +422,13 @@ Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
 ### 7.5 Serialization
 
 - `toApi()` returns a plain `ApiPrompt` object, which may hold `bigint`.
-- `stringify()` is our own deterministic serializer: insertion key order (every object we build
-  has a fixed construction order, which §7.4 needs), bigint as a JSON number.
+- `stringify()` is our own deterministic serializer: keys in JavaScript's enumeration order, as
+  `JSON.stringify` and the frontend use (integer-like keys such as node ids `"1"`, `"10"` first in
+  numeric order, then insertion order; every object we build has a fixed construction order,
+  which §7.4 needs), bigint as a JSON number.
+- `parse()` reads `NaN`, `Infinity` and `-Infinity`, which Python servers write for non-finite
+  floats (`/object_info` goes through `json.dumps`), and literals beyond the double range, as
+  `null` with `W_NON_FINITE_NUMBER`, so one such value can't invalidate a whole dump.
 - `parse()` keeps big integers through `JSON.parse` source-text access: an integer literal beyond
   2⁵³ becomes a bigint wherever it occurs, and each consumer decides per field (§9). On runtimes
   without source-text access, such literals produce `W_PRECISION_LOSS`. Invalid JSON is a
@@ -471,15 +477,26 @@ The diagnostic model is §5.4.
     for legacy combos: a COMBO socket would not express their exact-list link rule (§5.2), and
     the backend accepts constants for them anyway. Autogrow templates are always sockets, as the
     backend forces them.
+  - Input order is the frontend's (`getOrderedInputSpecs`): the required inputs `input_order`
+    lists, then the optional ones it lists, then all others. A name in both sections keeps the
+    required one, as the backend does.
   - `TYPE:name` input types (`INT:seed`, 3 inputs in the dump) are sockets of that exact type.
     The frontend has no widget for them, and the backend neither coerces them nor links them to
     `INT` (§16).
   - `null` means unset: Python servers send `None` for `display_name` (223 V3 nodes),
     `output_is_list` entries, defaults and tooltips. No diagnostic.
-  - A default the backend would reject (not one of the combo's options, the wrong type) is
-    dropped with `W_INVALID_INPUT_OPTION`, because the exporter fills defaults in (§7.2).
+  - A default the backend would reject (not one of the combo's options, outside `min`/`max`
+    after inward rounding, the wrong type) is dropped with `W_INVALID_INPUT_OPTION`, because the
+    exporter fills defaults in (§7.2). A combo with no listed options (remote, upload, an empty
+    folder) keeps its default: membership can't be checked offline.
+  - A legacy combo option that isn't a string, number or boolean makes the input unknown, since
+    its links match the full list; in the `COMBO` form, or in an output list, the option is
+    dropped or the node is, respectively.
   - Missing Autogrow and DynamicGroup counts take the backend's defaults (prefix: min 1, max 10,
-    at most 100 slots; group: min 0, max 20).
+    at most 100 slots; group: min 0, max 20). Counts outside those limits, which the backend's
+    constructors rule out, make the input unknown.
+  - Without source-text access (`W_PRECISION_LOSS`), integer-valued bounds beyond 2⁵³ move
+    inward by one double, which covers any rounding.
   - Nodes are sorted by class type (D15).
 - **emitTypes** (codegen): a small internal `CodeWriter`. Output is deterministic and already
   oxfmt-formatted; generated files are excluded from linting. Identifiers for interfaces and combo aliases:
@@ -751,5 +768,7 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Separating corpus tests (§13) | `bun test --path-ignore-patterns='**/*.corpus.test.ts'` skips them; a positional filter selects only them (Bun 1.4.3) |
 | Widget classification (D16) | Frontend 1.55.17 `addInputSocket`/`addInputWidget` (`litegraphService.ts`) look up `widgetType ?? type` in `ComfyWidgets` (`widgets.ts`): INT, FLOAT, BOOLEAN, STRING, MARKDOWN, COMBO, IMAGEUPLOAD, COLOR, IMAGECOMPARE, BOUNDING_BOX, CHART, GALLERIA, PAINTER, COMPOSITOR, TEXTAREA, CURVE, RANGE, VIDEO_EDIT, RESOLUTION_PREVIEW, BOUNDING_BOXES, COLORS, plus `COMFY_DYNAMICCOMBO_V3`; Autogrow and MatchType are handled as dynamic inputs; no DynamicGroup handler. The dump has 25 inputs on non-primitive core widgets and 12 with `widgetType` (FLOAT on `FLOAT,INT`, STRING on a file union, PAINTER, three pack widgets) |
 | `TYPE:name` types | `INT:seed` is not a frontend widget (not in the registry, not in the bundle). Backend `validate_inputs` coerces only exact `INT`/`FLOAT`/`STRING`/`BOOLEAN` but still checks min/max; `validate_node_input("INT", "INT:seed")` is false |
-| Normalizing the corpus dump | 1,758 of 1,758 nodes, 55–66 ms in Bun 1.4.3. 12 warnings, all real server inconsistencies: 7 combo defaults that aren't options, 3 `output_*` arrays longer than `output`, 2 `name` mismatches. Also found and distilled into mocks: `null` for unset fields, boolean combo options (3), value widgets, `widgetType` |
+| Normalizing the corpus dump | 1,758 of 1,758 nodes, 55–66 ms in Bun 1.4.3. 13 warnings, all real server inconsistencies: 7 combo defaults that aren't options, 1 INT default below its `min`, 3 `output_*` arrays longer than `output`, 2 `name` mismatches. Also found and distilled into mocks: `null` for unset fields, boolean combo options (3), value widgets, `widgetType` |
+| Input order (§9) | Frontend 1.55.17 `getOrderedInputSpecs` (`nodeDefOrderingUtil.ts`): listed required, listed optional, then remaining inputs in definition order; no `input_order`, definition order |
+| Non-finite numbers (§7.5) | `/object_info` is served by aiohttp `web.json_response`, whose default `json.dumps` writes `Infinity`/`NaN` (checked with the server's Python). None in the corpus dump today |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

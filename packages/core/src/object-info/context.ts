@@ -10,6 +10,11 @@ import { isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts"
 /** Collects the diagnostics of one normalizer run. */
 export interface Context {
   readonly diagnostics: Diagnostic[];
+  /**
+   * The parser had no source-text access and reported possible precision loss, so integers
+   * beyond 2^53 may be rounded; bounds then move inward to stay safe.
+   */
+  readonly inexact: boolean;
 }
 
 /** Records a diagnostic. */
@@ -68,13 +73,13 @@ export function isArray(value: JsonValue): value is readonly JsonValue[] {
   return Array.isArray(value);
 }
 
-/** A short JSON rendering of a value for messages. */
+const PREVIEW_LENGTH = 60;
+
+/** A short JSON rendering for messages. Total on `parse` output, which is always finite. */
 export function preview(value: JsonValue): string {
   const text = stringify(value);
   return text.length > PREVIEW_LENGTH ? `${text.slice(0, PREVIEW_LENGTH)}…` : text;
 }
-
-const PREVIEW_LENGTH = 60;
 
 /** Describes a JSON value's shape for messages. */
 export function describe(value: JsonValue | undefined): string {

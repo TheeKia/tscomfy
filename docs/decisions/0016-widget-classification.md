@@ -14,12 +14,11 @@ Whether an input takes a value or only a link decides its generated type and whe
 
 Follow the frontend's rule (ComfyUI_frontend 1.55.17, `litegraphService.ts` `addInputSocket`/`addInputWidget`, registry in `widgets.ts`): look up `widgetType ?? type` in the core widget registry.
 
-- INT, FLOAT, STRING, BOOLEAN and COMBO get their own input kinds.
-- The other core widgets become a `value` input holding the server's default as JSON.
-- If `widgetType` names a widget the core registry doesn't have (one a pack registers in the browser) and `type` is primitive, the input keeps the primitive kind and records `widgetType`.
-- Everything else is a socket, including `TYPE:name` types and pack types with widget-like options.
+- When `type` is primitive (INT, FLOAT, STRING, BOOLEAN, COMBO), the kind follows `type`: the backend coerces and validates by it (combo membership, `int()`), whatever widget the frontend draws. A differing `widgetType` is recorded.
+- Otherwise a primitive widget (e.g. FLOAT on a `FLOAT,INT` socket, COMBO on a pack type) gives its kind, and the other core widgets give a `value` input holding the server's default as JSON.
+- Everything else is a socket, including `TYPE:name` types, pack types with widget-like options, and widgets a pack registers in the browser on a non-primitive type.
 - `forceInput` makes a widget a socket, except legacy combos (their exact-list link rule can't be expressed as a COMBO socket, and the backend accepts constants for them).
-- The socket type (for links and for the backend's coercion) is always `type`, never the widget.
+- The socket type (for links and for the backend's coercion) is always `type`, never the widget. A COMBO widget on another type therefore takes no option-list links.
 
 ## Consequences
 

@@ -65,17 +65,25 @@
           { "default": "", "widgetType": "PAINTER", "socketless": true, "multiline": false }
         ],
         "timestamp": ["STRING", { "default": "00:00", "widgetType": "MOCK_PACK_TIMESTAMP" }],
-        "custom": ["MOCK_PACK_STATE", { "default": "{}", "socketless": true }]
+        "custom": ["MOCK_PACK_STATE", { "default": "{}", "socketless": true }],
+        "picker": [
+          "COMBO",
+          { "widgetType": "MOCK_PACK_PICKER", "options": ["a", "b"], "default": "a" }
+        ],
+        "size": ["MOCK_SIZE", { "widgetType": "COMBO", "options": ["s", "m"], "default": "s" }],
+        "count": ["INT", { "widgetType": "COMBO", "options": [1, 2], "default": 1 }]
       }
     },
-    "input_order": { "required": ["rate", "file", "sketch", "timestamp", "custom"] },
+    "input_order": {
+      "required": ["rate", "file", "sketch", "timestamp", "custom", "picker", "size", "count"]
+    },
     "is_input_list": false,
     "output": ["FLOAT"],
     "output_is_list": [false],
     "output_name": ["FLOAT"],
     "name": "MockWidgetTypeOverrides",
     "display_name": "Mock Widget Type Overrides",
-    "description": "widgetType picks the frontend widget: a FLOAT widget on a FLOAT,INT socket, a STRING widget on a union, a value widget on a STRING, and a widget only a pack's browser code registers. A pack type with a default but no widget stays a socket.",
+    "description": "widgetType picks the frontend widget: a FLOAT widget on a FLOAT,INT socket, a STRING widget on a union, a value widget on a STRING, and a widget only a pack's browser code registers; a COMBO type with a pack widget, a COMBO widget on a pack type and on INT. A pack type with a default but no widget stays a socket.",
     "python_module": "custom_nodes.mock-pack",
     "category": "mock/widgets",
     "output_node": false,

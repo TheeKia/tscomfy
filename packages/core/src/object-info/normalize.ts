@@ -35,12 +35,15 @@ export interface NormalizeResult {
  *
  * Lenient and total: it never throws for bad data. A node it can't use is dropped with an
  * `E_` diagnostic; an input spec it can't interpret is kept as an `unknown` input with a `W_`
- * diagnostic. Nodes are sorted by class type, so the result doesn't depend on the server's
- * load order, and the same text always gives the same result.
+ * diagnostic. Nodes are built in code-unit order of class type, so the result doesn't depend on
+ * the server's load order, and the same text always gives the same result.
  */
 export function normalizeObjectInfo(text: string, options: NormalizeOptions = {}): NormalizeResult {
   const parsed = parse(text);
-  const context: Context = { diagnostics: [...parsed.diagnostics] };
+  const context: Context = {
+    diagnostics: [...parsed.diagnostics],
+    inexact: parsed.diagnostics.some((diagnostic) => diagnostic.code === "W_PRECISION_LOSS"),
+  };
   const entries: [string, NodeDef][] = [];
   const root = parsed.value;
   if (root !== undefined) {

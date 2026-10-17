@@ -8,7 +8,7 @@ Generated files carry a schema hash in their header, and `tscomfy check` needs a
 
 ## Decision
 
-- The normalizer sorts `Schema.nodes` by class type in UTF-16 code-unit order (not `localeCompare`, whose order depends on the process locale: Node under `LANG=sv_SE` sorts `z` before `ä`, Bun doesn't). Inputs keep `input_order` and combo options keep the server's order, because those orders carry meaning.
+- The normalizer sorts `Schema.nodes` by class type in UTF-16 code-unit order (not `localeCompare`, whose order depends on the process locale: Node under `LANG=sv_SE` sorts `z` before `ä`, Bun doesn't). Inputs keep the frontend's order and combo options the server's, because those orders carry meaning. JavaScript still enumerates integer-like keys (a class named `"10"`) first, in numeric order; that is deterministic too, and `stringify` follows the same rule.
 - `hashSchema(schema): string` returns `sha256:<hex>` over the UTF-8 bytes of `stringify({ formatVersion, nodes })`. It is synchronous and uses a small hand-written SHA-256.
 - The hash isn't stored in `Schema`. Codegen computes it for file headers and the CLI for `check`. `Schema.comfyVersion` stays as plain metadata and isn't hashed.
 

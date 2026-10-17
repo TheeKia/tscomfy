@@ -12,7 +12,36 @@
         "autogrow_no_template": ["COMFY_AUTOGROW_V3", { "template": {} }],
         "matchtype_no_template": ["COMFY_MATCHTYPE_V3", {}],
         "dynamic_group_no_template": ["COMFY_DYNAMICGROUP_V3", { "min": 0, "max": 3 }],
-        "unknown_v3_type": ["COMFY_SOMETHING_NEW_V3", { "anything": true }]
+        "unknown_v3_type": ["COMFY_SOMETHING_NEW_V3", { "anything": true }],
+        "null_options": ["INT", null],
+        "legacy_object_option": [["a", { "x": 1 }]],
+        "autogrow_bad_max": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": { "required": { "image": ["IMAGE", {}] } },
+              "prefix": "image",
+              "min": 1,
+              "max": 0
+            }
+          }
+        ],
+        "dynamic_group_bad_counts": [
+          "COMFY_DYNAMICGROUP_V3",
+          { "template": { "required": { "x": ["INT", {}] } }, "min": 5, "max": 3 }
+        ],
+        "dynamic_combo_duplicates": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              {
+                "key": "a",
+                "inputs": { "required": { "v": ["INT", {}] }, "optional": { "v": ["FLOAT", {}] } }
+              },
+              { "key": "a", "inputs": { "required": {} } }
+            ]
+          }
+        ]
       },
       "optional": "not-a-record"
     },
@@ -29,6 +58,40 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "MockBadOutputOption": {
+    "input": { "required": {} },
+    "output": [["a", { "x": 1 }]],
+    "name": "MockBadOutputOption",
+    "display_name": "Mock Bad Output Option",
+    "description": "An option-list output with an option that is neither a string, a number nor a boolean.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/malformed",
+    "output_node": false
+  },
+  "MockMatchNoTemplate": {
+    "input": { "required": {} },
+    "output": ["COMFY_MATCHTYPE_V3"],
+    "name": "MockMatchNoTemplate",
+    "display_name": "Mock Match No Template",
+    "description": "A MatchType output without output_matchtypes.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/malformed",
+    "output_node": false
+  },
+  "MockPartialOrder": {
+    "input": {
+      "required": { "a": ["INT", {}], "b": ["INT", {}] },
+      "optional": { "c": ["INT", {}] }
+    },
+    "input_order": { "required": ["a"], "optional": ["c"] },
+    "output": [],
+    "name": "MockPartialOrder",
+    "display_name": "Mock Partial Order",
+    "description": "input_order leaves out a required input, which the frontend puts after the listed optional ones.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/malformed",
+    "output_node": false
   },
   "MockDuplicateInput": {
     "input": {

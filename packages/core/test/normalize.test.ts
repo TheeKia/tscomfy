@@ -228,6 +228,24 @@ describe("widgets", () => {
     expect(input.min).toBe(-18446744073709549568);
   });
 
+  test("drops defaults outside the bounds, also after rounding", async () => {
+    const { schema, diagnostics } = await normalizeMock("numbers");
+    const node = schema.nodes["MockNumbers"]!;
+    expect(inputOf(node, "below_min_default")).not.toHaveProperty("default");
+    expect(inputOf(node, "rounded_up_default")).not.toHaveProperty("default");
+    expect(
+      diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path.slice(3).join("/")]),
+    ).toEqual([
+      ["W_INVALID_INPUT_OPTION", "below_min_default/1/default"],
+      ["W_INVALID_INPUT_OPTION", "rounded_up_default/1/default"],
+    ]);
+  });
+
+  test("bounds a FLOAT written beyond the double range by the largest double", async () => {
+    const input = inputOf(await nodeOf("numbers", "MockNumbers"), "beyond_double");
+    expect(input).toMatchObject({ min: -Number.MAX_VALUE, max: Number.MAX_VALUE, default: 0 });
+  });
+
   test("keeps list-valued defaults", async () => {
     const node = await nodeOf("numbers", "MockNumbers");
     expect(inputOf(node, "list_default")).toMatchObject({ kind: "float", default: [1] });
@@ -276,10 +294,24 @@ describe("widgets", () => {
       kind: "string",
       type: { kind: "union", names: ["STRING", "MOCK_FILE"] },
     });
+    // A primitive type decides the kind: the backend coerces by it, whatever the widget.
     expect(inputOf(node, "sketch")).toMatchObject({
-      kind: "value",
-      widget: "PAINTER",
+      kind: "string",
+      widgetType: "PAINTER",
       type: { kind: "named", name: "STRING" },
+    });
+    expect(inputOf(node, "count")).toMatchObject({ kind: "int", widgetType: "COMBO", default: 1 });
+    expect(inputOf(node, "picker")).toMatchObject({
+      kind: "combo",
+      type: { kind: "named", name: "COMBO" },
+      widgetType: "MOCK_PACK_PICKER",
+      options: ["a", "b"],
+    });
+    expect(inputOf(node, "size")).toMatchObject({
+      kind: "combo",
+      form: "combo",
+      type: { kind: "named", name: "MOCK_SIZE" },
+      options: ["s", "m"],
     });
     expect(inputOf(node, "timestamp")).toMatchObject({
       kind: "string",
@@ -509,7 +541,9 @@ describe("malformed input", () => {
     expect(Object.keys(schema.nodes)).toEqual([
       "MockBadInputSpecs",
       "MockDuplicateInput",
+      "MockMatchNoTemplate",
       "MockNameMismatch",
+      "MockPartialOrder",
     ]);
   });
 
@@ -526,6 +560,11 @@ describe("malformed input", () => {
       ["matchtype_no_template", "unknown"],
       ["dynamic_group_no_template", "unknown"],
       ["unknown_v3_type", "unknown"],
+      ["null_options", "int"],
+      ["legacy_object_option", "unknown"],
+      ["autogrow_bad_max", "unknown"],
+      ["dynamic_group_bad_counts", "unknown"],
+      ["dynamic_combo_duplicates", "dynamicCombo"],
     ]);
     expect(inputOf(node, "unknown_v3_type")).toMatchObject({
       spec: ["COMFY_SOMETHING_NEW_V3", { anything: true }],
@@ -536,5 +575,70 @@ describe("malformed input", () => {
     const node = await nodeOf("malformed", "MockDuplicateInput");
     expect(node.inputs).toHaveLength(1);
     expect(node.inputs[0]).toMatchObject({ kind: "int", required: true });
+  });
+
+  test("treats null options as none, without a diagnostic", async () => {
+    const { diagnostics } = await normalizeMock("malformed");
+    const paths = diagnostics.map((diagnostic) => diagnostic.path.join("/"));
+    expect(paths.some((path) => path.includes("null_options"))).toBeFalse();
+  });
+
+  test("keeps the first of duplicate dynamic-combo keys and nested inputs", async () => {
+    const { schema, diagnostics } = await normalizeMock("malformed");
+    const input = inputOf(schema.nodes["MockBadInputSpecs"]!, "dynamic_combo_duplicates");
+    expect(input).toMatchObject({ options: [{ key: "a", inputs: [{ name: "v", kind: "int" }] }] });
+    const base = ["MockBadInputSpecs", "input", "required", "dynamic_combo_duplicates", 1];
+    const found = diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path]);
+    expect(found).toContainEqual([
+      "E_DUPLICATE_INPUT",
+      [...base, "options", 0, "inputs", "optional", "v"],
+    ]);
+    expect(found).toContainEqual(["W_INVALID_INPUT_OPTION", [...base, "options", 1, "key"]]);
+  });
+
+  test("orders an incomplete input_order like the frontend", async () => {
+    const node = await nodeOf("malformed", "MockPartialOrder");
+    expect(node.inputs.map((input) => input.name)).toEqual(["a", "c", "b"]);
+  });
+
+  test("lets a MatchType output without a template connect like *", async () => {
+    const { schema, diagnostics } = await normalizeMock("malformed");
+    expect(schema.nodes["MockMatchNoTemplate"]?.outputs).toEqual([
+      { index: 0, name: "COMFY_MATCHTYPE_V3", type: { kind: "any" }, isList: false },
+    ]);
+    expect(diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toContainEqual([
+      "W_INVALID_NODE_FIELD",
+      ["MockMatchNoTemplate", "output", 0],
+    ]);
+  });
+
+  test("reads Python's NaN and Infinity as unset", () => {
+    const node = {
+      input: {
+        required: {
+          x: [
+            "FLOAT",
+            { min: "@-Infinity", max: "@Infinity", default: "@NaN", tooltip: "NaN, Infinity" },
+          ],
+        },
+      },
+      output: [],
+      name: "MockNonFinite",
+      display_name: "Mock Non Finite",
+      category: "mock",
+      python_module: "custom_nodes.mock-pack",
+      output_node: false,
+    };
+    const text = JSON.stringify({ MockNonFinite: node }).replaceAll(/"@(-?Infinity|NaN)"/g, "$1");
+    const { schema, diagnostics } = normalizeObjectInfo(text);
+    const input = inputOf(schema.nodes["MockNonFinite"]!, "x");
+    expect(input).toMatchObject({ kind: "float", tooltip: "NaN, Infinity" });
+    expect(input).not.toContainAnyKeys(["min", "max", "default"]);
+    const spec = ["MockNonFinite", "input", "required", "x", 1];
+    expect(diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toEqual([
+      ["W_NON_FINITE_NUMBER", [...spec, "min"]],
+      ["W_NON_FINITE_NUMBER", [...spec, "max"]],
+      ["W_NON_FINITE_NUMBER", [...spec, "default"]],
+    ]);
   });
 });

@@ -33,7 +33,7 @@ import {
   MATCH_TYPE,
   type PrimitiveWidget,
 } from "./frontend-widgets.ts";
-import { toFloat, toFloatBound, toIntBound, toIntValue } from "./numbers.ts";
+import { toFloat, toFloatBound, toIntBound, toIntValue, withinBounds } from "./numbers.ts";
 import { parseSocketType } from "./socket-type.ts";
 
 /** How a spec is read. */
@@ -44,13 +44,15 @@ interface SpecMode {
 
 const NORMAL: SpecMode = { forceSocket: false };
 
-/** Backend defaults (`comfy_api/latest/_io.py`) for fields a server may leave out. */
+/** Backend limits and defaults (`comfy_api/latest/_io.py`) for fields a server may leave out. */
 const AUTOGROW_DEFAULT_MIN = 1;
 const AUTOGROW_DEFAULT_MAX = 10;
 const AUTOGROW_MAX_SLOTS = 100;
 const DYNAMIC_GROUP_MAX_ROWS = 20;
 
 const UPLOAD_FLAGS = ["image_upload", "video_upload", "audio_upload", "file_upload"] as const;
+
+type Section = "required" | "optional";
 
 /**
  * Reads a node's `input` field into ordered inputs. Returns `undefined` when the node can't be
@@ -91,35 +93,49 @@ export function readNodeInputs(
     );
     optional = {};
   }
-  const order = readInputOrder(context, node, path);
-  const inputs: InputDef[] = [];
-  const sections = [
-    ["required", required],
-    ["optional", optional],
-  ] as const;
-  for (const [section, specs] of sections) {
-    const names = orderedNames(context, specs, order?.[section], [...path, "input_order", section]);
-    for (const name of names) {
-      addInput(
+  // The backend looks a name up in `required` first, so a duplicate in `optional` is dead.
+  const optionalNames = Object.keys(optional).filter((name) => {
+    if (!Object.hasOwn(required, name)) return true;
+    report(
+      context,
+      "E_DUPLICATE_INPUT",
+      [...path, "input", "optional", name],
+      `Input ${name} is also required; dropping the optional one.`,
+    );
+    return false;
+  });
+  const specs = { required, optional };
+  const declared = new Set([...Object.keys(required), ...Object.keys(optional)]);
+  return orderInputs(context, node, Object.keys(required), optionalNames, declared, path).map(
+    ({ name, section }) =>
+      readInput(
         context,
-        inputs,
         name,
-        specs[name],
-        section,
+        specs[section][name],
+        section === "required",
         [...path, "input", section, name],
         NORMAL,
-      );
-    }
-  }
-  return inputs;
+      ),
+  );
 }
 
-/** `input_order`: the order the frontend creates inputs in. Optional on older servers. */
-function readInputOrder(
+/**
+ * The frontend's input order (ComfyUI_frontend 1.55.17 `getOrderedInputSpecs`): the required
+ * inputs `input_order` lists, then the optional ones it lists, then every other input, required
+ * before optional. Without `input_order`, key order.
+ */
+function orderInputs(
   context: Context,
   node: JsonObject,
+  requiredNames: readonly string[],
+  optionalNames: readonly string[],
+  declared: ReadonlySet<string>,
   path: DiagnosticPath,
-): { readonly required?: readonly string[]; readonly optional?: readonly string[] } | undefined {
+): { readonly name: string; readonly section: Section }[] {
+  const all = [
+    ...requiredNames.map((name) => ({ name, section: "required" as const })),
+    ...optionalNames.map((name) => ({ name, section: "optional" as const })),
+  ];
   const order = readOptional(
     context,
     node,
@@ -129,43 +145,49 @@ function readInputOrder(
     "an object",
     isObject,
   );
-  if (order === undefined) return undefined;
-  const result: { required?: readonly string[]; optional?: readonly string[] } = {};
-  for (const section of ["required", "optional"] as const) {
-    const names = readOptional(
-      context,
-      order,
-      section,
-      [...path, "input_order"],
-      "W_INVALID_NODE_FIELD",
-      "a list of names",
-      isStringArray,
+  if (order === undefined) return all;
+  const listed = (section: Section, names: readonly string[]) => {
+    const unique = new Set(
+      readOptional(
+        context,
+        order,
+        section,
+        [...path, "input_order"],
+        "W_INVALID_NODE_FIELD",
+        "a list of names",
+        isStringArray,
+      ),
     );
-    if (names !== undefined) result[section] = names;
-  }
-  return result;
-}
-
-/** The section's input names in `input_order`, then any it doesn't list, in key order. */
-function orderedNames(
-  context: Context,
-  specs: JsonObject,
-  listed: readonly string[] | undefined,
-  orderPath: DiagnosticPath,
-): string[] {
-  const keys = Object.keys(specs);
-  if (listed === undefined) return keys;
-  const known = listed.filter((name) => Object.hasOwn(specs, name));
-  const undeclared = listed.filter((name) => !Object.hasOwn(specs, name));
-  const unlisted = keys.filter((name) => !listed.includes(name));
-  if (undeclared.length > 0 || unlisted.length > 0) {
+    // A name listed under the other section is skipped here and placed with the rest.
+    return {
+      known: [...unique].filter((name) => names.includes(name)),
+      undeclared: [...unique].filter((name) => !declared.has(name)),
+    };
+  };
+  const listedRequired = listed("required", requiredNames);
+  const listedOptional = listed("optional", optionalNames);
+  const first = [
+    ...listedRequired.known.map((name) => ({ name, section: "required" as const })),
+    ...listedOptional.known.map((name) => ({ name, section: "optional" as const })),
+  ];
+  const rest = all.filter(
+    ({ name, section }) =>
+      !(section === "required" ? listedRequired : listedOptional).known.includes(name),
+  );
+  const undeclared = [...listedRequired.undeclared, ...listedOptional.undeclared];
+  if (undeclared.length > 0 || rest.length > 0) {
     const parts = [
-      undeclared.length > 0 ? `lists unknown inputs ${undeclared.join(", ")}` : "",
-      unlisted.length > 0 ? `misses ${unlisted.join(", ")}, which go last` : "",
+      undeclared.length > 0 ? `names ${undeclared.join(", ")}, which the node doesn't declare` : "",
+      rest.length > 0 ? `leaves out ${rest.map(({ name }) => name).join(", ")}, placed last` : "",
     ].filter((part) => part !== "");
-    report(context, "W_INPUT_ORDER_MISMATCH", orderPath, `input_order ${parts.join(" and ")}.`);
+    report(
+      context,
+      "W_INPUT_ORDER_MISMATCH",
+      [...path, "input_order"],
+      `input_order ${parts.join("; it ")}.`,
+    );
   }
-  return [...new Set([...known, ...unlisted])];
+  return [...first, ...rest];
 }
 
 /** Reads `{ required?, optional? }` sections nested in a dynamic input. */
@@ -178,7 +200,7 @@ function readNestedSections(
   const inputs: InputDef[] = [];
   for (const section of ["required", "optional"] as const) {
     const specs = sections[section];
-    if (specs === undefined) continue;
+    if (specs === undefined || specs === null) continue;
     if (!isObject(specs)) {
       report(
         context,
@@ -189,37 +211,29 @@ function readNestedSections(
       continue;
     }
     for (const [name, spec] of Object.entries(specs)) {
-      addInput(context, inputs, name, spec, section, [...path, section, name], mode);
+      const specPath = [...path, section, name];
+      if (inputs.some((existing) => existing.name === name)) {
+        report(
+          context,
+          "E_DUPLICATE_INPUT",
+          specPath,
+          `Input ${name} is declared twice; keeping the first.`,
+        );
+        continue;
+      }
+      inputs.push(readInput(context, name, spec, section === "required", specPath, mode));
     }
   }
   return inputs;
 }
 
-/** Reads one input into `inputs`, unless an earlier section already declared its name. */
-function addInput(
-  context: Context,
-  inputs: InputDef[],
-  name: string,
-  spec: JsonValue | undefined,
-  section: "required" | "optional",
-  path: DiagnosticPath,
-  mode: SpecMode,
-): void {
-  if (inputs.some((existing) => existing.name === name)) {
-    report(
-      context,
-      "E_DUPLICATE_INPUT",
-      path,
-      `Input ${name} is declared twice; keeping the first.`,
-    );
-    return;
-  }
-  inputs.push(readInput(context, name, spec, section === "required", path, mode));
-}
-
 /**
  * Reads one `[type, options?]` spec. Never fails: a spec it can't interpret becomes an
  * {@link UnknownInput} with a diagnostic.
+ *
+ * Widget or socket follows the frontend (docs/plan.md D16): it looks up `widgetType ?? type` in
+ * its widget registry. The kind follows the type when the type is primitive, because the backend
+ * coerces and validates by the type; otherwise it follows the widget.
  */
 function readInput(
   context: Context,
@@ -242,7 +256,7 @@ function readInput(
   const [head, rawOptions] = spec;
   const optionsPath = [...path, 1];
   let options: JsonObject = {};
-  if (rawOptions !== undefined) {
+  if (rawOptions !== undefined && rawOptions !== null) {
     if (isObject(rawOptions)) options = rawOptions;
     else
       report(
@@ -256,7 +270,9 @@ function readInput(
 
   // Legacy combos ignore forceInput: their links only match an identical option list (§5.2),
   // which a COMBO socket would not express.
-  if (head !== undefined && isArray(head)) return reader.combo("legacy", head, [...path, 0]);
+  if (head !== undefined && isArray(head)) {
+    return reader.legacyCombo(head, [...path, 0]) ?? unknown(context, name, required, spec, path);
+  }
   if (typeof head !== "string") {
     return unknown(
       context,
@@ -293,11 +309,10 @@ function readInput(
   const widgetType = reader.string("widgetType");
   const forced = mode.forceSocket || reader.flag("forceInput");
   if (!forced) {
+    if (isPrimitiveWidget(head)) return reader.primitive(head, type, widgetType);
     const widget = widgetType ?? head;
     if (isPrimitiveWidget(widget)) return reader.primitive(widget, type, widgetType);
     if (isValueWidget(widget)) return reader.value(widget, type);
-    // A widget registered by a pack in the browser: the value still has the head's type.
-    if (isPrimitiveWidget(head)) return reader.primitive(head, type, widgetType);
   }
   return { kind: "socket", ...reader.base(), type };
 }
@@ -350,11 +365,12 @@ class SpecReader {
     };
     switch (widget) {
       case "INT": {
-        const value = this.#read("default", "an integer or a list of integers", (raw) =>
+        const inexact = this.#context.inexact;
+        const min = this.#read("min", "an integer", (raw) => toIntBound(raw, "min", inexact));
+        const max = this.#read("max", "an integer", (raw) => toIntBound(raw, "max", inexact));
+        const value = this.#default("an integer or a list of integers", min, max, (raw) =>
           isArray(raw) ? listOf(raw, toIntValue) : toIntValue(raw),
         );
-        const min = this.#read("min", "an integer", (raw) => toIntBound(raw, "min"));
-        const max = this.#read("max", "an integer", (raw) => toIntBound(raw, "max"));
         const step = this.#number("step");
         return {
           kind: "int",
@@ -367,11 +383,12 @@ class SpecReader {
         };
       }
       case "FLOAT": {
-        const value = this.#read("default", "a number or a list of numbers", (raw) =>
+        const inexact = this.#context.inexact;
+        const min = this.#read("min", "a number", (raw) => toFloatBound(raw, "min", inexact));
+        const max = this.#read("max", "a number", (raw) => toFloatBound(raw, "max", inexact));
+        const value = this.#default("a number or a list of numbers", min, max, (raw) =>
           isArray(raw) ? listOf(raw, toFloat) : toFloat(raw),
         );
-        const min = this.#read("min", "a number", (raw) => toFloatBound(raw, "min"));
-        const max = this.#read("max", "a number", (raw) => toFloatBound(raw, "max"));
         const step = this.#number("step");
         const round = this.#read("round", "a number or false", (raw) =>
           raw === false || (typeof raw === "number" && Number.isFinite(raw)) ? raw : undefined,
@@ -409,9 +426,29 @@ class SpecReader {
           ...(value === undefined ? {} : { default: value }),
         };
       }
-      case "COMBO":
-        return this.combo("combo", this.#options["options"], [...this.#path, "options"]);
+      case "COMBO": {
+        const options = this.#comboOptions(this.#options["options"], [...this.#path, "options"]);
+        return this.#combo("combo", options, widgetFields);
+      }
     }
+  }
+
+  /**
+   * A legacy `[[…]]` combo. The backend compares links against the full option list, so an
+   * option we can't represent makes the spec unknown rather than silently shorter.
+   */
+  legacyCombo(rawOptions: readonly JsonValue[], optionsPath: DiagnosticPath): InputDef | undefined {
+    const invalid = rawOptions.findIndex((option) => !isComboOption(option));
+    if (invalid !== -1) {
+      return this.#invalid(
+        `Legacy combo option ${String(invalid)} is ${preview(rawOptions[invalid] ?? null)}, not a string, number or boolean; links match the full list, so it can't be dropped.`,
+        optionsPath,
+      );
+    }
+    return this.#combo("legacy", [...rawOptions].filter(isComboOption), {
+      type: { kind: "named", name: "COMBO" },
+      socketless: this.flag("socketless"),
+    });
   }
 
   value(widget: string, type: SocketType): InputDef {
@@ -423,58 +460,6 @@ class SpecReader {
       socketless: this.flag("socketless"),
       widget,
       ...(value === undefined ? {} : { default: value }),
-    };
-  }
-
-  combo(
-    form: ComboInput["form"],
-    rawOptions: JsonValue | undefined,
-    optionsPath: DiagnosticPath,
-  ): ComboInput {
-    const options: ComboOption[] = [];
-    if (rawOptions !== undefined) {
-      if (isArray(rawOptions)) {
-        rawOptions.forEach((option, index) => {
-          if (isComboOption(option)) options.push(option);
-          else
-            report(
-              this.#context,
-              "W_INVALID_INPUT_OPTION",
-              [...optionsPath, index],
-              `Expected a combo option to be a string, a number or a boolean, got ${describe(option)}; dropping it.`,
-            );
-        });
-      } else {
-        report(
-          this.#context,
-          "W_INVALID_INPUT_OPTION",
-          optionsPath,
-          `Expected the combo options to be a list, got ${describe(rawOptions)}; using none.`,
-        );
-      }
-    }
-    const multiselect = this.flag("multiselect");
-    // A default the backend would reject is dropped rather than filled in later.
-    const isMember = (value: JsonValue): value is ComboOption =>
-      isComboOption(value) && (options.length === 0 || options.includes(value));
-    const value = this.#read(
-      "default",
-      multiselect ? "a list of the options" : "one of the options",
-      (raw): ComboOption | readonly ComboOption[] | undefined => {
-        if (!multiselect) return isMember(raw) ? raw : undefined;
-        return isArray(raw) && raw.every(isMember) ? raw : undefined;
-      },
-    );
-    return {
-      kind: "combo",
-      ...this.base(),
-      form,
-      options,
-      ...(value === undefined ? {} : { default: value }),
-      multiselect,
-      upload: UPLOAD_FLAGS.some((flag) => this.flag(flag)),
-      remote: this.#object("remote") !== undefined,
-      socketless: this.flag("socketless"),
     };
   }
 
@@ -495,7 +480,8 @@ class SpecReader {
       )[0];
     if (first === undefined) return this.#invalid("Autogrow's template has no input.");
 
-    const min = readCount(this.#context, template, "min", templatePath, AUTOGROW_DEFAULT_MIN, 0);
+    const min = count(template, "min", AUTOGROW_DEFAULT_MIN, 0, Number.MAX_SAFE_INTEGER);
+    if (min === undefined) return this.#invalid("Autogrow's template.min must be an integer ≥ 0.");
     let form: AutogrowInput["form"];
     let slots: string[];
     if (Object.hasOwn(template, "names")) {
@@ -510,10 +496,12 @@ class SpecReader {
       if (typeof prefix !== "string") {
         return this.#invalid("Autogrow's template.prefix must be a string.");
       }
-      const max = Math.min(
-        readCount(this.#context, template, "max", templatePath, AUTOGROW_DEFAULT_MAX, 1),
-        AUTOGROW_MAX_SLOTS,
-      );
+      const max = count(template, "max", AUTOGROW_DEFAULT_MAX, 1, AUTOGROW_MAX_SLOTS);
+      if (max === undefined) {
+        return this.#invalid(
+          `Autogrow's template.max must be an integer from 1 to ${String(AUTOGROW_MAX_SLOTS)}.`,
+        );
+      }
       form = "prefix";
       slots = Array.from({ length: max }, (_, index) => `${prefix}${index}`);
     } else {
@@ -559,7 +547,7 @@ class SpecReader {
           this.#context,
           "W_INVALID_INPUT_OPTION",
           [...optionPath, "key"],
-          `Option ${key} appears twice; keeping the first.`,
+          `Option ${key} appears twice; keeping the first, as the backend does.`,
         );
         return;
       }
@@ -583,11 +571,13 @@ class SpecReader {
   dynamicGroup(): DynamicGroupInput | undefined {
     const template = this.#object("template");
     if (template === undefined) return this.#invalid("A dynamic group needs a template.");
-    const max = Math.min(
-      readCount(this.#context, this.#options, "max", this.#path, DYNAMIC_GROUP_MAX_ROWS, 1),
-      DYNAMIC_GROUP_MAX_ROWS,
-    );
-    const min = Math.min(readCount(this.#context, this.#options, "min", this.#path, 0, 0), max);
+    const max = count(this.#options, "max", DYNAMIC_GROUP_MAX_ROWS, 1, DYNAMIC_GROUP_MAX_ROWS);
+    const min = max === undefined ? undefined : count(this.#options, "min", 0, 0, max);
+    if (max === undefined || min === undefined) {
+      return this.#invalid(
+        `A dynamic group needs 0 ≤ min ≤ max ≤ ${String(DYNAMIC_GROUP_MAX_ROWS)}, with max ≥ 1.`,
+      );
+    }
     const groupName = this.string("group_name");
     return {
       kind: "dynamicGroup",
@@ -648,6 +638,93 @@ class SpecReader {
     );
   }
 
+  #combo(
+    form: ComboInput["form"],
+    options: readonly ComboOption[],
+    widgetFields: {
+      readonly type: SocketType;
+      readonly socketless: boolean;
+      readonly widgetType?: string;
+    },
+  ): ComboInput {
+    const multiselect = this.flag("multiselect");
+    // A default the backend would reject is dropped rather than filled in later. With no options
+    // listed (remote and upload combos, empty folders) membership can't be checked here.
+    const isMember = (value: JsonValue): value is ComboOption =>
+      isComboOption(value) && (options.length === 0 || options.includes(value));
+    const value = this.#read(
+      "default",
+      multiselect ? "a list of the options" : "one of the options",
+      (raw): ComboOption | readonly ComboOption[] | undefined => {
+        if (!multiselect) return isMember(raw) ? raw : undefined;
+        return isArray(raw) && raw.every(isMember) ? raw : undefined;
+      },
+    );
+    return {
+      kind: "combo",
+      ...this.base(),
+      ...widgetFields,
+      form,
+      options,
+      ...(value === undefined ? {} : { default: value }),
+      multiselect,
+      upload: UPLOAD_FLAGS.some((flag) => this.flag(flag)),
+      remote: this.#object("remote") !== undefined,
+    };
+  }
+
+  /**
+   * The options of a `COMBO`-form combo, dropping (and reporting) any that aren't a string,
+   * number or boolean. Dropping is safe here: links into this form don't compare option lists.
+   */
+  #comboOptions(rawOptions: JsonValue | undefined, optionsPath: DiagnosticPath): ComboOption[] {
+    if (rawOptions === undefined || rawOptions === null) return [];
+    if (!isArray(rawOptions)) {
+      report(
+        this.#context,
+        "W_INVALID_INPUT_OPTION",
+        optionsPath,
+        `Expected the combo options to be a list, got ${describe(rawOptions)}; using none.`,
+      );
+      return [];
+    }
+    const options: ComboOption[] = [];
+    rawOptions.forEach((option, index) => {
+      if (isComboOption(option)) {
+        options.push(option);
+        return;
+      }
+      report(
+        this.#context,
+        "W_INVALID_INPUT_OPTION",
+        [...optionsPath, index],
+        `Expected a combo option to be a string, a number or a boolean, got ${preview(option)}; dropping it.`,
+      );
+    });
+    return options;
+  }
+
+  /**
+   * A numeric default. One outside the bounds is dropped: the backend would reject it, and the
+   * exporter fills defaults in (§7.2).
+   */
+  #default<T extends number | bigint | readonly (number | bigint)[]>(
+    expected: string,
+    min: number | bigint | undefined,
+    max: number | bigint | undefined,
+    convert: (raw: JsonValue) => T | undefined,
+  ): T | undefined {
+    const value = this.#read("default", expected, convert);
+    if (value === undefined || withinBounds(value, min, max)) return value;
+    report(
+      this.#context,
+      "W_INVALID_INPUT_OPTION",
+      [...this.#path, "default"],
+      `The default ${exact(value)} is outside [${exact(min)}, ${exact(max)}]; ignoring it.`,
+    );
+    return undefined;
+  }
+
   #number(key: string): number | undefined {
     return this.#read(key, "a number", (raw) =>
       typeof raw === "number" && Number.isFinite(raw) ? raw : undefined,
@@ -687,13 +764,8 @@ class SpecReader {
     return value;
   }
 
-  #invalid(message: string): undefined {
-    report(
-      this.#context,
-      "W_INVALID_INPUT_SPEC",
-      this.#path,
-      `${message} Keeping the input as unknown.`,
-    );
+  #invalid(message: string, path: DiagnosticPath = this.#path): undefined {
+    report(this.#context, "W_INVALID_INPUT_SPEC", path, `${message} Keeping the input as unknown.`);
     return undefined;
   }
 }
@@ -712,25 +784,34 @@ function unknown(
   return { kind: "unknown", name, required, lazy: false, rawLink: false, spec: spec ?? null };
 }
 
-/** An integer count with a backend default; missing or out of range, the default is used. */
-function readCount(
-  context: Context,
+/**
+ * An integer count within the backend's limits, or its default when absent. `undefined` when it
+ * is present but invalid, which the backend's constructors rule out.
+ */
+function count(
   object: JsonObject,
   key: string,
-  path: DiagnosticPath,
   fallback: number,
   least: number,
-): number {
+  most: number,
+): number | undefined {
   const raw = object[key];
   if (raw === undefined || raw === null) return fallback;
-  if (typeof raw === "number" && Number.isSafeInteger(raw) && raw >= least) return raw;
-  report(
-    context,
-    "W_INVALID_INPUT_OPTION",
-    [...path, key],
-    `Expected ${key} to be an integer of at least ${String(least)}, got ${preview(raw)}; using ${String(fallback)}.`,
-  );
-  return fallback;
+  return typeof raw === "number" && Number.isSafeInteger(raw) && raw >= least && raw <= most
+    ? raw
+    : undefined;
+}
+
+/**
+ * Renders numbers for messages without the shortest-round-trip form JavaScript uses, which shows
+ * 2^64 − 2048 as 18446744073709550000.
+ */
+function exact(value: number | bigint | readonly (number | bigint)[] | undefined): string {
+  if (value === undefined) return "";
+  if (typeof value === "object") return `[${value.map(exact).join(", ")}]`;
+  return typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value)
+    ? BigInt(value).toString()
+    : String(value);
 }
 
 function listOf<T>(

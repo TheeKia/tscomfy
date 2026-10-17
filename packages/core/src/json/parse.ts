@@ -9,25 +9,27 @@ import type { JsonValue } from "./value.ts";
 export interface ParseResult {
   /** The parsed value, or `undefined` when the text is not valid JSON. */
   readonly value: JsonValue | undefined;
-  /** `E_INVALID_JSON`, or `W_PRECISION_LOSS` for each big integer a runtime could not keep. */
+  /** `E_INVALID_JSON`, `W_NON_FINITE_NUMBER` or `W_PRECISION_LOSS`; see {@link parse}. */
   readonly diagnostics: readonly Diagnostic[];
 }
 
-/** The context argument of a `JSON.parse` reviver, where the runtime supports source-text access. */
+/** A `JSON.parse` reviver's context argument, on runtimes with source-text access. */
 interface ReviverContext {
   readonly source?: string;
 }
+
+type Reviver = (key: string, value: unknown, context?: ReviverContext) => unknown;
 
 /**
  * `JSON.parse`, typed by what it returns: JSON values, plus the bigints our reviver produces.
  * Its declared return type is `any`, which this boundary keeps out of the rest of the code.
  */
-const parseJson: (
-  text: string,
-  reviver?: (key: string, value: unknown, context?: ReviverContext) => unknown,
-) => JsonValue = JSON.parse;
+const parseJson: (text: string, reviver?: Reviver) => JsonValue = JSON.parse;
 
 const INTEGER_LITERAL = /^-?(?:0|[1-9]\d*)$/;
+
+/** Python's `json.dumps` writes these for non-finite floats. They aren't JSON. */
+const PYTHON_NON_FINITE = ["-Infinity", "Infinity", "NaN"] as const;
 
 /** Whether this runtime passes the source text of primitives to `JSON.parse` revivers. */
 const HAS_SOURCE_ACCESS: boolean = probeSourceAccess();
@@ -44,11 +46,14 @@ function probeSourceAccess(): boolean {
 /**
  * Parses JSON text, keeping integers beyond 2^53 exact as `bigint` wherever they occur
  * (docs/plan.md §7.5). Integer literals inside the safe range, and every literal with a fraction
- * or an exponent, stay `number`.
+ * or an exponent, stay `number`. The result never holds a non-finite number.
  *
- * Never throws for bad input: invalid JSON yields `E_INVALID_JSON` and no value. On runtimes
- * without `JSON.parse` source-text access, each integer that lost precision yields
- * `W_PRECISION_LOSS`.
+ * Never throws for bad input:
+ * - invalid JSON yields `E_INVALID_JSON` and no value;
+ * - `NaN`, `Infinity` and `-Infinity` (which Python servers write for non-finite floats), and
+ *   number literals beyond the double range, become `null` with `W_NON_FINITE_NUMBER`;
+ * - on runtimes without `JSON.parse` source-text access, each integer that may have lost
+ *   precision yields `W_PRECISION_LOSS`.
  */
 export function parse(text: string): ParseResult {
   return parseWith(text, HAS_SOURCE_ACCESS);
@@ -59,48 +64,128 @@ export function parse(text: string): ParseResult {
  * not part of the public API.
  */
 export function parseWith(text: string, sourceAccess: boolean): ParseResult {
+  // An object, so the flag set inside the reviver isn't narrowed away.
+  const seen = { nonFinite: false };
+  const reviver: Reviver = (_key, value, context) => {
+    if (typeof value !== "number" || Number.isSafeInteger(value)) return value;
+    const source = context?.source;
+    if (source !== undefined && INTEGER_LITERAL.test(source)) return BigInt(source);
+    if (!Number.isFinite(value)) seen.nonFinite = true;
+    return value;
+  };
+  const read = (source: string): JsonValue =>
+    sourceAccess ? parseJson(source, reviver) : parseJson(source);
+
   let value: JsonValue;
+  let marker: string | undefined;
   try {
-    value = sourceAccess ? parseJson(text, reviveBigIntegers) : parseJson(text);
+    value = read(text);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    return {
-      value: undefined,
-      diagnostics: [createDiagnostic("E_INVALID_JSON", [], `Invalid JSON: ${reason}`)],
-    };
+    const marked = markPythonNonFinite(text);
+    try {
+      if (marked === undefined) throw error;
+      value = read(marked.text);
+      marker = marked.marker;
+    } catch {
+      const reason = error instanceof Error ? error.message : String(error);
+      return {
+        value: undefined,
+        diagnostics: [createDiagnostic("E_INVALID_JSON", [], `Invalid JSON: ${reason}`)],
+      };
+    }
   }
-  return { value, diagnostics: sourceAccess ? [] : findPrecisionLoss(value) };
+  if (sourceAccess && !seen.nonFinite && marker === undefined) return { value, diagnostics: [] };
+  const diagnostics: Diagnostic[] = [];
+  const clean = sanitize(value, [], { checkPrecision: !sourceAccess, marker, diagnostics });
+  return { value: clean, diagnostics };
 }
 
-function reviveBigIntegers(_key: string, value: unknown, context?: ReviverContext): unknown {
-  if (typeof value !== "number" || Number.isSafeInteger(value)) return value;
-  const source = context?.source;
-  return source !== undefined && INTEGER_LITERAL.test(source) ? BigInt(source) : value;
+interface SanitizeOptions {
+  readonly checkPrecision: boolean;
+  /** Prefix of the strings {@link markPythonNonFinite} put in place of non-finite tokens. */
+  readonly marker: string | undefined;
+  readonly diagnostics: Diagnostic[];
+}
+
+/** Replaces non-finite numbers and marked tokens with `null`, reporting each. */
+function sanitize(value: JsonValue, path: DiagnosticPath, options: SanitizeOptions): JsonValue {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      options.diagnostics.push(
+        createDiagnostic(
+          "W_NON_FINITE_NUMBER",
+          path,
+          "A number literal is beyond the double range; reading it as null.",
+        ),
+      );
+      return null;
+    }
+    if (options.checkPrecision && Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      options.diagnostics.push(
+        createDiagnostic(
+          "W_PRECISION_LOSS",
+          path,
+          `The integer ${String(value)} may have lost precision: this runtime has no JSON.parse source-text access.`,
+        ),
+      );
+    }
+    return value;
+  }
+  if (typeof value === "string") {
+    const { marker } = options;
+    if (marker === undefined || !value.startsWith(marker)) return value;
+    options.diagnostics.push(
+      createDiagnostic(
+        "W_NON_FINITE_NUMBER",
+        path,
+        `${value.slice(marker.length)} is not JSON (Python writes it for non-finite floats); reading it as null.`,
+      ),
+    );
+    return null;
+  }
+  if (typeof value !== "object" || value === null) return value;
+  if (isArray(value)) return value.map((item, index) => sanitize(item, [...path, index], options));
+  // Object.fromEntries defines own data properties, so a "__proto__" key stays an ordinary key.
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, sanitize(item, [...path, key], options)]),
+  );
 }
 
 /**
- * Without source text, an integer-valued number beyond the safe range may have been written as
- * an exact integer, which `JSON.parse` rounded. Report every such number.
+ * Replaces each `NaN`/`Infinity`/`-Infinity` token outside strings with a marked JSON string, so
+ * the text parses and {@link sanitize} can report each one at its path. Returns `undefined` when
+ * there is none. Outside strings, valid JSON has no other words starting with `N` or `I`.
  */
-function findPrecisionLoss(root: JsonValue): Diagnostic[] {
-  const found: Diagnostic[] = [];
-  const visit = (value: JsonValue, path: DiagnosticPath): void => {
-    if (typeof value === "number") {
-      if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
-        found.push(
-          createDiagnostic(
-            "W_PRECISION_LOSS",
-            path,
-            `The integer ${String(value)} may have lost precision: this runtime has no JSON.parse source-text access.`,
-          ),
-        );
-      }
-    } else if (Array.isArray(value)) {
-      value.forEach((item: JsonValue, index) => visit(item, [...path, index]));
-    } else if (typeof value === "object" && value !== null) {
-      for (const [key, item] of Object.entries(value)) visit(item, [...path, key]);
+function markPythonNonFinite(text: string): { text: string; marker: string } | undefined {
+  // The marker starts with U+0000, which raw JSON text can't hold inside a string; checking the
+  // rest keeps it apart from escaped `\u0000` too.
+  let marker = "\u0000tscomfy:non-finite:";
+  while (text.includes(marker.slice(1))) marker += "#";
+  let result = "";
+  let copied = 0;
+  let inString = false;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (inString) {
+      if (char === "\\") index++;
+      else if (char === '"') inString = false;
+      continue;
     }
-  };
-  visit(root, []);
-  return found;
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    const token = PYTHON_NON_FINITE.find((candidate) => text.startsWith(candidate, index));
+    if (token === undefined) continue;
+    result += text.slice(copied, index) + JSON.stringify(marker + token);
+    index += token.length - 1;
+    copied = index + 1;
+  }
+  if (copied === 0) return undefined;
+  return { text: result + text.slice(copied), marker };
+}
+
+// `Array.isArray` doesn't narrow readonly arrays out of a union.
+function isArray(value: JsonValue): value is readonly JsonValue[] {
+  return Array.isArray(value);
 }

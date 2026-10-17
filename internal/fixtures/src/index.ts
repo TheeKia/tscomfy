@@ -57,8 +57,9 @@ export interface CorpusFile {
 export const CORPUS_DIR: string = join(root, "corpus");
 
 /**
- * Lists the JSON files in one section of the local corpus, sorted by name (code-unit order). Returns an empty list
- * when the section doesn't exist, so corpus tests skip cleanly on a fresh clone.
+ * Lists the JSON files in one section of the local corpus, sorted by name in code-unit order.
+ * Returns an empty list when the section doesn't exist, so corpus tests skip cleanly on a fresh
+ * clone.
  */
 export async function listCorpus(section: CorpusSection): Promise<readonly CorpusFile[]> {
   const dir = join(CORPUS_DIR, section);

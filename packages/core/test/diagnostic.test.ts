@@ -32,32 +32,55 @@ describe("registry", () => {
 const malformed = async (): Promise<readonly Diagnostic[]> =>
   normalizeObjectInfo(await readMockObjectInfo("malformed")).diagnostics;
 
-/** One negative test per code: an input that must produce it. */
-const PRODUCERS: Record<
-  DiagnosticCode,
-  () => Promise<readonly Diagnostic[]> | readonly Diagnostic[]
-> = {
-  E_INVALID_JSON: () => parse("{").diagnostics,
-  W_PRECISION_LOSS: () => parseWith("[18446744073709551615]", false).diagnostics,
-  E_INVALID_OBJECT_INFO: () => normalizeObjectInfo("[]").diagnostics,
-  E_INVALID_NODE: malformed,
-  W_INVALID_NODE_FIELD: malformed,
-  W_NODE_NAME_MISMATCH: malformed,
-  E_INVALID_INPUT_SECTION: malformed,
-  E_DUPLICATE_INPUT: malformed,
-  W_INPUT_ORDER_MISMATCH: malformed,
-  W_INVALID_INPUT_SPEC: malformed,
-  W_UNSUPPORTED_INPUT_TYPE: malformed,
-  W_INVALID_INPUT_OPTION: async () =>
-    normalizeObjectInfo(await readMockObjectInfo("combos")).diagnostics,
+interface Producer {
+  readonly produce: () => Promise<readonly Diagnostic[]> | readonly Diagnostic[];
+  /** Where the diagnostic must point. */
+  readonly path: readonly (string | number)[];
+}
+
+/** One negative test per code: an input that must produce it, at a precise path. */
+const PRODUCERS: Record<DiagnosticCode, Producer> = {
+  E_INVALID_JSON: { produce: () => parse("{").diagnostics, path: [] },
+  W_PRECISION_LOSS: {
+    produce: () => parseWith('{"max":[18446744073709551615]}', false).diagnostics,
+    path: ["max", 0],
+  },
+  W_NON_FINITE_NUMBER: { produce: () => parse('{"max":Infinity}').diagnostics, path: ["max"] },
+  E_INVALID_OBJECT_INFO: { produce: () => normalizeObjectInfo("[]").diagnostics, path: [] },
+  E_INVALID_NODE: { produce: malformed, path: ["MockBadOutputOption", "output", 0, 1] },
+  W_INVALID_NODE_FIELD: { produce: malformed, path: ["MockBadInputSpecs", "output_name"] },
+  W_NODE_NAME_MISMATCH: { produce: malformed, path: ["MockNameMismatch", "name"] },
+  E_INVALID_INPUT_SECTION: {
+    produce: malformed,
+    path: ["MockBadInputSpecs", "input", "optional"],
+  },
+  E_DUPLICATE_INPUT: {
+    produce: malformed,
+    path: ["MockDuplicateInput", "input", "optional", "value"],
+  },
+  W_INPUT_ORDER_MISMATCH: { produce: malformed, path: ["MockPartialOrder", "input_order"] },
+  W_INVALID_INPUT_SPEC: {
+    produce: malformed,
+    path: ["MockBadInputSpecs", "input", "required", "null_spec"],
+  },
+  W_UNSUPPORTED_INPUT_TYPE: {
+    produce: malformed,
+    path: ["MockBadInputSpecs", "input", "required", "unknown_v3_type", 0],
+  },
+  W_INVALID_INPUT_OPTION: {
+    produce: malformed,
+    path: ["MockBadInputSpecs", "input", "required", "options_not_object", 1],
+  },
 };
 
 describe("every code has a negative test", () => {
   test.each(codes)("%s", async (code) => {
-    const diagnostics = await PRODUCERS[code]();
-    const found = diagnostics.find((diagnostic) => diagnostic.code === code);
-    expect(found).toBeDefined();
-    expect(found?.severity).toBe(DIAGNOSTIC_CODES[code]);
-    expect(Object.isFrozen(found)).toBeTrue();
+    const { produce, path } = PRODUCERS[code];
+    const found = (await produce()).filter((diagnostic) => diagnostic.code === code);
+    expect(found.map((diagnostic) => diagnostic.path)).toContainEqual(path);
+    for (const diagnostic of found) {
+      expect(diagnostic.severity).toBe(DIAGNOSTIC_CODES[code]);
+      expect(Object.isFrozen(diagnostic)).toBeTrue();
+    }
   });
 });

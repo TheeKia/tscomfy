@@ -5,16 +5,19 @@ import type { ComboOption, InputDef, OutputDef, OutputType, SocketType } from ".
  * backend's non-strict `validate_node_input`:
  * - `*` on either side passes, also as a member of a comma list;
  * - MatchType passes on either side (it is checked per template instead);
- * - an option-list output passes into a `COMBO`-form combo; a legacy `[[…]]` combo only takes
- *   an identical option list;
+ * - an option-list output passes into an input typed exactly `COMBO`; a legacy `[[…]]` combo only
+ *   takes an identical option list;
  * - otherwise the comma lists must share a type.
  *
  * List outputs don't change the answer: ComfyUI maps a list over a non-list input. An Autogrow
  * input answers for its slots. Inputs that can't be linked as a whole (DynamicGroup) and specs
- * the normalizer couldn't interpret answer `false`.
+ * the normalizer couldn't interpret answer `false`, whatever the output: stricter than the
+ * backend, never looser.
  */
 export function accepts(input: InputDef, output: OutputDef): boolean {
-  if (output.matchTemplate !== undefined) return true;
+  if (input.kind === "dynamicGroup" || input.kind === "unknown") return false;
+  if (input.kind === "autogrow") return accepts(input.template, output);
+  if (input.kind === "matchType" || output.matchTemplate !== undefined) return true;
   switch (input.kind) {
     case "socket":
     case "int":
@@ -24,22 +27,14 @@ export function accepts(input: InputDef, output: OutputDef): boolean {
     case "value":
       return typeAccepts(input.type, output.type);
     case "combo":
-      return input.form === "combo"
-        ? typeAccepts(COMBO, output.type)
-        : legacyComboAccepts(input.options, output.type);
+      return input.form === "legacy"
+        ? legacyComboAccepts(input.options, output.type)
+        : typeAccepts(input.type, output.type);
     case "dynamicCombo":
       return typeAccepts(DYNAMIC_COMBO, output.type);
-    case "autogrow":
-      return accepts(input.template, output);
-    case "matchType":
-      return true;
-    case "dynamicGroup":
-    case "unknown":
-      return false;
   }
 }
 
-const COMBO: SocketType = { kind: "named", name: "COMBO" };
 const DYNAMIC_COMBO: SocketType = { kind: "named", name: "COMFY_DYNAMICCOMBO_V3" };
 
 function typeAccepts(input: SocketType, output: OutputType): boolean {

@@ -54,6 +54,36 @@ describe("parse", () => {
     ]);
   });
 
+  test("reads non-finite numbers as null, at their paths", () => {
+    const result = parse('{"a":[NaN, "NaN Infinity"],"b":{"c":-Infinity},"d":1e400,"e":Infinity}');
+    expect(result.value).toEqual({ a: [null, "NaN Infinity"], b: { c: null }, d: null, e: null });
+    expect(result.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toEqual([
+      ["W_NON_FINITE_NUMBER", ["a", 0]],
+      ["W_NON_FINITE_NUMBER", ["b", "c"]],
+      ["W_NON_FINITE_NUMBER", ["d"]],
+      ["W_NON_FINITE_NUMBER", ["e"]],
+    ]);
+  });
+
+  test("keeps a 400-digit integer as a bigint", () => {
+    expect(parse(`[${"9".repeat(400)}]`).value).toEqual([10n ** 400n - 1n]);
+  });
+
+  test("still rejects other invalid JSON that mentions NaN", () => {
+    expect(parse("[NaN,]").diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "E_INVALID_JSON",
+    ]);
+  });
+
+  test("without source-text access, also reads overflowing literals as null", () => {
+    const result = parseWith("[1e400, 18446744073709551615]", false);
+    expect(result.value).toEqual([null, 18446744073709552000]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "W_NON_FINITE_NUMBER",
+      "W_PRECISION_LOSS",
+    ]);
+  });
+
   test("this runtime has source-text access", () => {
     expect(parseWith("[18446744073709551615]", true)).toEqual(parse("[18446744073709551615]"));
     expect(parse("[18446744073709551615]").diagnostics).toEqual([]);

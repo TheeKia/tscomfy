@@ -50,8 +50,8 @@ type WidgetBase = InputBase & {
   /** The frontend draws no socket for it, so links are only possible in API JSON. */
   readonly socketless: boolean;
   /**
-   * A frontend widget other than the one `kind` implies, e.g. a pack's custom editor for a STRING.
-   * Absent when `widgetType` names the widget `kind` already says.
+   * The frontend widget the server names, when it differs from the one `kind` implies: a pack's
+   * editor for a STRING, or a core widget on a primitive type, whose coercion decides the kind.
    */
   readonly widgetType?: string;
 };
@@ -99,9 +99,12 @@ export type BooleanInput = WidgetBase & {
 };
 
 /** A combo, from either the legacy `[[…]]` form or the `["COMBO", {options}]` form. */
-export type ComboInput = InputBase & {
+export type ComboInput = WidgetBase & {
   readonly kind: "combo";
-  /** The backend only connects option-list outputs to the `COMBO` form (§5.2). */
+  /**
+   * The backend matches links into the legacy form against the option list itself, and into
+   * the `COMBO` form by `type` (§5.2). A legacy combo's `type` is `COMBO`, as the frontend sees it.
+   */
   readonly form: "legacy" | "combo";
   /** Server order. May be empty (no model files installed, or a remote combo). */
   readonly options: readonly ComboOption[];
@@ -113,7 +116,6 @@ export type ComboInput = InputBase & {
   readonly upload: boolean;
   /** Options are fetched by the frontend at runtime. */
   readonly remote: boolean;
-  readonly socketless: boolean;
 };
 
 /**
@@ -240,6 +242,9 @@ export type Schema = {
   readonly formatVersion: 1;
   /** The ComfyUI version, if the caller supplied it. Metadata only: not part of the hash. */
   readonly comfyVersion?: string;
-  /** Keyed by class type and sorted by it in code-unit order (D15). */
+  /**
+   * Keyed by class type and built in code-unit order of class type (D15). JavaScript enumerates
+   * integer-like keys first, in numeric order, so a class named "10" would list before "A".
+   */
   readonly nodes: { readonly [classType: string]: NodeDef };
 };

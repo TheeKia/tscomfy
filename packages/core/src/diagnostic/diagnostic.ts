@@ -9,6 +9,7 @@ export type Severity = "error" | "warning";
 export const DIAGNOSTIC_CODES = {
   E_INVALID_JSON: "error",
   W_PRECISION_LOSS: "warning",
+  W_NON_FINITE_NUMBER: "warning",
   E_INVALID_OBJECT_INFO: "error",
   E_INVALID_NODE: "error",
   W_INVALID_NODE_FIELD: "warning",

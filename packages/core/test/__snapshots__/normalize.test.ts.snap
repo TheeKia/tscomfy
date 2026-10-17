@@ -386,6 +386,10 @@ exports[`snapshots basic-pipeline 1`] = `
             "required": true,
             "socketless": false,
             "tooltip": "Checkpoint file to load.",
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -580,6 +584,10 @@ exports[`snapshots basic-pipeline 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -598,6 +606,10 @@ exports[`snapshots basic-pipeline 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -775,6 +787,10 @@ exports[`snapshots basic-pipeline 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -841,6 +857,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -857,6 +877,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -894,6 +918,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -907,6 +935,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -948,6 +980,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -966,6 +1002,10 @@ exports[`snapshots combos 1`] = `
             "required": true,
             "socketless": false,
             "tooltip": "Legacy form.",
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -984,6 +1024,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -1000,6 +1044,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -1016,6 +1064,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -1060,6 +1112,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -1102,6 +1158,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -1120,6 +1180,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
           {
@@ -1137,6 +1201,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -1224,6 +1292,10 @@ exports[`snapshots combos 1`] = `
             "remote": false,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": true,
           },
           {
@@ -1237,6 +1309,10 @@ exports[`snapshots combos 1`] = `
             "remote": true,
             "required": true,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": true,
           },
         ],
@@ -1521,6 +1597,10 @@ exports[`snapshots dynamic-combo 1`] = `
             "remote": false,
             "required": false,
             "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
             "upload": false,
           },
         ],
@@ -1575,6 +1655,10 @@ exports[`snapshots dynamic-combo 1`] = `
                     "remote": false,
                     "required": true,
                     "socketless": false,
+                    "type": {
+                      "kind": "named",
+                      "name": "COMBO",
+                    },
                     "upload": false,
                   },
                 ],
@@ -1665,6 +1749,10 @@ exports[`snapshots dynamic-combo 1`] = `
                     "remote": false,
                     "required": false,
                     "socketless": false,
+                    "type": {
+                      "kind": "named",
+                      "name": "COMBO",
+                    },
                     "upload": false,
                   },
                 ],
@@ -1756,6 +1844,10 @@ exports[`snapshots dynamic-group 1`] = `
                 "remote": false,
                 "required": true,
                 "socketless": false,
+                "type": {
+                  "kind": "named",
+                  "name": "COMBO",
+                },
                 "upload": false,
               },
               {
@@ -2118,11 +2210,10 @@ exports[`snapshots malformed 1`] = `
     },
     {
       "code": "W_INPUT_ORDER_MISMATCH",
-      "message": "input_order lists unknown inputs missing_from_input and misses number_type, empty_tuple, options_not_object, dynamic_combo_no_options, autogrow_no_template, matchtype_no_template, dynamic_group_no_template, unknown_v3_type, which go last.",
+      "message": "input_order names missing_from_input, which the node doesn't declare; it leaves out number_type, empty_tuple, options_not_object, dynamic_combo_no_options, autogrow_no_template, matchtype_no_template, dynamic_group_no_template, unknown_v3_type, null_options, legacy_object_option, autogrow_bad_max, dynamic_group_bad_counts, dynamic_combo_duplicates, placed last.",
       "path": [
         "MockBadInputSpecs",
         "input_order",
-        "required",
       ],
       "severity": "warning",
     },
@@ -2243,6 +2334,74 @@ exports[`snapshots malformed 1`] = `
       "severity": "warning",
     },
     {
+      "code": "W_INVALID_INPUT_SPEC",
+      "message": "Legacy combo option 1 is {"x":1}, not a string, number or boolean; links match the full list, so it can't be dropped. Keeping the input as unknown.",
+      "path": [
+        "MockBadInputSpecs",
+        "input",
+        "required",
+        "legacy_object_option",
+        0,
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_SPEC",
+      "message": "Autogrow's template.max must be an integer from 1 to 100. Keeping the input as unknown.",
+      "path": [
+        "MockBadInputSpecs",
+        "input",
+        "required",
+        "autogrow_bad_max",
+        1,
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_SPEC",
+      "message": "A dynamic group needs 0 ≤ min ≤ max ≤ 20, with max ≥ 1. Keeping the input as unknown.",
+      "path": [
+        "MockBadInputSpecs",
+        "input",
+        "required",
+        "dynamic_group_bad_counts",
+        1,
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "E_DUPLICATE_INPUT",
+      "message": "Input v is declared twice; keeping the first.",
+      "path": [
+        "MockBadInputSpecs",
+        "input",
+        "required",
+        "dynamic_combo_duplicates",
+        1,
+        "options",
+        0,
+        "inputs",
+        "optional",
+        "v",
+      ],
+      "severity": "error",
+    },
+    {
+      "code": "W_INVALID_INPUT_OPTION",
+      "message": "Option a appears twice; keeping the first, as the backend does.",
+      "path": [
+        "MockBadInputSpecs",
+        "input",
+        "required",
+        "dynamic_combo_duplicates",
+        1,
+        "options",
+        1,
+        "key",
+      ],
+      "severity": "warning",
+    },
+    {
       "code": "W_INVALID_NODE_FIELD",
       "message": "output_name has 1 entries for 2 outputs; missing entries use defaults.",
       "path": [
@@ -2261,8 +2420,19 @@ exports[`snapshots malformed 1`] = `
       "severity": "warning",
     },
     {
+      "code": "E_INVALID_NODE",
+      "message": "Expected an option to be a string, a number or a boolean, got {"x":1}; dropping the node.",
+      "path": [
+        "MockBadOutputOption",
+        "output",
+        0,
+        1,
+      ],
+      "severity": "error",
+    },
+    {
       "code": "E_DUPLICATE_INPUT",
-      "message": "Input value is declared twice; keeping the first.",
+      "message": "Input value is also required; dropping the optional one.",
       "path": [
         "MockDuplicateInput",
         "input",
@@ -2270,6 +2440,16 @@ exports[`snapshots malformed 1`] = `
         "value",
       ],
       "severity": "error",
+    },
+    {
+      "code": "W_INVALID_NODE_FIELD",
+      "message": "A MatchType output names no template; it connects like *.",
+      "path": [
+        "MockMatchNoTemplate",
+        "output",
+        0,
+      ],
+      "severity": "warning",
     },
     {
       "code": "E_INVALID_NODE",
@@ -2332,6 +2512,15 @@ exports[`snapshots malformed 1`] = `
         "MockNotAnObject",
       ],
       "severity": "error",
+    },
+    {
+      "code": "W_INPUT_ORDER_MISMATCH",
+      "message": "input_order leaves out b, placed last.",
+      "path": [
+        "MockPartialOrder",
+        "input_order",
+      ],
+      "severity": "warning",
     },
   ],
   "schema": {
@@ -2454,6 +2643,106 @@ exports[`snapshots malformed 1`] = `
               },
             ],
           },
+          {
+            "kind": "int",
+            "lazy": false,
+            "name": "null_options",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "kind": "unknown",
+            "lazy": false,
+            "name": "legacy_object_option",
+            "rawLink": false,
+            "required": true,
+            "spec": [
+              [
+                "a",
+                {
+                  "x": 1,
+                },
+              ],
+            ],
+          },
+          {
+            "kind": "unknown",
+            "lazy": false,
+            "name": "autogrow_bad_max",
+            "rawLink": false,
+            "required": true,
+            "spec": [
+              "COMFY_AUTOGROW_V3",
+              {
+                "template": {
+                  "input": {
+                    "required": {
+                      "image": [
+                        "IMAGE",
+                        {},
+                      ],
+                    },
+                  },
+                  "max": 0,
+                  "min": 1,
+                  "prefix": "image",
+                },
+              },
+            ],
+          },
+          {
+            "kind": "unknown",
+            "lazy": false,
+            "name": "dynamic_group_bad_counts",
+            "rawLink": false,
+            "required": true,
+            "spec": [
+              "COMFY_DYNAMICGROUP_V3",
+              {
+                "max": 3,
+                "min": 5,
+                "template": {
+                  "required": {
+                    "x": [
+                      "INT",
+                      {},
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+          {
+            "kind": "dynamicCombo",
+            "lazy": false,
+            "name": "dynamic_combo_duplicates",
+            "options": [
+              {
+                "inputs": [
+                  {
+                    "kind": "int",
+                    "lazy": false,
+                    "name": "v",
+                    "rawLink": false,
+                    "required": true,
+                    "socketless": false,
+                    "type": {
+                      "kind": "named",
+                      "name": "INT",
+                    },
+                  },
+                ],
+                "key": "a",
+              },
+            ],
+            "rawLink": false,
+            "required": true,
+          },
         ],
         "isInputList": false,
         "outputNode": false,
@@ -2516,6 +2805,28 @@ exports[`snapshots malformed 1`] = `
         ],
         "pythonModule": "custom_nodes.mock-pack",
       },
+      "MockMatchNoTemplate": {
+        "category": "mock/malformed",
+        "classType": "MockMatchNoTemplate",
+        "deprecated": false,
+        "description": "A MatchType output without output_matchtypes.",
+        "displayName": "Mock Match No Template",
+        "experimental": false,
+        "inputs": [],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "COMFY_MATCHTYPE_V3",
+            "type": {
+              "kind": "any",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
       "MockNameMismatch": {
         "category": "mock/malformed",
         "classType": "MockNameMismatch",
@@ -2524,6 +2835,56 @@ exports[`snapshots malformed 1`] = `
         "displayName": "Mock Name Mismatch",
         "experimental": false,
         "inputs": [],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockPartialOrder": {
+        "category": "mock/malformed",
+        "classType": "MockPartialOrder",
+        "deprecated": false,
+        "description": "input_order leaves out a required input, which the frontend puts after the listed optional ones.",
+        "displayName": "Mock Partial Order",
+        "experimental": false,
+        "inputs": [
+          {
+            "kind": "int",
+            "lazy": false,
+            "name": "a",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "kind": "int",
+            "lazy": false,
+            "name": "c",
+            "rawLink": false,
+            "required": false,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "kind": "int",
+            "lazy": false,
+            "name": "b",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+        ],
         "isInputList": false,
         "outputNode": false,
         "outputs": [],
@@ -3132,7 +3493,34 @@ exports[`snapshots nulls 1`] = `
 
 exports[`snapshots numbers 1`] = `
 {
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "code": "W_INVALID_INPUT_OPTION",
+      "message": "The default 0 is outside [1, 8]; ignoring it.",
+      "path": [
+        "MockNumbers",
+        "input",
+        "required",
+        "below_min_default",
+        1,
+        "default",
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_OPTION",
+      "message": "The default 18446744073709551616 is outside [0, 18446744073709549568]; ignoring it.",
+      "path": [
+        "MockNumbers",
+        "input",
+        "required",
+        "rounded_up_default",
+        1,
+        "default",
+      ],
+      "severity": "warning",
+    },
+  ],
   "schema": {
     "formatVersion": 1,
     "nodes": {
@@ -3140,7 +3528,7 @@ exports[`snapshots numbers 1`] = `
         "category": "mock/widgets",
         "classType": "MockNumbers",
         "deprecated": false,
-        "description": "Integer bounds beyond 2^53 (exact in this file), including on FLOAT and on a TYPE:name widget type, widgets without defaults, list-valued defaults, and every widget option variant.",
+        "description": "Integer bounds beyond 2^53 (exact in this file), including on FLOAT, beyond the double range and on a TYPE:name widget type, defaults outside the bounds (also after rounding), widgets without defaults, list-valued defaults, and every widget option variant.",
         "displayName": "Mock Numbers",
         "experimental": false,
         "inputs": [
@@ -3307,6 +3695,49 @@ exports[`snapshots numbers 1`] = `
             "type": {
               "kind": "named",
               "name": "INT:seed",
+            },
+          },
+          {
+            "kind": "int",
+            "lazy": false,
+            "max": 8,
+            "min": 1,
+            "name": "below_min_default",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "kind": "float",
+            "lazy": false,
+            "max": 18446744073709550000,
+            "min": 0,
+            "name": "rounded_up_default",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "FLOAT",
+            },
+          },
+          {
+            "default": 0,
+            "kind": "float",
+            "lazy": false,
+            "max": 1.7976931348623157e+308,
+            "min": -1.7976931348623157e+308,
+            "name": "beyond_double",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "FLOAT",
             },
           },
           {
@@ -3993,7 +4424,7 @@ exports[`snapshots widget-types 1`] = `
         "category": "mock/widgets",
         "classType": "MockWidgetTypeOverrides",
         "deprecated": false,
-        "description": "widgetType picks the frontend widget: a FLOAT widget on a FLOAT,INT socket, a STRING widget on a union, a value widget on a STRING, and a widget only a pack's browser code registers. A pack type with a default but no widget stays a socket.",
+        "description": "widgetType picks the frontend widget: a FLOAT widget on a FLOAT,INT socket, a STRING widget on a union, a value widget on a STRING, and a widget only a pack's browser code registers; a COMBO type with a pack widget, a COMBO widget on a pack type and on INT. A pack type with a default but no widget stays a socket.",
         "displayName": "Mock Widget Type Overrides",
         "experimental": false,
         "inputs": [
@@ -4036,8 +4467,10 @@ exports[`snapshots widget-types 1`] = `
           },
           {
             "default": "",
-            "kind": "value",
+            "dynamicPrompts": false,
+            "kind": "string",
             "lazy": false,
+            "multiline": false,
             "name": "sketch",
             "rawLink": false,
             "required": true,
@@ -4046,7 +4479,7 @@ exports[`snapshots widget-types 1`] = `
               "kind": "named",
               "name": "STRING",
             },
-            "widget": "PAINTER",
+            "widgetType": "PAINTER",
           },
           {
             "default": "00:00",
@@ -4074,6 +4507,63 @@ exports[`snapshots widget-types 1`] = `
               "kind": "named",
               "name": "MOCK_PACK_STATE",
             },
+          },
+          {
+            "default": "a",
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "picker",
+            "options": [
+              "a",
+              "b",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+            "widgetType": "MOCK_PACK_PICKER",
+          },
+          {
+            "default": "s",
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "size",
+            "options": [
+              "s",
+              "m",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "MOCK_SIZE",
+            },
+            "upload": false,
+          },
+          {
+            "default": 1,
+            "kind": "int",
+            "lazy": false,
+            "name": "count",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+            "widgetType": "COMBO",
           },
         ],
         "isInputList": false,

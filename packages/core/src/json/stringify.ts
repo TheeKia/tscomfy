@@ -1,8 +1,10 @@
 import type { JsonValue } from "./value.ts";
 
 /**
- * Serializes a JSON value as compact JSON: keys in insertion order, `bigint` written as a plain
- * integer literal, everything else exactly as `JSON.stringify` writes it (docs/plan.md §7.5).
+ * Serializes a JSON value as compact JSON: keys in JavaScript's enumeration order (integer-like
+ * keys first in numeric order, then insertion order, as `JSON.stringify` and the ComfyUI frontend
+ * use), `bigint` written as a plain integer literal, everything else exactly as `JSON.stringify`
+ * writes it (docs/plan.md §7.5).
  * The output for a given value is the same in every runtime.
  *
  * Throws a `TypeError` for a non-finite number, which has no JSON form: passing one is a

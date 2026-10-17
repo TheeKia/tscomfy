@@ -27,7 +27,20 @@
           "FLOAT",
           { "default": 0, "min": -18446744073709551615, "max": 18446744073709551615, "step": 0.01 }
         ],
-        "typed_seed": ["INT:seed", { "default": 0, "min": 0, "max": 18446744073709551615 }]
+        "typed_seed": ["INT:seed", { "default": 0, "min": 0, "max": 18446744073709551615 }],
+        "below_min_default": ["INT", { "default": 0, "min": 1, "max": 8 }],
+        "rounded_up_default": [
+          "FLOAT",
+          { "default": 18446744073709551615, "min": 0, "max": 18446744073709551615 }
+        ],
+        "beyond_double": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,
+            "max": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+          }
+        ]
       },
       "optional": {
         "text": ["STRING", { "multiline": true, "dynamicPrompts": true, "default": "" }],
@@ -49,7 +62,10 @@
         "list_default",
         "int_list_default",
         "huge_float",
-        "typed_seed"
+        "typed_seed",
+        "below_min_default",
+        "rounded_up_default",
+        "beyond_double"
       ],
       "optional": ["text", "single_line", "toggle", "no_default_bool", "no_default_string"]
     },
@@ -59,7 +75,7 @@
     "output_name": ["INT", "FLOAT"],
     "name": "MockNumbers",
     "display_name": "Mock Numbers",
-    "description": "Integer bounds beyond 2^53 (exact in this file), including on FLOAT and on a TYPE:name widget type, widgets without defaults, list-valued defaults, and every widget option variant.",
+    "description": "Integer bounds beyond 2^53 (exact in this file), including on FLOAT, beyond the double range and on a TYPE:name widget type, defaults outside the bounds (also after rounding), widgets without defaults, list-valued defaults, and every widget option variant.",
     "python_module": "custom_nodes.mock-pack",
     "category": "mock/widgets",
     "output_node": false,

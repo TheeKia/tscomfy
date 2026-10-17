@@ -1,7 +1,15 @@
 import type { DiagnosticPath } from "../diagnostic/diagnostic.ts";
 import type { JsonObject, JsonValue } from "../json/value.ts";
 import type { ComboOption, OutputDef, OutputType } from "../schema/types.ts";
-import { type Context, describe, isArray, isBoolean, isString, report } from "./context.ts";
+import {
+  type Context,
+  describe,
+  isArray,
+  isBoolean,
+  isString,
+  preview,
+  report,
+} from "./context.ts";
 import { MATCH_TYPE } from "./frontend-widgets.ts";
 import { parseSocketType } from "./socket-type.ts";
 
@@ -41,7 +49,7 @@ export function readOutputs(
       report(
         context,
         "W_INVALID_NODE_FIELD",
-        [...path, "output_matchtypes", index],
+        templates === undefined ? typePath : [...path, "output_matchtypes", index],
         "A MatchType output names no template; it connects like *.",
       );
     }
@@ -74,23 +82,24 @@ function readOutputType(
     return type;
   }
   if (isArray(raw)) {
+    // A legacy combo input matches this list in full (§5.2), so it can't be kept partially.
     const options: ComboOption[] = [];
-    raw.forEach((option, index) => {
+    for (const [index, option] of raw.entries()) {
       if (
-        typeof option === "string" ||
-        typeof option === "boolean" ||
-        (typeof option === "number" && Number.isFinite(option))
+        typeof option !== "string" &&
+        typeof option !== "boolean" &&
+        (typeof option !== "number" || !Number.isFinite(option))
       ) {
-        options.push(option);
-      } else {
         report(
           context,
-          "W_INVALID_NODE_FIELD",
+          "E_INVALID_NODE",
           [...path, index],
-          `Expected an option to be a string, a number or a boolean, got ${describe(option)}; dropping it.`,
+          `Expected an option to be a string, a number or a boolean, got ${preview(option)}; dropping the node.`,
         );
+        return undefined;
       }
-    });
+      options.push(option);
+    }
     return { kind: "combo", options };
   }
   report(
