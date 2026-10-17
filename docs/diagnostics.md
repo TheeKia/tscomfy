@@ -72,6 +72,16 @@ takes, but may not do what was meant.
 | `E_TOO_FEW_DYNAMIC_INPUTS` | A DynamicGroup with fewer rows than its `min`. | — |
 | `E_DEPENDENCY_CYCLE` | Nodes that depend on each other through their links. | One diagnostic per back edge the search meets (two inputs linked to the same node are one edge), at the node it returns to. |
 
+## Importing prompts
+
+`importApi` reads a prompt back into a workflow (plan §10). Its paths point into the prompt, as
+validation's do. It also reports `E_INVALID_JSON`, `E_INVALID_PROMPT` (a node it can't read is
+left out) and `E_INVALID_LINK` (the input is left out).
+
+| Code | Meaning | What happens |
+|---|---|---|
+| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`. | The node is kept as a raw node with its wire keys, so it exports as it came. |
+
 ## Generating types
 
 Paths of codegen diagnostics are a class type followed by the input names leading to the input,
@@ -81,3 +91,14 @@ with dynamic-combo option keys in between, e.g. `["SaveVideo", "format", "mp4", 
 |---|---|---|
 | `W_EMPTY_COMBO` | A combo lists no options (no model files installed, an empty folder) and isn't remote. | Its values are typed as `string`. |
 | `W_UNTYPED_INPUT` | An input the normalizer kept as `unknown`. | Its value is typed as `unknown`. |
+
+## Transpiling
+
+`transpile` writes builder code for a workflow (plan §10). Its paths point into the workflow's
+nodes, by id. It also reports `E_DEPENDENCY_CYCLE` (no program can build a cycle; those nodes are
+left out) and `E_DANGLING_LINK` (a link to a node the workflow doesn't have; the input is left
+out).
+
+| Code | Meaning | What happens |
+|---|---|---|
+| `W_TRANSPILED_AS_RAW` | A node of a known class whose inputs the generated types can't express: a value or link they refuse (a legacy combo linked from an option list, a link into a socketless widget, a MatchType input that disagrees with the inferring one), an input the class doesn't have, a missing required input, a link to an output the node doesn't have. | The node is written as `raw(…)` with its wire keys, so the program still builds the same prompt. |

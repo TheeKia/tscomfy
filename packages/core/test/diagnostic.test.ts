@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   DIAGNOSTIC_CODES,
   exportApi,
+  importApi,
   workflow,
   type Diagnostic,
   type DiagnosticCode,
@@ -63,7 +64,7 @@ interface Producer {
 }
 
 /** Codes codegen reports; their negative tests are in packages/codegen/test. */
-const CODEGEN_CODES = ["W_EMPTY_COMBO", "W_UNTYPED_INPUT"] as const;
+const CODEGEN_CODES = ["W_EMPTY_COMBO", "W_UNTYPED_INPUT", "W_TRANSPILED_AS_RAW"] as const;
 type CoreCode = Exclude<DiagnosticCode, (typeof CODEGEN_CODES)[number]>;
 const isCoreCode = (code: DiagnosticCode): code is CoreCode =>
   !(CODEGEN_CODES as readonly DiagnosticCode[]).includes(code);
@@ -113,6 +114,14 @@ const PRODUCERS: Record<CoreCode, Producer> = {
         },
       ),
     path: ["1"],
+  },
+  W_IMPORTED_AS_RAW: {
+    produce: async () =>
+      importApi(
+        '{"9": {"class_type": "MockDynamicGroupOptional", "inputs": {"replacements.1.find": "a"}}}',
+        looseSchema(await readMockObjectInfo("dynamic-group")),
+      ).diagnostics,
+    path: ["9"],
   },
   E_UNKNOWN_CLASS_TYPE: {
     produce: () => validated({ "1": node("NoSuchNode") }),

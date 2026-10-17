@@ -1,18 +1,28 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { generate } from "@tscomfy/codegen";
-import { normalizeObjectInfo } from "@tscomfy/core";
+import { generate, transpile } from "@tscomfy/codegen";
+import {
+  defineSchema,
+  importApi,
+  normalizeObjectInfo,
+  parse,
+  stringify,
+  toApi,
+  type Workflow,
+} from "@tscomfy/core";
 import { CORPUS_DIR, listCorpus } from "@tscomfy/fixtures";
 
 // Corpus tests (docs/plan.md §13): the generated code for each real dump must type-check and be
-// exactly what oxfmt would produce. Output goes to corpus/generated/, which is gitignored like
-// the rest of the corpus.
+// exactly what oxfmt would produce, and so must every corpus API workflow transpiled over it
+// (§10), which must also rebuild its prompt byte for byte. Output goes to corpus/generated/,
+// which is gitignored like the rest of the corpus.
 
 const REPO = join(import.meta.dir, "../../..");
 const BIN = join(REPO, "node_modules/.bin");
 const TIMEOUT = 120_000;
 
 const dumps = await listCorpus("object-info");
+const prompts = await listCorpus("workflows/api");
 
 async function run(
   command: readonly string[],
@@ -41,7 +51,21 @@ describe("generate the corpus", () => {
       `${dump.name}: the generated code type-checks and is oxfmt-formatted`,
       async () => {
         const { schema } = normalizeObjectInfo(await Bun.file(dump.path).text());
-        const { files } = generate(schema, { exportName: "corpus" });
+        const typed = defineSchema(stringify(schema));
+        const transpiled = await Promise.all(
+          prompts.map(async (prompt) => {
+            const text = await Bun.file(prompt.path).text();
+            const result = transpile(importApi(text, typed).workflow, {
+              name: "prompt",
+              schemaModule: "./index.ts",
+              schemaName: "corpus",
+            });
+            expect(result.diagnostics).toEqual([]);
+            const path = `transpiled-${prompt.name.replace(/\.json$/, "")}.ts`;
+            return { path, contents: result.code, expected: stringify(parse(text).value ?? null) };
+          }),
+        );
+        const files = [...generate(schema, { exportName: "corpus" }).files, ...transpiled];
         await Promise.all(
           files.map((file) => Bun.write(join(directory, file.path), file.contents)),
         );
@@ -78,6 +102,18 @@ describe("generate the corpus", () => {
         expect(formatted.map((result) => result.output)).toEqual(
           files.map((file) => file.contents),
         );
+
+        // Bun resolves @tscomfy/core through the tsconfig's paths.
+        for (const file of transpiled) {
+          // oxlint-disable-next-line no-await-in-loop -- one module at a time, in order
+          const module: unknown = await import(join(directory, file.path));
+          const built: unknown =
+            typeof module === "object" && module !== null
+              ? Reflect.get(module, "prompt")
+              : undefined;
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the module's export
+          expect(stringify(toApi(built as Workflow))).toBe(file.expected);
+        }
       },
       TIMEOUT,
     );

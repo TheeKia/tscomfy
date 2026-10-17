@@ -360,13 +360,7 @@ class TypesEmitter {
     const members: Doc[] = [];
     const templates = new Set<string>();
     let optional = true;
-    // A DynamicGroup row is counted only when one of its keys is sent (§7.2): when no field is
-    // required or has a default, the first one must be given, or `{}` would send no row at all.
-    const sendable = inputs.filter((input) => input.kind !== "value" || sendsValue(input.widget));
-    const forced =
-      sendsSomething && !sendable.some((input) => isRequired(input) || hasDefault(input))
-        ? sendable[0]
-        : undefined;
+    const forced = sendsSomething ? forcedRowField(inputs) : undefined;
     for (const input of inputs) {
       // The frontend never sends display-only widgets, so they take no value (§7.4).
       if (input.kind === "value" && !sendsValue(input.widget)) continue;
@@ -755,7 +749,18 @@ class TypesEmitter {
  * Autogrow and DynamicGroup are required by their minimum alone: the backend enforces it even
  * when the input itself is optional.
  */
-function isRequired(input: InputDef): boolean {
+/**
+ * The field a DynamicGroup row's type requires beyond the required ones (§7.2): a row is counted
+ * only when one of its keys is sent, so when no field is required or has a default, the first
+ * one must be given, or `{}` would send no row at all.
+ */
+export function forcedRowField(fields: readonly InputDef[]): InputDef | undefined {
+  const sendable = fields.filter((field) => field.kind !== "value" || sendsValue(field.widget));
+  return sendable.some((field) => isRequired(field) || hasDefault(field)) ? undefined : sendable[0];
+}
+
+/** Whether the generated types require the input (shared with the transpiler). */
+export function isRequired(input: InputDef): boolean {
   switch (input.kind) {
     case "autogrow":
       return input.template.required && input.min > 0 && input.slots.length > 0;
@@ -777,7 +782,7 @@ function isRequired(input: InputDef): boolean {
 }
 
 /** Whether the exporter sends a value for the input when none is given. */
-function hasDefault(input: InputDef): boolean {
+export function hasDefault(input: InputDef): boolean {
   switch (input.kind) {
     case "int":
     case "float":

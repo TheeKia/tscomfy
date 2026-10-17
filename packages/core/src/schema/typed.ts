@@ -12,6 +12,12 @@ declare const nodesType: unique symbol;
 export type TypedSchema<N> = Schema & { readonly [nodesType]: N };
 
 /**
+ * The `Nodes` interface of a typed schema: `Workflow<NodesOf<typeof local>>` names a workflow's
+ * type without importing the generated `nodes.ts`.
+ */
+export type NodesOf<S> = S extends TypedSchema<infer N> ? N : never;
+
+/**
  * Loads the schema a generated `index.ts` embeds (docs/plan.md §6.1, D13). `text` is
  * `stringify(schema)` as codegen wrote it; it is parsed losslessly, so big integers stay exact.
  *

@@ -15,6 +15,7 @@ export {
   type Severity,
 } from "./diagnostic/diagnostic.ts";
 export { exportApi, toApi, type ToApiOptions, validate } from "./api/export.ts";
+export { importApi, type ImportResult } from "./api/import.ts";
 export type { ApiLink, ApiNode, ApiPrompt } from "./api/prompt.ts";
 export { ValidationError } from "./diagnostic/validation-error.ts";
 export type {
@@ -50,7 +51,7 @@ export { accepts, acceptsType, socketAccepts } from "./schema/accepts.ts";
 export { namedOutputs, sendsValue } from "./schema/frontend.ts";
 export { diffSchemas, type InputChange, type NodeChange, type SchemaDiff } from "./schema/diff.ts";
 export { hashSchema } from "./schema/hash.ts";
-export { defineSchema, type TypedSchema } from "./schema/typed.ts";
+export { defineSchema, type NodesOf, type TypedSchema } from "./schema/typed.ts";
 export type {
   AutogrowInput,
   BooleanInput,

@@ -640,16 +640,44 @@ The diagnostic model is §5.4.
 
 ## 10. Transpiler (API JSON → TS)
 
-`transpile(wf, opts) → string`:
-- Topological order.
-- Variable names from output and class names, de-duplicated.
-- Short single-use refs inlined (configurable).
-- Ids and titles kept.
-- Dynamic inputs re-nested.
-- Unknown classes become `raw(…)` with a comment.
+**Import.** `importApi(text, schema) → { workflow, diagnostics }` (core) is the exporter in
+reverse. It takes raw text (D10). Nodes keep their ids; a title is kept only when it differs from
+the display name the exporter writes. Wire keys are folded back by the schema, mirroring the
+exporter: dynamic-combo options into `{ option, inputs }` (or the bare key), Autogrow slots into a
+list when they are the first ones in order (else by slot name), DynamicGroup keys into rows,
+`{"__value__": [...]}` into the list and CURVE's `{"__type__", "__value__"}` into its value. A
+node of an unknown class, or one whose keys don't fold back (rows missing in between, keys under a
+dynamic combo's unknown option), is kept as a raw node with its wire keys (`W_IMPORTED_AS_RAW`),
+so it still exports as it came. Keys the schema doesn't know pass through for validation to
+report. An internal `assembleWorkflow` builds the graph, so links may point forward.
 
-**Round-trip guarantee** on a corpus of real workflows: `toApi(run(transpile(x)))` equals `x`, after a
-documented normalization (defaults filled, key order ignored).
+**Transpile.** `transpile(workflow, { name, schemaModule, schemaName, inline?, header? }) → { code,
+diagnostics }` (codegen) writes an ES module exporting `const <name>: Workflow<NodesOf<typeof
+<schema>>> = workflow(<schema>, ({ n, raw }) => { … })`:
+- Dependency order, ties broken by graph order; nodes in a cycle are reported and left out.
+- Variables named after outputs (`latent`, `conditioning2`) for single outputs, destructured by
+  output name for several, after the class for raw nodes; de-duplicated with numeric suffixes.
+- A single-output node used once is inlined into its use, unless it inlines another itself, so
+  nesting stays one level deep (`inline: false` turns it off).
+- Ids and titles are kept as `{ id, title }`; values equal to their default are left out at every
+  level (the exporter fills them back in).
+- A node becomes `n.Class(…)` only when the generated types accept its inputs, decided by the
+  rules `emit-types.ts` writes them with (link atoms per output, `#link`, legacy combos taking
+  `*`, socketless widgets, MatchType's inferring position and parameter defaults, Autogrow and
+  DynamicGroup bounds, the forced row field). Anything else becomes `raw(…)` with its wire keys
+  and `W_TRANSPILED_AS_RAW`; unknown classes are raw without a warning.
+- Layout follows oxfmt's (Prettier's) rules for calls with two object arguments, objects, arrays
+  of multi-element objects, and the hugged build function; the committed transpiled mock prompts
+  pass `format:check` and `tsc -b`.
+
+CLI: `tscomfy transpile --prompt <file> --schema <dir> [--out <file>] [--name] [--no-inline]`,
+importing the schema relative to the output, with the import extension the manifest records.
+
+**Round-trip guarantee**, stronger than first planned (no normalization needed for frontend
+exports): `stringify(toApi(importApi(x)))` equals `stringify(parse(x))`, and running the
+transpiled module and exporting gives the same bytes, for every mock prompt and every corpus API
+workflow. Ids that aren't integers may come back in another order after transpiling, because
+creation order follows dependencies.
 
 ## 11. UI format (later phases)
 
@@ -852,7 +880,7 @@ Exit: an example project generates from the live server and builds `txt2img` end
 
 Exit: a negative test for every code; `toApi({ validate })`.
 
-**Phase 6: API import and transpiler**
+**Phase 6: API import and transpiler** (done)
 - `parse`, `importApi` (schema-driven un-flattening, `__value__` unwrap), `transpile`, CLI `transpile`.
 
 Exit: every corpus API workflow re-exports byte for byte, key order included:
@@ -926,4 +954,5 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Phase 4 review | An independent review found 10 issues, each reproduced: a `?token=` query appended before `/object_info` (and shown), `check` trusting header lines over file contents, an error body (`{"detail": …}`) generating 0 nodes over good types with exit 0, reserved-word export names, upload combos counted as drift, an unguarded response body read, a fix command that named the old source, credentials in usage errors, control characters in recorded paths, and doc gaps. All fixed with tests |
 | Backend validation (§8) | Read in backend 0.41 `execution.py` (`validate_inputs`, `validate_prompt`) and `comfy_api/latest/_io.py` (`get_finalized_class_inputs`, the Autogrow, DynamicCombo and DynamicGroup expanders): coercion with `int()`/`float()`/`str()`/`bool()` before bounds, combo membership with multi-selects element-wise, `VALIDATE_INPUTS` skipping built-in checks, an unknown dynamic-combo key dropping the input silently, DynamicGroup key grammar and row counts, Autogrow minimums from the template's section, cycles and "no outputs" rejecting the prompt. The corpus Anima export (13 nodes) validates with no diagnostic in 0.8 ms; 20,000-node chains, plain and through MatchType nodes, validate without deep recursion |
 | Phase 5 review | An independent review found 10 issues, each reproduced: MatchType outputs narrowed by inputs the types don't infer from (typed code over the real `ComfySwitchNode` failed validation), the inferring position in an unchosen dynamic-combo option, links and wrapped keys into dynamic combos that the backend drops, `[{}]` rows that send nothing, recursive MatchType resolution overflowing the stack at 16,000 nodes, unchecked links into unknown inputs, Autogrow slots never checked against slot 0, `int()` truncation assumed for non-INT types, misdescribed ordering and duplicate cycle reports, and tests whose sources were all untyped. All fixed; `soundness.test.ts` now builds typed workflows |
+| Import and transpile round trip (§10) | The corpus Anima export (13 nodes) imports without a diagnostic or raw node, re-exports byte for byte with validation on, and transpiles to typed code (no `raw`) that type-checks against the corpus types, is oxfmt-formatted, and rebuilds the prompt byte for byte. The six mock prompts do the same over their mock schemas |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

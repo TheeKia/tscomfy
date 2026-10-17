@@ -14,9 +14,9 @@ GUIs, MCP servers. Don't add these.
 
 **Status:** Phases 0 (foundation), 1 (lossless JSON, diagnostics, the schema model, `accepts()`,
 the `/object_info` normalizer), 2 (the type emitter in `codegen`), 3 (`workflow()` and `toApi`) and
-4 (the `tscomfy` CLI: `generate`, `check`) and 5 (validation: `validateApi`, `validate`, `toApi`
-validating by default) are done. Next is Phase 6: API import and the transpiler. Phases and exit
-criteria are in `docs/plan.md` §14.
+4 (the `tscomfy` CLI: `generate`, `check`), 5 (validation: `validateApi`, `validate`, `toApi`
+validating by default) and 6 (`importApi`, `transpile`, `tscomfy transpile`) are done. Next is
+Phase 7: graph operations. Phases and exit criteria are in `docs/plan.md` §14.
 
 ## Where things are
 
@@ -80,7 +80,7 @@ bun install
 bun run check     # tsc -b, lint, format check, tests: run before declaring work done
 bun run test      # tests against source, no build needed (skips corpus tests)
 bun run test:corpus  # corpus tests against your local real data
-bun run generate:fixtures  # after changing codegen: regenerate packages/codegen/test/generated
+bun run generate:fixtures  # after changing codegen: regenerate packages/codegen/test/generated (types and transpiled prompts)
 bun run bench:types  # type-check budget of generated types (plan §6.6)
 bun run tscomfy generate --url http://127.0.0.1:8188 --out <dir>  # the CLI, from source
 bun run format    # oxfmt: format and sort imports

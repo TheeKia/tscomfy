@@ -3,7 +3,7 @@ import type { TypedSchema } from "../schema/typed.ts";
 import type { NodeDef } from "../schema/types.ts";
 import type { BuildContext, Graph, GraphNode, InputValue, RawNode, Workflow } from "./graph.ts";
 import { isOutputRef, outputRef, ownerOf } from "./output-ref.ts";
-import type { NodeHandle, NodeId } from "./types.ts";
+import type { NodeHandle, NodeId, Out } from "./types.ts";
 
 /**
  * Builds a workflow (docs/plan.md §7): `build` calls node functions on `n`, which add nodes and
@@ -31,6 +31,35 @@ export function workflow<N>(
   // Nodes added after an `await` would come too late; refuse rather than build half a graph.
   if (isThenable(returned)) {
     throw new TypeError("workflow: the build function must be synchronous");
+  }
+  return Object.freeze({ schema, graph: builder.graph() });
+}
+
+/** A node given whole, as an importer reads it: its id, class, structured inputs and title. */
+export interface AssembledNode {
+  readonly id: NodeId;
+  readonly classType: string;
+  readonly inputs: { readonly [name: string]: InputValue };
+  readonly title?: string;
+  readonly raw: boolean;
+}
+
+/**
+ * Builds a workflow from whole nodes, for importers (not part of the package API). `build`
+ * receives `link`, which makes an output reference of this workflow, to a node added before or
+ * after, and returns the nodes in order. Throws a `TypeError` as {@link workflow} does.
+ */
+export function assembleWorkflow<N>(
+  schema: TypedSchema<N>,
+  build: (link: (node: NodeId, slot: number) => Out<string>) => readonly AssembledNode[],
+): Workflow<N> {
+  const builder = new GraphBuilder<N>(schema);
+  try {
+    for (const node of build((source, slot) => outputRef(builder, source, slot))) {
+      builder.assemble(node);
+    }
+  } finally {
+    builder.close();
   }
   return Object.freeze({ schema, graph: builder.graph() });
 }
@@ -81,6 +110,22 @@ class GraphBuilder<N> {
 
   close(): void {
     this.#open = false;
+  }
+
+  assemble(node: AssembledNode): void {
+    if (node.id === "" || this.#nodes.has(node.id)) {
+      throw new TypeError(`workflow: node id ${JSON.stringify(node.id)} is empty or taken`);
+    }
+    this.#nodes.set(
+      node.id,
+      Object.freeze({
+        id: node.id,
+        classType: node.classType,
+        inputs: freezeInputs(node.inputs, this),
+        ...(node.title === undefined ? {} : { title: node.title }),
+        raw: node.raw,
+      }),
+    );
   }
 
   graph(): Graph {

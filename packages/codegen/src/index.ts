@@ -15,3 +15,4 @@ export {
   type GenerateOptions,
   type GenerateResult,
 } from "./generate.ts";
+export { transpile, type TranspileOptions, type TranspileResult } from "./transpile.ts";

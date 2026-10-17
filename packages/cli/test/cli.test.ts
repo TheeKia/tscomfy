@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { CLI_VERSION, run } from "@tscomfy/cli";
 import { CODEGEN_VERSION } from "@tscomfy/codegen";
-import { readMockObjectInfo } from "@tscomfy/fixtures";
+import { readMockApiWorkflow, readMockObjectInfo } from "@tscomfy/fixtures";
 import { type MemoryIo, memoryIo, rawNode } from "./memory-io.ts";
 
 const basic = await readMockObjectInfo("basic-pipeline");
@@ -448,5 +448,94 @@ describe("check", () => {
     io.files.set("after.json", '{"detail": "Not authenticated"}');
     expect(await run(["check", "--from", "after.json", "--out", "gen"], io)).toBe(1);
     expect(io.stderr()).toStartWith("tscomfy: after.json doesn't hold node definitions");
+  });
+});
+
+/** {@link generated} from basic-pipeline, plus a prompt at `prompts/My Txt2Img.json`. */
+async function withPrompt(prompt: string): Promise<MemoryIo> {
+  const io = await generated(basic);
+  io.files.set("prompts/My Txt2Img.json", prompt);
+  return io;
+}
+
+describe("transpile", () => {
+  test("prints a module over the generated types, importing them relative to the output", async () => {
+    const io = await withPrompt(await readMockApiWorkflow("txt2img"));
+    expect(
+      await run(["transpile", "--prompt", "prompts/My Txt2Img.json", "--schema", "gen"], io),
+    ).toBe(0);
+    expect(io.stderr()).toBe("");
+    expect(io.stdout()).toContain('import { gen } from "./gen/index.js";\n');
+    expect(io.stdout()).toContain(
+      "export const myTxt2Img: Workflow<NodesOf<typeof gen>> = workflow(gen, ({ n }) => {",
+    );
+    expect(io.stdout()).toContain(
+      "// Regenerate with: tscomfy transpile --prompt 'prompts/My Txt2Img.json' --schema gen\n",
+    );
+  });
+
+  test("writes the module to --out, with --name and --no-inline", async () => {
+    const io = await withPrompt(await readMockApiWorkflow("txt2img"));
+    const args = [
+      "--prompt",
+      "prompts/My Txt2Img.json",
+      "--schema",
+      "gen",
+      "--out",
+      "src/flows/t.ts",
+    ];
+    expect(await run(["transpile", ...args, "--name", "txt2img", "--no-inline"], io)).toBe(0);
+    expect(io.stdout()).toBe(
+      "Transpiled 8 nodes from prompts/My Txt2Img.json into src/flows/t.ts.\n",
+    );
+    const code = io.files.get("src/flows/t.ts") ?? "";
+    expect(code).toContain('import { gen } from "../../gen/index.js";\n');
+    expect(code).toContain("export const txt2img: ");
+    expect(code).toContain("const seed = n.MockSeed(");
+  });
+
+  test("reports what it writes as raw on stderr", async () => {
+    const prompt = JSON.stringify({
+      "1": { class_type: "VAELoader", inputs: { vae_name: "pixel_space", x: 1 } },
+    });
+    const io = await withPrompt(prompt);
+    expect(
+      await run(["transpile", "--prompt", "prompts/My Txt2Img.json", "--schema", "gen"], io),
+    ).toBe(0);
+    expect(io.stderr()).toStartWith(
+      "W_TRANSPILED_AS_RAW 1: Node 1 (VAELoader) is written as raw(…)",
+    );
+    expect(io.stdout()).toContain(
+      'raw("VAELoader", { vae_name: "pixel_space", x: 1 }, { id: "1" });',
+    );
+  });
+
+  test.each([
+    [["--schema", "gen"], 2, "--prompt is required."],
+    [["--prompt", "p.json"], 2, "--schema is required."],
+    [
+      ["--prompt", "prompts/My Txt2Img.json", "--schema", "gen", "--name", "gen"],
+      2,
+      '--name "gen" isn\'t usable',
+    ],
+    [["--prompt", "1.json", "--schema", "gen"], 2, 'Can\'t make an export name from "1.json"'],
+    [["--prompt", "missing.json", "--schema", "gen"], 1, "There is no file at missing.json."],
+    [
+      ["--prompt", "prompts/My Txt2Img.json", "--schema", "nowhere"],
+      1,
+      "There is no tscomfy.json in nowhere",
+    ],
+  ])("fails for %p", async (args, exit, message) => {
+    const io = await withPrompt("{}");
+    expect(await run(["transpile", ...args], io)).toBe(exit);
+    expect(io.stderr()).toStartWith(`tscomfy: ${message}`);
+  });
+
+  test("fails for a file that isn't a prompt", async () => {
+    const io = await withPrompt("[1]");
+    expect(
+      await run(["transpile", "--prompt", "prompts/My Txt2Img.json", "--schema", "gen"], io),
+    ).toBe(1);
+    expect(io.stderr()).toStartWith("tscomfy: prompts/My Txt2Img.json isn't a prompt: ");
   });
 });

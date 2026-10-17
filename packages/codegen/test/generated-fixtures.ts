@@ -3,9 +3,14 @@
 // `bun run generate:fixtures`; generated.test.ts fails while the committed copy is stale.
 
 import { join } from "node:path";
-import { generate, type GenerateResult } from "@tscomfy/codegen";
-import { accepts, normalizeObjectInfo } from "@tscomfy/core";
-import { type MockObjectInfoName, readMockObjectInfo } from "@tscomfy/fixtures";
+import { generate, type GenerateResult, transpile, type TranspileResult } from "@tscomfy/codegen";
+import { accepts, defineSchema, importApi, normalizeObjectInfo, stringify } from "@tscomfy/core";
+import {
+  type MockApiWorkflowName,
+  type MockObjectInfoName,
+  readMockApiWorkflow,
+  readMockObjectInfo,
+} from "@tscomfy/fixtures";
 
 /** Where the committed fixtures live. */
 export const GENERATED_DIR: string = join(import.meta.dir, "generated");
@@ -49,4 +54,30 @@ export async function acceptsMatrix(): Promise<string> {
   }
   lines.push("}", "");
   return lines.join("\n");
+}
+
+/** The mock schema each mock prompt was written for. */
+export const PROMPT_SCHEMAS: Record<MockApiWorkflowName, MockObjectInfoName> = {
+  autogrow: "autogrow",
+  "dynamic-combo": "dynamic-combo",
+  "dynamic-group": "dynamic-group",
+  lists: "combos",
+  txt2img: "basic-pipeline",
+  "value-widgets": "widget-types",
+};
+
+/** Where the transpiled mock prompts live, one module each, over the generated fixtures. */
+export const TRANSPILED_DIR: string = join(GENERATED_DIR, "transpiled");
+
+/** A mock prompt transpiled exactly as committed: `export const prompt`, over `mock`. */
+export async function transpileMock(name: MockApiWorkflowName): Promise<TranspileResult> {
+  const schemaName = PROMPT_SCHEMAS[name];
+  const { schema } = normalizeObjectInfo(await readMockObjectInfo(schemaName));
+  const { workflow } = importApi(await readMockApiWorkflow(name), defineSchema(stringify(schema)));
+  return transpile(workflow, {
+    name: "prompt",
+    schemaModule: `../${schemaName}/index.ts`,
+    schemaName: "mock",
+    header: ["Regenerate with: bun run generate:fixtures"],
+  });
 }

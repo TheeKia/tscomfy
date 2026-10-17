@@ -40,8 +40,10 @@ export const DIAGNOSTIC_CODES = {
   E_UNKNOWN_DYNAMIC_OPTION: "error",
   E_TOO_FEW_DYNAMIC_INPUTS: "error",
   E_DEPENDENCY_CYCLE: "error",
+  W_IMPORTED_AS_RAW: "warning",
   W_EMPTY_COMBO: "warning",
   W_UNTYPED_INPUT: "warning",
+  W_TRANSPILED_AS_RAW: "warning",
 } as const;
 
 /** A stable diagnostic code. Codes are never reused for a different meaning. */
