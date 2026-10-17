@@ -13,8 +13,9 @@ time, and runtime validation catches the rest. Output is API-format JSON.
 GUIs, MCP servers. Don't add these.
 
 **Status:** Phases 0 (foundation), 1 (lossless JSON, diagnostics, the schema model, `accepts()`,
-the `/object_info` normalizer), 2 (the type emitter in `codegen`) and 3 (`workflow()` and `toApi`)
-are done. Next is Phase 4: the CLI. Phases and exit criteria are in `docs/plan.md` §14.
+the `/object_info` normalizer), 2 (the type emitter in `codegen`), 3 (`workflow()` and `toApi`) and
+4 (the `tscomfy` CLI: `generate`, `check`) are done. Next is Phase 5: validation. Phases and exit
+criteria are in `docs/plan.md` §14.
 
 ## Where things are
 
@@ -27,6 +28,7 @@ are done. Next is Phase 4: the CLI. Phases and exit criteria are in `docs/plan.m
 | `packages/{core,codegen,cli}` | The publishable packages, `@tscomfy/<folder>` |
 | `internal/fixtures` | `@tscomfy/fixtures` (private): mocks and the local corpus |
 | `internal/bench` | `@tscomfy/bench` (private): `bench:types`, synthetic schemas built from the mocks |
+| `examples/` | Example projects, workspace members outside `tsc -b`; their generated types are gitignored |
 
 ## Working agreements
 
@@ -79,6 +81,7 @@ bun run test      # tests against source, no build needed (skips corpus tests)
 bun run test:corpus  # corpus tests against your local real data
 bun run generate:fixtures  # after changing codegen: regenerate packages/codegen/test/generated
 bun run bench:types  # type-check budget of generated types (plan §6.6)
+bun run tscomfy generate --url http://127.0.0.1:8188 --out <dir>  # the CLI, from source
 bun run format    # oxfmt: format and sort imports
 bun run clean     # tsc never deletes stale outputs; clean when files are removed or renamed
 ```

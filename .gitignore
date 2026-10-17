@@ -6,3 +6,7 @@ internal/bench/.out/
 # Local real-data corpus: never committed (see internal/fixtures/corpus/README.md)
 internal/fixtures/corpus/*
 !internal/fixtures/corpus/README.md
+
+# Examples generate from your own server: never committed.
+examples/*/src/comfy/
+examples/*/.test-*/

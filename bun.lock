@@ -13,6 +13,13 @@
         "typescript": "7.0.2",
       },
     },
+    "examples/txt2img": {
+      "name": "@tscomfy/example-txt2img",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tscomfy/core": "workspace:*",
+      },
+    },
     "internal/bench": {
       "name": "@tscomfy/bench",
       "version": "0.0.0",
@@ -29,9 +36,15 @@
     "packages/cli": {
       "name": "@tscomfy/cli",
       "version": "0.0.0",
+      "bin": {
+        "tscomfy": "./dist/main.js",
+      },
       "dependencies": {
         "@tscomfy/codegen": "workspace:*",
         "@tscomfy/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@tscomfy/fixtures": "workspace:*",
       },
     },
     "packages/codegen": {
@@ -148,6 +161,8 @@
     "@tscomfy/codegen": ["@tscomfy/codegen@workspace:packages/codegen"],
 
     "@tscomfy/core": ["@tscomfy/core@workspace:packages/core"],
+
+    "@tscomfy/example-txt2img": ["@tscomfy/example-txt2img@workspace:examples/txt2img"],
 
     "@tscomfy/fixtures": ["@tscomfy/fixtures@workspace:internal/fixtures"],
 

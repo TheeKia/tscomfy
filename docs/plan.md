@@ -575,9 +575,25 @@ The diagnostic model is §5.4.
   - de-duplicated with stable suffixes
   - **328 class names in the dump are not valid identifiers**; they stay as quoted keys
   - diagnostics: `W_EMPTY_COMBO`, `W_UNTYPED_INPUT` (docs/diagnostics.md)
-- **check**: diffs the live server against the snapshot (nodes added, removed or changed, combo option
-  changes). It exits non-zero on drift.
-- **Report**: counts plus diagnostics grouped by node pack (`python_module`; the dump has 203 packs).
+- **CLI** (`packages/cli`, the only I/O; commands take an injected `Io`, so tests run without a
+  disk or network):
+  - `generate (--url <server> | --from <file>) --out <dir>` writes `nodes.ts`, `index.ts` and
+    `object_info.json`, the raw response byte for byte. The snapshot lets `--from` regenerate
+    offline and gives `check` its baseline. With `--url` it GETs `/object_info` and
+    `/system_stats` (for `comfyui_version`; optional) and nothing else. The headers record the
+    schema hash and the command that regenerates the files, shell-quoted, with credentials
+    taken out of the URL. Credentials are also kept out of every message. A response that
+    isn't JSON or isn't an object of nodes is fatal (exit 1, nothing written). Anything less is
+    reported and generated.
+  - `check (--url | --from) --out <dir>` normalizes the server and the snapshot and compares
+    their `hashSchema` (D15), so differences in fields the schema doesn't keep don't count. On
+    drift it prints the diff (`diffSchemas` in core): nodes added, removed and changed, and per
+    node the inputs, combo options, outputs and details. It also checks that `nodes.ts` and
+    `index.ts` carry the snapshot's hash, which catches edited or half-regenerated files. It
+    exits 1 on either, and suggests the command recorded in the header.
+  - Exit codes: 0 on success, 1 on a failure or drift, 2 on a usage error (with the usage).
+- **Report**: counts plus diagnostics grouped by node pack (`python_module`; the dump has 203
+  packs), 5 per pack unless `--verbose`. `--quiet` prints errors only, to stderr.
 
 ## 10. Transpiler (API JSON → TS)
 
@@ -780,8 +796,11 @@ Exit: byte-stable API output; parity tests (§7.4) pass, one committed mock work
 (`mocks/workflows/`) per rule, distilled from corpus exports. Re-exporting the corpus itself needs
 the importer, so it is Phase 6's exit.
 
-**Phase 4: CLI**
-- `generate` (`--url` or `--from`), `check` (drift), the report.
+**Phase 4: CLI** (done)
+- `generate` (`--url` or `--from`), `check` (drift), the report (§9). `diffSchemas` in core.
+- `examples/txt2img`: a workspace project whose `generate` script targets the local server and
+  whose generated directory is gitignored. Its test runs it over the basic-pipeline mock
+  (generate, `tsc`, run, compare the prompt), and the corpus test runs it over each real dump.
 
 Exit: an example project generates from the live server and builds `txt2img` end to end.
 
@@ -858,4 +877,7 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Input order (§9) | Frontend 1.55.17 `getOrderedInputSpecs` (`nodeDefOrderingUtil.ts`): listed required, listed optional, then remaining inputs in definition order; no `input_order`, definition order |
 | `stringify`/`parse` round trip (§7.5) | `JSON.stringify(2 ** 64 - 2048)` is `"18446744073709550000"`, an integer literal that `parse` reads as a different bigint; `toExponential()` (`1.844674407370955e+19`) round-trips exactly. Found by `defineSchema` on the numbers mock |
 | Non-finite numbers (§7.5) | `/object_info` is served by aiohttp `web.json_response`, whose default `json.dumps` writes `Infinity`/`NaN` (checked with the server's Python). None in the corpus dump today |
+| CLI against the live server (§9) | `generate --url` on ComfyUI 0.41.0: 1,758 node types in 1.6 s; 0 errors and 67 warnings (54 `W_EMPTY_COMBO` for loaders with no model files, plus the 13 normalizer warnings above). `check --url` takes 0.36 s. `examples/txt2img` generates, type-checks and prints a prompt over the live types |
+| Schema identity across responses (D15) | A corpus dump saved earlier and the live response differ only in the order of `vhs_path_extensions` on `VHS_LoadImagePath`, a field the normalizer doesn't keep. The hashes are equal and `check` reports up to date, as intended |
+| Credentials in `--url` | Bun's `fetch` turns `http://user:pw@host` into `Authorization: Basic …` (checked with `Bun.serve` in `system.test.ts`), so authenticated servers work. The CLI strips the credentials from every message and header |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

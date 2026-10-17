@@ -3,11 +3,13 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "internal/*"
+    "internal/*",
+    "examples/*"
   ],
   "type": "module",
   "scripts": {
     "build": "tsc -b",
+    "tscomfy": "bun --conditions=@tscomfy/source packages/cli/src/main.ts",
     "clean": "rm -rf packages/*/dist",
     "test": "bun test --conditions=@tscomfy/source --path-ignore-patterns='**/*.corpus.test.ts' packages internal",
     "test:corpus": "bun test --conditions=@tscomfy/source .corpus.test",

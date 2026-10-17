@@ -54,6 +54,7 @@ export {
 } from "./object-info/normalize.ts";
 export { accepts } from "./schema/accepts.ts";
 export { namedOutputs, sendsValue } from "./schema/frontend.ts";
+export { diffSchemas, type InputChange, type NodeChange, type SchemaDiff } from "./schema/diff.ts";
 export { hashSchema } from "./schema/hash.ts";
 export { defineSchema, type TypedSchema } from "./schema/typed.ts";
 export type {
