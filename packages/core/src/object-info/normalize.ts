@@ -1,6 +1,7 @@
 import type { Diagnostic, DiagnosticPath } from "../diagnostic/diagnostic.ts";
 import { parse } from "../json/parse.ts";
 import type { JsonObject, JsonValue } from "../json/value.ts";
+import { freezeSchema } from "../schema/freeze.ts";
 import type { NodeDef, Schema } from "../schema/types.ts";
 import {
   type Context,
@@ -61,12 +62,12 @@ export function normalizeObjectInfo(text: string, options: NormalizeOptions = {}
       );
     }
   }
-  const schema: Schema = {
+  const schema = freezeSchema({
     formatVersion: 1,
     ...(options.comfyVersion === undefined ? {} : { comfyVersion: options.comfyVersion }),
-    nodes: nullPrototype(Object.fromEntries(entries)),
-  };
-  return { schema: deepFreeze(schema), diagnostics: Object.freeze(context.diagnostics) };
+    nodes: Object.fromEntries(entries),
+  });
+  return { schema, diagnostics: Object.freeze(context.diagnostics) };
 }
 
 function readNode(
@@ -159,23 +160,4 @@ function readExpected<T extends JsonValue>(
 function compareCodeUnits(a: string, b: string): number {
   if (a === b) return 0;
   return a < b ? -1 : 1;
-}
-
-/**
- * Drops the prototype of a record keyed by server names, so a class named "constructor" or
- * "toString" can't resolve to an inherited member. `Object.fromEntries` defines keys as own data
- * properties, so even "__proto__" is safe before this.
- */
-function nullPrototype<T extends object>(record: T): T {
-  Object.setPrototypeOf(record, null);
-  return record;
-}
-
-function deepFreeze<T>(value: T): T {
-  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
-    const children: unknown[] = Object.values(value);
-    for (const child of children) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }

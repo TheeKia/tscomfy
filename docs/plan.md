@@ -425,7 +425,8 @@ Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
 - `stringify()` is our own deterministic serializer: keys in JavaScript's enumeration order, as
   `JSON.stringify` and the frontend use (integer-like keys such as node ids `"1"`, `"10"` first in
   numeric order, then insertion order; every object we build has a fixed construction order,
-  which §7.4 needs), bigint as a JSON number.
+  which §7.4 needs), bigint as a JSON number. An integer-valued number beyond 2⁵³ is written in
+  exponent form, so it reads back as the same number rather than as a bigint (§16).
 - `parse()` reads `NaN`, `Infinity` and `-Infinity`, which Python servers write for non-finite
   floats (`/object_info` goes through `json.dumps`), and literals beyond the double range, as
   `null` with `W_NON_FINITE_NUMBER`, so one such value can't invalidate a whole dump.
@@ -770,5 +771,6 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | `TYPE:name` types | `INT:seed` is not a frontend widget (not in the registry, not in the bundle). Backend `validate_inputs` coerces only exact `INT`/`FLOAT`/`STRING`/`BOOLEAN` but still checks min/max; `validate_node_input("INT", "INT:seed")` is false |
 | Normalizing the corpus dump | 1,758 of 1,758 nodes, 55–66 ms in Bun 1.4.3. 13 warnings, all real server inconsistencies: 7 combo defaults that aren't options, 1 INT default below its `min`, 3 `output_*` arrays longer than `output`, 2 `name` mismatches. Also found and distilled into mocks: `null` for unset fields, boolean combo options (3), value widgets, `widgetType` |
 | Input order (§9) | Frontend 1.55.17 `getOrderedInputSpecs` (`nodeDefOrderingUtil.ts`): listed required, listed optional, then remaining inputs in definition order; no `input_order`, definition order |
+| `stringify`/`parse` round trip (§7.5) | `JSON.stringify(2 ** 64 - 2048)` is `"18446744073709550000"`, an integer literal that `parse` reads as a different bigint; `toExponential()` (`1.844674407370955e+19`) round-trips exactly. Found by `defineSchema` on the numbers mock |
 | Non-finite numbers (§7.5) | `/object_info` is served by aiohttp `web.json_response`, whose default `json.dumps` writes `Infinity`/`NaN` (checked with the server's Python). None in the corpus dump today |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

@@ -96,6 +96,15 @@ describe("stringify", () => {
     expect(stringify(value)).toBe(JSON.stringify(value));
   });
 
+  test("writes unsafe integer-valued numbers so they round-trip as numbers", () => {
+    const values = [2 ** 64 - 2048, -(2 ** 64), 1e21, Number.MAX_VALUE, 2 ** 53];
+    expect(stringify(values)).toBe(
+      "[1.844674407370955e+19,-1.8446744073709552e+19,1e+21,1.7976931348623157e+308,9.007199254740992e+15]",
+    );
+    expect(parse(stringify(values)).value).toEqual(values);
+    expect(JSON.parse(stringify(values))).toEqual(values);
+  });
+
   test("writes bigint as a plain integer literal", () => {
     expect(stringify({ seed: 18446744073709551615n, list: [-1n] })).toBe(
       '{"seed":18446744073709551615,"list":[-1]}',

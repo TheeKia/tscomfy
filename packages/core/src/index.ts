@@ -13,6 +13,7 @@ export {
   type DiagnosticPath,
   type Severity,
 } from "./diagnostic/diagnostic.ts";
+export type { In, Match, NodeHandle, NodeId, NodeOptions, Out } from "./graph/types.ts";
 export { parse, type ParseResult } from "./json/parse.ts";
 export { stringify } from "./json/stringify.ts";
 export type { JsonObject, JsonValue } from "./json/value.ts";
@@ -22,6 +23,8 @@ export {
   type NormalizeResult,
 } from "./object-info/normalize.ts";
 export { accepts } from "./schema/accepts.ts";
+export { hashSchema } from "./schema/hash.ts";
+export { defineSchema, type TypedSchema } from "./schema/typed.ts";
 export type {
   AutogrowInput,
   BooleanInput,
