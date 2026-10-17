@@ -62,5 +62,5 @@
       "rules": { "typescript/no-non-null-assertion": "off" }
     }
   ],
-  "ignorePatterns": ["**/dist/**", "internal/fixtures/corpus/**"]
+  "ignorePatterns": ["**/dist/**", "internal/fixtures/corpus/**", "**/test/generated/**"]
 }

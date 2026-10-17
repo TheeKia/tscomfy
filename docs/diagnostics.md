@@ -31,3 +31,13 @@ Paths of parser and normalizer diagnostics point into the raw document, e.g.
 | `W_INVALID_INPUT_SPEC` | An input spec can't be interpreted: not a `[type, options?]` list, a type that isn't a string or option list, an empty type, a dynamic input missing its payload or with counts outside the backend's limits, or a legacy combo with an option that isn't a string, number or boolean (its links match the full list). | The input is kept as `unknown`. |
 | `W_UNSUPPORTED_INPUT_TYPE` | The input uses a `COMFY_…_V3` dynamic type this version doesn't know. | The input is kept as `unknown`. |
 | `W_INVALID_INPUT_OPTION` | One option of a readable spec is invalid: wrong type; a combo option that isn't a string, number or boolean; a default the backend would reject (not one of the combo's options, outside `min`/`max`); a malformed or duplicate dynamic-combo option. | That option is ignored. A combo with no listed options keeps its default, since membership can't be checked. |
+
+## Generating types
+
+Paths of codegen diagnostics are a class type followed by the input names leading to the input,
+with dynamic-combo option keys in between, e.g. `["SaveVideo", "format", "mp4", "codec"]`.
+
+| Code | Meaning | What happens |
+|---|---|---|
+| `W_EMPTY_COMBO` | A combo lists no options (no model files installed, an empty folder) and isn't remote. | Its values are typed as `string`. |
+| `W_UNTYPED_INPUT` | An input the normalizer kept as `unknown`. | Its value is typed as `unknown`. |

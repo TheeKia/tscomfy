@@ -31,6 +31,9 @@
       "dependencies": {
         "@tscomfy/core": "workspace:*",
       },
+      "devDependencies": {
+        "@tscomfy/fixtures": "workspace:*",
+      },
     },
     "packages/core": {
       "name": "@tscomfy/core",

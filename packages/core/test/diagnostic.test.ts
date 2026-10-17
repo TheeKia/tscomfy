@@ -38,8 +38,14 @@ interface Producer {
   readonly path: readonly (string | number)[];
 }
 
+/** Codes codegen reports; their negative tests are in packages/codegen/test. */
+const CODEGEN_CODES = ["W_EMPTY_COMBO", "W_UNTYPED_INPUT"] as const;
+type CoreCode = Exclude<DiagnosticCode, (typeof CODEGEN_CODES)[number]>;
+const isCoreCode = (code: DiagnosticCode): code is CoreCode =>
+  !(CODEGEN_CODES as readonly DiagnosticCode[]).includes(code);
+
 /** One negative test per code: an input that must produce it, at a precise path. */
-const PRODUCERS: Record<DiagnosticCode, Producer> = {
+const PRODUCERS: Record<CoreCode, Producer> = {
   E_INVALID_JSON: { produce: () => parse("{").diagnostics, path: [] },
   W_PRECISION_LOSS: {
     produce: () => parseWith('{"max":[18446744073709551615]}', false).diagnostics,
@@ -74,7 +80,7 @@ const PRODUCERS: Record<DiagnosticCode, Producer> = {
 };
 
 describe("every code has a negative test", () => {
-  test.each(codes)("%s", async (code) => {
+  test.each(codes.filter(isCoreCode))("%s", async (code) => {
     const { produce, path } = PRODUCERS[code];
     const found = (await produce()).filter((diagnostic) => diagnostic.code === code);
     expect(found.map((diagnostic) => diagnostic.path)).toContainEqual(path);

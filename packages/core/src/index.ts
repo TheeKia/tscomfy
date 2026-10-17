@@ -7,6 +7,7 @@
  */
 
 export {
+  createDiagnostic,
   DIAGNOSTIC_CODES,
   type Diagnostic,
   type DiagnosticCode,

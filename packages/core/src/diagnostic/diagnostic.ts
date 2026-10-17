@@ -20,6 +20,8 @@ export const DIAGNOSTIC_CODES = {
   W_INVALID_INPUT_SPEC: "warning",
   W_UNSUPPORTED_INPUT_TYPE: "warning",
   W_INVALID_INPUT_OPTION: "warning",
+  W_EMPTY_COMBO: "warning",
+  W_UNTYPED_INPUT: "warning",
 } as const;
 
 /** A stable diagnostic code. Codes are never reused for a different meaning. */
