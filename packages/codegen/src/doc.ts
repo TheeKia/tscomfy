@@ -43,6 +43,8 @@ interface IndentIfBreak {
 interface Fill {
   readonly kind: "fill";
   readonly contents: readonly string[];
+  /** Printed after the last item when broken, and counted in its fit. */
+  readonly trailing: string;
 }
 
 /**
@@ -62,8 +64,8 @@ export function groupId(description: string): GroupId {
  * Prettier's `fill` over text separated by `line`s: as many items on each line as fit. An item
  * goes on the current line when it fits there together with the item before it.
  */
-export function fill(contents: readonly string[]): Doc {
-  return { kind: "fill", contents };
+export function fill(contents: readonly string[], trailing = ""): Doc {
+  return { kind: "fill", contents, trailing };
 }
 
 /** Indents the lines inside by one level. */
@@ -157,14 +159,17 @@ export function print(doc: Doc, width: number): string {
           });
           break;
         case "fill": {
-          const { contents } = current;
-          for (const [index, item] of contents.entries()) {
-            const next = contents[index + 1];
+          const broken = mode === "break";
+          const items = current.contents.map((item, index) =>
+            broken && index === current.contents.length - 1 ? `${item}${current.trailing}` : item,
+          );
+          for (const [index, item] of items.entries()) {
+            const next = items[index + 1];
             const start = column;
             output.push(item);
             column += textWidth(item);
             if (next === undefined) break;
-            if (mode === "flat" || start + textWidth(item) + 1 + textWidth(next) <= width) {
+            if (!broken || start + textWidth(item) + 1 + textWidth(next) <= width) {
               output.push(" ");
               column += 1;
             } else {

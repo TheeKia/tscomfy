@@ -116,7 +116,9 @@ function notAPrompt(text: string): string | undefined {
   if (Array.isArray(parsed["nodes"]) && Array.isArray(parsed["links"])) {
     return "it is a UI workflow; save it with the frontend's Export (API) instead.";
   }
-  if (typeof parsed["prompt"] === "object" && !Object.hasOwn(parsed, "class_type")) {
+  // A node with the id "prompt" has a class_type; a POST /prompt body's prompt doesn't.
+  const prompt = parsed["prompt"];
+  if (prompt !== undefined && isRecord(prompt) && !Object.hasOwn(prompt, "class_type")) {
     return "it is a POST /prompt body; save its prompt on its own.";
   }
   return undefined;
@@ -143,11 +145,21 @@ function moduleSpecifier(out: string | undefined, schemaDir: string, extension: 
 function readName(flags: Flags, promptPath: string, schemaName: string): string {
   const given = value(flags, "name");
   const name = given ?? camel(basename(promptPath).replace(/\.[^.]*$/, ""));
+  if (BUILDER_NAMES.includes(schemaName)) {
+    throw new CliError(
+      `The schema's export name, ${schemaName}, is one the transpiled module needs itself; run tscomfy generate again with another --name.`,
+    );
+  }
   const taken = name === schemaName || BUILDER_NAMES.includes(name);
-  if (!isExportName(name) || taken) {
+  // The declaration must fit on one line: `export const <name>: Workflow<NodesOf<…>> =`. Export
+  // names are ASCII, so their length is their width.
+  const long = `export const ${name}: Workflow<NodesOf<typeof ${schemaName}>> =`.length > 100;
+  if (!isExportName(name) || taken || long) {
     const why = taken
       ? `the module itself uses it (${[schemaName, ...BUILDER_NAMES].join(", ")})`
-      : "it must be an identifier, not a reserved word";
+      : long
+        ? "it is too long for the declaration's line"
+        : "it must be an identifier, not a reserved word";
     throw new CliError(
       given === undefined
         ? `Can't name the export ${JSON.stringify(name)}, after ${JSON.stringify(promptPath)}: ${why}; pass --name.`

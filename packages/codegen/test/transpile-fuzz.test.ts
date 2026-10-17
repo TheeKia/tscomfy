@@ -113,6 +113,17 @@ const CRAFTED: readonly Case[] = [
     }),
   },
   {
+    name: "many outputs inside an expanded declaration",
+    schema: "outputs",
+    built: workflow(outputs, ({ n, raw }) => {
+      const all = n.MockManyOutputs();
+      raw("MockSink", { first: all[0], second: all[1], third: all[2], fourth: all[3] });
+      const again = n.MockManyOutputs();
+      raw("MockSink", { first: again[0], second: again[1], third: again[2], fourth: again[3] });
+    }),
+    options: { name: "aWorkflowWithAQuiteLongNameThatNeedsMoreRoom" },
+  },
+  {
     name: "numbers and keys",
     schema: "widget-types",
     built: workflow(widgetTypes, ({ n }) => {
@@ -214,7 +225,13 @@ function fuzz(seed: number): Case {
               ),
             );
           case "value":
-            return pick([null, "#ff0000", [1, 2, 3], { x: 1, y: [0.5, 1e21] }]);
+            return next() < 0.5
+              ? pick([null, "#ff0000", [1, 2, 3], { x: 1, y: [0.5, 1e21] }])
+              : // Number lists of every length and width, for the fill layout's line ends.
+                Array.from(
+                  { length: 2 + Math.floor(next() * 60) },
+                  () => Math.round(next() * 10 ** Math.floor(next() * 7)) / 10,
+                );
           case "socket":
           case "matchType":
           case "unknown":
@@ -237,7 +254,7 @@ function fuzz(seed: number): Case {
 
 const CASES: readonly Case[] = [
   ...CRAFTED,
-  ...Array.from({ length: 150 }, (_, seed) => fuzz(seed + 1)),
+  ...Array.from({ length: 300 }, (_, seed) => fuzz(seed + 1)),
 ];
 
 interface Written {

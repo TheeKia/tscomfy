@@ -520,6 +520,7 @@ describe("transpile", () => {
     ],
     [["--prompt", "1.json", "--schema", "gen"], 2, 'Can\'t name the export "1", after "1.json"'],
     [["--prompt", "workflow.json", "--schema", "gen"], 2, 'Can\'t name the export "workflow"'],
+    [["--prompt", `${"a".repeat(60)}.json`, "--schema", "gen"], 2, "Can't name the export"],
     [["--prompt", "missing.json", "--schema", "gen"], 1, "There is no file at missing.json."],
     [
       ["--prompt", "prompts/My Txt2Img.json", "--schema", "nowhere"],
@@ -539,4 +540,23 @@ describe("transpile", () => {
     ).toBe(1);
     expect(io.stderr()).toStartWith("tscomfy: prompts/My Txt2Img.json isn't a prompt: ");
   });
+});
+
+test("transpile refuses a schema whose export name the module needs itself", async () => {
+  const io = memoryIo({ "before.json": basic, "p.json": await readMockApiWorkflow("txt2img") });
+  expect(await run(["generate", "--from", "before.json", "--out", "src/raw", "--quiet"], io)).toBe(
+    0,
+  );
+  expect(await run(["transpile", "--prompt", "p.json", "--schema", "src/raw"], io)).toBe(1);
+  expect(io.stderr()).toStartWith("tscomfy: The schema's export name, raw, is one the transpiled");
+});
+
+test("transpile takes a prompt with a node named prompt", async () => {
+  const io = await withPrompt(
+    JSON.stringify({ prompt: { class_type: "VAELoader", inputs: { vae_name: "pixel_space" } } }),
+  );
+  expect(
+    await run(["transpile", "--prompt", "prompts/My Txt2Img.json", "--schema", "gen"], io),
+  ).toBe(0);
+  expect(io.stdout()).toContain('n.VAELoader({ vae_name: "pixel_space" }, { id: "prompt" });');
 });

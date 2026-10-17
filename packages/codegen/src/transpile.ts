@@ -39,7 +39,14 @@ import {
   textWidth,
 } from "./doc.ts";
 import { isExportName } from "./emit-schema-module.ts";
-import { forcedRowField, hasDefault, headerLines, isRequired, PRINT_WIDTH } from "./emit-types.ts";
+import {
+  forcedRowField,
+  hasDefault,
+  headerLines,
+  isObjectMember,
+  isRequired,
+  PRINT_WIDTH,
+} from "./emit-types.ts";
 import { CODEGEN_VERSION } from "./generate.ts";
 import { NameRegistry, propertyKey, quote } from "./names.ts";
 
@@ -94,8 +101,7 @@ export function transpile(workflow: Workflow, options: TranspileOptions): Transp
       throw new TypeError(`transpile: ${JSON.stringify(value)} is a name the module itself uses`);
     }
   }
-  const declaration = `export const ${options.name}: Workflow<NodesOf<typeof ${options.schemaName}>> =`;
-  if (textWidth(declaration) > PRINT_WIDTH) {
+  if (textWidth(declarationLeft(options)) > PRINT_WIDTH) {
     throw new TypeError("transpile: options.name and options.schemaName are too long for one line");
   }
   return new Transpiler(workflow, options).run();
@@ -125,6 +131,7 @@ class Transpiler {
   readonly #names: NameRegistry;
   #usesN = false;
   #usesRaw = false;
+  #layout: Layout = "hug";
 
   constructor(workflow: Workflow, options: TranspileOptions) {
     this.#workflow = workflow;
@@ -180,6 +187,10 @@ class Transpiler {
       });
     }
     const plans = order.flatMap((node) => this.#plans.get(node.id) ?? []);
+    this.#usesN = plans.some((plan) => plan.mode === "typed");
+    this.#usesRaw = plans.some((plan) => plan.mode === "raw");
+    // Known before any statement: how deep the statements sit decides their layout.
+    this.#layout = declarationLayout(this.#options, this.#build(), plans.length === 0);
     const uses = this.#uses(plans);
     const statements: Doc[] = [];
     for (const plan of plans) {
@@ -264,7 +275,6 @@ class Transpiler {
     const { node, definition } = plan;
     const options = this.#nodeOptions(node);
     if (plan.mode === "raw" || definition === undefined) {
-      this.#usesRaw = true;
       const call = callDoc("raw", [quote(node.classType), this.#wireObject(plan), options]);
       const slots = this.#usedSlots.get(node.id);
       if (slots === undefined) return [call, ";"];
@@ -274,7 +284,6 @@ class Transpiler {
       }
       return statementDoc(`const ${name}`, call);
     }
-    this.#usesN = true;
     const callee = /^[A-Za-z_$][\w$]*$/.test(node.classType)
       ? `n.${node.classType}`
       : `n[${quote(node.classType)}]`;
@@ -301,16 +310,14 @@ class Transpiler {
     // Several outputs: destructure the ones used, by their names, while the pattern fits on its
     // line (Prettier would break a longer one); otherwise index one variable.
     const last = Math.max(...used.map((output) => output.index));
-    const names = outputs
+    const bindings = outputs
       .slice(0, last + 1)
-      .map((output) => (used.includes(output) ? camel(output.name, "output") : ""));
-    if (textWidth(`  const [${names.join(", ")}] =`) <= PRINT_WIDTH) {
-      const bindings = outputs.slice(0, last + 1).map((output) => {
-        if (!used.includes(output)) return "";
-        const name = this.#claim(camel(output.name, "output"));
-        this.#references.set(slotKey(node.id, output.index), name);
-        return name;
-      });
+      .map((output) => (used.includes(output) ? this.#claim(camel(output.name, "output")) : ""));
+    const pattern = `const [${bindings.join(", ")}] =`;
+    if (STATEMENT_INDENT[this.#layout] + textWidth(pattern) <= PRINT_WIDTH) {
+      for (const [index, binding] of bindings.entries()) {
+        if (binding !== "") this.#references.set(slotKey(node.id, index), binding);
+      }
       return statementDoc(`const [${bindings.join(", ")}]`, call);
     }
     const name = this.#claim(camel(node.classType, "node"));
@@ -439,14 +446,18 @@ class Transpiler {
     );
   }
 
-  #module(statements: readonly Doc[]): string {
+  /** The build function's head: `({ n, raw }) =>` with what the statements use. */
+  #build(): string {
     const context = [...(this.#usesN ? ["n"] : []), ...(this.#usesRaw ? ["raw"] : [])];
+    return `(${context.length === 0 ? "" : `{ ${context.join(", ")} }`}) =>`;
+  }
+
+  #module(statements: readonly Doc[]): string {
     const header = [
       `Transpiled by @tscomfy/codegen ${CODEGEN_VERSION}.`,
       ...(this.#options.header ?? []),
     ];
-    const { name, schemaName } = this.#options;
-    const build = `(${context.length === 0 ? "" : `{ ${context.join(", ")} }`}) =>`;
+    const { schemaName } = this.#options;
     const block: Doc =
       statements.length === 0
         ? "{}"
@@ -457,27 +468,39 @@ class Transpiler {
       'import { type NodesOf, type Workflow, workflow } from "@tscomfy/core";',
       `import { ${schemaName} } from ${quote(this.#options.schemaModule)};`,
       "",
-      print(declarationDoc(name, schemaName, build, block, statements.length === 0), PRINT_WIDTH),
+      print(declarationDoc(this.#options, this.#build(), block, this.#layout), PRINT_WIDTH),
       "",
     ].join("\n");
   }
 }
 
 /**
- * `export const <name>: Workflow<…> = workflow(<schema>, <build> <block>);` laid out as Prettier
- * lays out an assignment whose right side is a call with a function last: the function hugs the
- * call while the line up to its `{` fits (with `});` for an empty block); otherwise the right side
- * moves below `=` if that makes it fit, and failing that each argument takes a line of its own.
+ * How `export const <name>: Workflow<…> = workflow(<schema>, <build> <block>);` is laid out, as
+ * Prettier lays out an assignment whose right side is a call with a function last: the function
+ * hugs the call while the line up to its `{` fits (with `});` for an empty block), else each
+ * argument takes a line of its own; the right side moves below `=` when that makes the call's
+ * first line fit.
  */
-function declarationDoc(
-  name: string,
-  schemaName: string,
-  build: string,
-  block: Doc,
-  empty: boolean,
-): Doc {
-  const left = `export const ${name}: Workflow<NodesOf<typeof ${schemaName}>> =`;
-  const hug = `workflow(${schemaName}, ${build} ${empty ? "{});" : "{"}`;
+type Layout = "hug" | "expand" | "belowHug" | "belowExpand";
+
+/** The column the build function's statements start at, per layout. */
+const STATEMENT_INDENT: Record<Layout, number> = { hug: 2, expand: 4, belowHug: 4, belowExpand: 6 };
+
+function declarationLayout(options: TranspileOptions, build: string, empty: boolean): Layout {
+  const left = declarationLeft(options);
+  const hug = `workflow(${options.schemaName}, ${build} ${empty ? "{});" : "{"}`;
+  if (textWidth(`${left} ${hug}`) <= PRINT_WIDTH) return "hug";
+  if (textWidth(`${left} workflow(`) <= PRINT_WIDTH) return "expand";
+  return textWidth(`  ${hug}`) <= PRINT_WIDTH ? "belowHug" : "belowExpand";
+}
+
+function declarationLeft(options: TranspileOptions): string {
+  return `export const ${options.name}: Workflow<NodesOf<typeof ${options.schemaName}>> =`;
+}
+
+function declarationDoc(options: TranspileOptions, build: string, block: Doc, layout: Layout): Doc {
+  const { schemaName } = options;
+  const left = declarationLeft(options);
   const hugged: Doc = [`workflow(${schemaName}, `, build, " ", block, ");"];
   const expanded: Doc = [
     "workflow(",
@@ -485,10 +508,16 @@ function declarationDoc(
     hardline,
     ");",
   ];
-  if (textWidth(`${left} ${hug}`) <= PRINT_WIDTH) return [left, " ", hugged];
-  if (textWidth(`${left} workflow(`) <= PRINT_WIDTH) return [left, " ", expanded];
-  const below = textWidth(`  ${hug}`) <= PRINT_WIDTH ? hugged : expanded;
-  return [left, indent([hardline, below])];
+  switch (layout) {
+    case "hug":
+      return [left, " ", hugged];
+    case "expand":
+      return [left, " ", expanded];
+    case "belowHug":
+      return [left, indent([hardline, hugged])];
+    case "belowExpand":
+      return [left, indent([hardline, expanded])];
+  }
 }
 
 /** The nodes of `nodes` that lie on a cycle among them (Tarjan's algorithm, iteratively). */
@@ -797,7 +826,7 @@ class Typing {
     for (const [index, slot] of input.slots.entries()) {
       const item = Object.hasOwn(value, slot) ? value[slot] : undefined;
       if (item === undefined) {
-        if (index < required) return `${where} needs ${slot}`;
+        if (index < required || isObjectMember(slot)) return `${where} needs ${slot}`;
         continue;
       }
       const problem = this.#input(scope, input.template, item, where, index);
@@ -1201,7 +1230,8 @@ function numbersDoc(values: readonly number[]): Doc {
   const items = values.map((value, index) =>
     index < values.length - 1 ? `${numberText(value)},` : numberText(value),
   );
-  return group(["[", indent([softline, fill(items), ifBreak(",")]), softline, "]"]);
+  // The trailing comma belongs to the last item, so the last line's fit counts it.
+  return group(["[", indent([softline, fill(items, ",")]), softline, "]"]);
 }
 
 /**

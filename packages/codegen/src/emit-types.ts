@@ -554,7 +554,7 @@ class TypesEmitter {
     const members = input.slots.map((slotName, index) => [
       "readonly ",
       propertyKey(slotName),
-      index < required ? ": " : "?: ",
+      index < required || isObjectMember(slotName) ? ": " : "?: ",
       index === 0 ? first : rest,
       ";",
     ]);
@@ -744,6 +744,14 @@ class TypesEmitter {
   }
 }
 
+/**
+ * Whether a property named `name` must be required: TypeScript checks an optional property
+ * against the `Object` member of that name, which every object literal has.
+ */
+export function isObjectMember(name: string): boolean {
+  return OBJECT_MEMBERS.has(name);
+}
+
 /** Members of TypeScript's `Object` interface, which every object type has. */
 const OBJECT_MEMBERS: ReadonlySet<string> = new Set([
   "constructor",
@@ -774,7 +782,7 @@ export function forcedRowField(fields: readonly InputDef[]): InputDef | undefine
  * transpiler.
  */
 export function isRequired(input: InputDef): boolean {
-  if (OBJECT_MEMBERS.has(input.name)) return true;
+  if (isObjectMember(input.name)) return true;
   switch (input.kind) {
     case "autogrow":
       return input.template.required && input.min > 0 && input.slots.length > 0;

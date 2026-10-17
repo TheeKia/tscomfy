@@ -117,3 +117,39 @@ describe("diagnostics", () => {
     ]);
   });
 });
+
+describe("Object members", () => {
+  test("are required, as inputs and as Autogrow slots: TypeScript checks optional ones against Object", () => {
+    const { schema } = normalizeObjectInfo(
+      JSON.stringify({
+        N: {
+          input: {
+            required: {
+              vals: [
+                "COMFY_AUTOGROW_V3",
+                {
+                  template: {
+                    input: { required: { v: ["IMAGE", {}] } },
+                    names: ["a", "constructor"],
+                    min: 0,
+                  },
+                },
+              ],
+            },
+            optional: { toString: ["STRING", { default: "" }] },
+          },
+          output: [],
+          name: "N",
+          display_name: "N",
+          category: "test",
+          python_module: "nodes",
+          output_node: true,
+        },
+      }),
+    );
+    const [types] = generate(schema, { exportName: "local" }).files;
+    expect(types?.contents).toContain('readonly constructor: In<"IMAGE">;');
+    expect(types?.contents).toContain('readonly a?: In<"IMAGE">;');
+    expect(types?.contents).toContain('readonly toString: string | In<"STRING">;');
+  });
+});
