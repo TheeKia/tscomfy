@@ -2464,6 +2464,69 @@ exports[`snapshots dynamic-group 1`] = `
         ],
         "pythonModule": "comfy_extras.nodes_mock",
       },
+      "MockDynamicGroupNoDefaults": {
+        "category": "mock/dynamic",
+        "classType": "MockDynamicGroupNoDefaults",
+        "deprecated": false,
+        "description": "Rows whose fields are all optional without defaults: an empty row sends no key, so the backend doesn't count it.",
+        "displayName": "Mock Dynamic Group No Defaults",
+        "experimental": false,
+        "inputs": [
+          {
+            "fields": [
+              {
+                "dynamicPrompts": false,
+                "kind": "string",
+                "lazy": false,
+                "multiline": false,
+                "name": "tag",
+                "rawLink": false,
+                "required": false,
+                "socketless": false,
+                "type": {
+                  "kind": "named",
+                  "name": "STRING",
+                },
+              },
+              {
+                "kind": "float",
+                "lazy": false,
+                "max": 1,
+                "min": 0,
+                "name": "weight",
+                "rawLink": false,
+                "required": false,
+                "socketless": false,
+                "type": {
+                  "kind": "named",
+                  "name": "FLOAT",
+                },
+              },
+            ],
+            "kind": "dynamicGroup",
+            "lazy": false,
+            "max": 3,
+            "min": 1,
+            "name": "rows",
+            "rawLink": false,
+            "required": true,
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "STRING",
+            "type": {
+              "kind": "named",
+              "name": "STRING",
+            },
+          },
+        ],
+        "pythonModule": "comfy_extras.nodes_mock",
+      },
       "MockDynamicGroupOptional": {
         "category": "mock/dynamic",
         "classType": "MockDynamicGroupOptional",
@@ -4943,6 +5006,60 @@ exports[`snapshots widget-types 1`] = `
   "schema": {
     "formatVersion": 1,
     "nodes": {
+      "MockIntWidgetOnPackType": {
+        "category": "mock/widgets",
+        "classType": "MockIntWidgetOnPackType",
+        "deprecated": false,
+        "description": "An INT widget on a pack type: the backend coerces only inputs typed exactly INT, so a fraction isn't truncated. A FLOAT whose maximum is beyond 2^53.",
+        "displayName": "Mock INT Widget On Pack Type",
+        "experimental": false,
+        "inputs": [
+          {
+            "default": 5,
+            "kind": "int",
+            "lazy": false,
+            "max": 10,
+            "min": 0,
+            "name": "level",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "MOCK_LEVEL",
+            },
+          },
+          {
+            "default": 0.5,
+            "kind": "float",
+            "lazy": false,
+            "max": 100000000000000000000,
+            "min": 0,
+            "name": "ratio",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "FLOAT",
+            },
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "MOCK_LEVEL",
+            "type": {
+              "kind": "named",
+              "name": "MOCK_LEVEL",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
       "MockValueWidgets": {
         "category": "mock/widgets",
         "classType": "MockValueWidgets",

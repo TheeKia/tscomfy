@@ -22,6 +22,7 @@ export const DIAGNOSTIC_CODES = {
   W_INVALID_INPUT_OPTION: "warning",
   E_INPUT_KEY_COLLISION: "error",
   E_TOO_MANY_DYNAMIC_INPUTS: "error",
+  E_INVALID_PROMPT: "error",
   E_UNKNOWN_CLASS_TYPE: "error",
   E_NO_OUTPUT_NODE: "error",
   E_UNKNOWN_INPUT: "error",

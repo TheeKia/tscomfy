@@ -351,6 +351,7 @@ class TypesEmitter {
     prefix: string,
     inputs: readonly InputDef[],
     path: readonly string[],
+    sendsSomething = false,
   ): {
     readonly reference: Doc;
     readonly optional: boolean;
@@ -359,6 +360,13 @@ class TypesEmitter {
     const members: Doc[] = [];
     const templates = new Set<string>();
     let optional = true;
+    // A DynamicGroup row is counted only when one of its keys is sent (§7.2): when no field is
+    // required or has a default, the first one must be given, or `{}` would send no row at all.
+    const sendable = inputs.filter((input) => input.kind !== "value" || sendsValue(input.widget));
+    const forced =
+      sendsSomething && !sendable.some((input) => isRequired(input) || hasDefault(input))
+        ? sendable[0]
+        : undefined;
     for (const input of inputs) {
       // The frontend never sends display-only widgets, so they take no value (§7.4).
       if (input.kind === "value" && !sendsValue(input.widget)) continue;
@@ -367,7 +375,7 @@ class TypesEmitter {
         input.name,
       ]);
       for (const template of built.templates) templates.add(template);
-      const required = isRequired(input);
+      const required = isRequired(input) || input === forced;
       if (required) optional = false;
       members.push([
         docComment(inputDocLines(input)),
@@ -447,6 +455,7 @@ class TypesEmitter {
           rows,
           input.fields,
           path,
+          true,
         );
         return {
           atoms: [this.#repeated(row.reference, row.reference, input.min, input.max)],
@@ -764,6 +773,26 @@ function isRequired(input: InputDef): boolean {
     case "matchType":
     case "unknown":
       return input.required;
+  }
+}
+
+/** Whether the exporter sends a value for the input when none is given. */
+function hasDefault(input: InputDef): boolean {
+  switch (input.kind) {
+    case "int":
+    case "float":
+    case "string":
+    case "boolean":
+    case "combo":
+    case "value":
+      return input.default !== undefined;
+    case "socket":
+    case "autogrow":
+    case "dynamicCombo":
+    case "dynamicGroup":
+    case "matchType":
+    case "unknown":
+      return false;
   }
 }
 

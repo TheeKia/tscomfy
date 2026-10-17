@@ -21,6 +21,7 @@ import { acceptsType, socketAccepts } from "../schema/accepts.ts";
 import type {
   ComboInput,
   ComboOption,
+  DynamicComboInput,
   InputDef,
   IntValue,
   NodeDef,
@@ -31,11 +32,18 @@ import type {
 
 /**
  * Checks a prompt against a schema the way the backend would, and stricter where the generated
- * types are (docs/plan.md §8). Diagnostics come in prompt order, then input order; paths point
- * into the prompt: `[id, "inputs", key]`, `[id, "class_type"]`, `[id]` for a cycle and `[]` for
- * the whole prompt.
+ * types are (docs/plan.md §8). Diagnostics come node by node in prompt order (its class, its keys
+ * as they expand, then each input in input order), then for the prompt as a whole (no output
+ * node, cycles). Paths point into the prompt: `[id, "inputs", key]`, `[id, "class_type"]`, `[id]`
+ * for a node or a cycle through it, and `[]` for the whole prompt.
+ *
+ * Takes any JSON as well, such as a prompt read with `parse`: what isn't a prompt node is
+ * reported (`E_INVALID_PROMPT`), never thrown.
  */
-export function validateApi(prompt: ApiPrompt, schema: Schema): readonly Diagnostic[] {
+export function validateApi(prompt: ApiPrompt | JsonValue, schema: Schema): readonly Diagnostic[] {
+  if (typeof prompt !== "object" || prompt === null || isArray(prompt)) {
+    return [createDiagnostic("E_INVALID_PROMPT", [], "A prompt is an object of nodes by id.")];
+  }
   return new PromptValidator(prompt, schema).run();
 }
 
@@ -47,11 +55,6 @@ interface Position {
   readonly input: InputDef;
   readonly required: boolean;
   readonly value: JsonValue | undefined;
-  /**
-   * Which declared input the position came from, in declaration order: every slot of one
-   * Autogrow shares it. MatchType consistency is decided by the first declared input.
-   */
-  readonly declared: number;
 }
 
 /** A node of the prompt with a known class, expanded. */
@@ -59,50 +62,70 @@ interface Expanded {
   readonly id: NodeId;
   readonly definition: NodeDef;
   readonly positions: readonly Position[];
+  readonly byKey: ReadonlyMap<string, Position>;
   /** Problems found while expanding: unknown keys, bad group keys and row counts. */
   readonly diagnostics: readonly Diagnostic[];
 }
 
-/** A link's target, once checked: the source node and its resolved output type. */
+/** Where a valid link points. */
+interface Located {
+  readonly node: Expanded;
+  readonly slot: number;
+}
+
+/** A link's source, once checked: the node and its output's type, MatchType resolved. */
 interface Source {
   readonly node: NodeId;
   readonly type: OutputType;
 }
 
+type LinkProblem = "shape" | "node" | "slot";
+
 const ANY: SocketType = { kind: "any" };
 
+/** A prompt's nodes, not yet known to be prompt nodes. */
+type Nodes = { readonly [id: NodeId]: unknown };
+
 class PromptValidator {
-  readonly #prompt: ApiPrompt;
+  readonly #prompt: Nodes;
   readonly #schema: Schema;
   readonly #expanded = new Map<NodeId, Expanded>();
-  /** Resolved MatchType templates per node, `undefined` while being resolved (a cycle). */
-  readonly #templates = new Map<string, OutputType | undefined>();
+  /** Resolved MatchType templates, by node id and template id. */
+  readonly #templates = new Map<string, OutputType>();
 
-  constructor(prompt: ApiPrompt, schema: Schema) {
+  constructor(prompt: Nodes, schema: Schema) {
     this.#prompt = prompt;
     this.#schema = schema;
   }
 
   run(): readonly Diagnostic[] {
-    const diagnostics: Diagnostic[] = [];
+    // Node problems first, in prompt order, so links to every node can be followed after.
+    const nodeProblems = new Map<NodeId, Diagnostic>();
     let outputs = 0;
     for (const [id, node] of Object.entries(this.#prompt)) {
-      const definition = Object.hasOwn(this.#schema.nodes, node.class_type)
-        ? this.#schema.nodes[node.class_type]
+      const read = readNode(node);
+      if (read === undefined) {
+        nodeProblems.set(id, unreadable(id));
+        continue;
+      }
+      const definition = Object.hasOwn(this.#schema.nodes, read.classType)
+        ? this.#schema.nodes[read.classType]
         : undefined;
       if (definition === undefined) {
-        // The backend rejects the whole prompt for this, before validating anything else.
-        diagnostics.push(
-          createDiagnostic(
-            "E_UNKNOWN_CLASS_TYPE",
-            [id, "class_type"],
-            `Node ${id} has class type ${JSON.stringify(node.class_type)}, which the schema doesn't have.`,
-          ),
-        );
+        nodeProblems.set(id, unknownClass(id, read.classType));
         continue;
       }
       if (definition.outputNode) outputs++;
-      this.#expanded.set(id, expand(id, definition, node.inputs));
+      this.#expanded.set(id, expand(id, definition, read.inputs));
+    }
+    const diagnostics: Diagnostic[] = [];
+    for (const id of Object.keys(this.#prompt)) {
+      const problem = nodeProblems.get(id);
+      const node = this.#expanded.get(id);
+      if (problem !== undefined) diagnostics.push(problem);
+      if (node === undefined) continue;
+      diagnostics.push(...node.diagnostics);
+      for (const position of node.positions) diagnostics.push(...this.#check(node, position));
     }
     if (outputs === 0) {
       diagnostics.push(
@@ -112,11 +135,6 @@ class PromptValidator {
           "The prompt has no output node (save, preview, …), so the backend would run nothing.",
         ),
       );
-    }
-    for (const node of this.#expanded.values()) {
-      diagnostics.push(...node.diagnostics);
-      for (const position of node.positions) diagnostics.push(...this.#check(node, position));
-      diagnostics.push(...this.#matchTypes(node));
     }
     diagnostics.push(...this.#cycles());
     return diagnostics;
@@ -132,27 +150,42 @@ class PromptValidator {
     if (value === undefined) {
       return position.required ? report("E_MISSING_INPUT", `${where} is required.`) : [];
     }
-    if (input.kind === "unknown") return [];
-    if (isList(value)) {
-      const source = this.#source(value);
-      if (typeof source === "string")
-        return report(
-          source === "shape" ? "E_INVALID_LINK" : "E_DANGLING_LINK",
-          `${where} ${linkProblem(source, value)}.`,
-        );
-      if (source === undefined) return [];
-      const fits =
-        input.kind === "matchType"
-          ? socketAccepts(input.allowed, source.type)
-          : acceptsType(input, source.type);
-      return fits
+    // The backend reads a dynamic combo's choice as it is: anything but a key drops the input.
+    if (input.kind === "dynamicCombo") return dynamicCombo(input, value, report, where);
+    if (!isList(value)) return this.#constant(input, unwrap(value), report, where);
+    const source = this.#source(value);
+    if (typeof source === "string") {
+      return report(
+        source === "shape" ? "E_INVALID_LINK" : "E_DANGLING_LINK",
+        `${where} ${linkProblem(source, value)}.`,
+      );
+    }
+    // A source of an unknown class is reported already; an unreadable input can't be typed.
+    if (source === undefined || input.kind === "unknown") return [];
+    if (input.kind !== "matchType") {
+      return acceptsType(input, source.type)
         ? []
         : report(
             "E_TYPE_MISMATCH",
             `${where} takes ${describeInput(input)}, but is linked to ${describeOutput(source.type)} from node ${source.node}.`,
           );
     }
-    return this.#constant(input, unwrap(value), report, where);
+    if (!socketAccepts(input.allowed, source.type)) {
+      return report(
+        "E_TYPE_MISMATCH",
+        `${where} takes ${describeInput(input)}, but is linked to ${describeOutput(source.type)} from node ${source.node}.`,
+      );
+    }
+    // MatchType consistency (§6.3), as the generated types check it: the inferring position
+    // fixes the template's type, and every other position must agree with it.
+    const inferring = inferringKey(node.definition, input.templateId);
+    if (inferring === undefined || inferring === key) return [];
+    const inferred = this.#linkedType(node.byKey.get(inferring));
+    if (inferred === undefined || isAnyType(inferred) || agree(inferred, source.type)) return [];
+    return report(
+      "E_MATCH_TYPE_MISMATCH",
+      `${where} is linked to ${describeOutput(source.type)}, but its template follows ${inferring}, which is linked to ${describeOutput(inferred)}.`,
+    );
   }
 
   /** The checks of a value that isn't a link. */
@@ -170,6 +203,7 @@ class PromptValidator {
         return report("E_NOT_A_LINK", `${where} takes a link, not a value.`);
       case "unknown":
       case "value":
+      case "dynamicCombo":
         return [];
       case "int": {
         if (typeof value !== "number" && typeof value !== "bigint") {
@@ -178,19 +212,23 @@ class PromptValidator {
             `${where} takes an integer, not ${describeValue(value)}.`,
           );
         }
-        const fraction =
-          typeof value === "number" && !Number.isInteger(value)
-            ? report(
-                "W_NON_INTEGER_VALUE",
-                `${where} is ${String(value)}; the backend truncates it to ${String(Math.trunc(value))}.`,
-              )
-            : [];
-        // The backend checks the bounds after its int() truncation.
-        const integer = typeof value === "number" ? Math.trunc(value) : value;
-        return [...fraction, ...range(integer, input.min, input.max, report, where)];
+        // The backend's int() applies to inputs typed exactly INT; it truncates, then checks
+        // the bounds. Other types (an INT widget on a custom type) are compared as they are.
+        if (!isNamed(input.type, "INT") || typeof value === "bigint" || Number.isInteger(value)) {
+          return range(value, input.min, input.max, report, where);
+        }
+        const truncated = Math.trunc(value);
+        return [
+          ...report(
+            "W_NON_INTEGER_VALUE",
+            `${where} is ${String(value)}; the backend truncates it to ${String(truncated)}.`,
+          ),
+          ...range(truncated, input.min, input.max, report, where),
+        ];
       }
       case "float":
-        if (typeof value !== "number") {
+        // A bigint is an integer literal beyond 2^53, which float() reads.
+        if (typeof value !== "number" && typeof value !== "bigint") {
           return report("E_INVALID_VALUE", `${where} takes a number, not ${describeValue(value)}.`);
         }
         return range(value, input.min, input.max, report, where);
@@ -204,128 +242,97 @@ class PromptValidator {
           : report("E_INVALID_VALUE", `${where} takes a boolean, not ${describeValue(value)}.`);
       case "combo":
         return combo(input, value, report, where);
-      case "dynamicCombo":
-        if (typeof value !== "string") {
-          return report(
-            "E_INVALID_VALUE",
-            `${where} takes an option key, not ${describeValue(value)}.`,
-          );
-        }
-        return input.options.some((option) => option.key === value)
-          ? []
-          : report(
-              "E_UNKNOWN_DYNAMIC_OPTION",
-              `${where} is ${JSON.stringify(value)}, which isn't one of its options (${list(input.options.map((option) => option.key))}).`,
-            );
     }
   }
 
-  /**
-   * Where a link points, with the output's type resolved; a string naming what is wrong with
-   * it; or `undefined` when its source has a class the schema doesn't know (reported already).
-   */
-  #source(link: readonly JsonValue[]): Source | "shape" | "node" | "slot" | undefined {
+  /** Where a link points, or what is wrong with it; `undefined` for a node of unknown class. */
+  #locate(link: readonly JsonValue[]): Located | LinkProblem | undefined {
     const [node, slot] = link;
     if (link.length !== 2 || typeof node !== "string" || typeof slot !== "number") return "shape";
     if (!Number.isSafeInteger(slot) || slot < 0) return "shape";
     if (!Object.hasOwn(this.#prompt, node)) return "node";
     const source = this.#expanded.get(node);
     if (source === undefined) return undefined;
-    const output = source.definition.outputs[slot];
-    if (output === undefined) return "slot";
-    return { node, type: this.#outputType(source, slot) };
+    if (source.definition.outputs[slot] === undefined) return "slot";
+    return { node: source, slot };
   }
 
-  /** An output's type: a MatchType output has the type its template resolves to. */
-  #outputType(node: Expanded, slot: number): OutputType {
+  /** {@link #locate}, with the output's type: a MatchType output's resolved template. */
+  #source(link: readonly JsonValue[]): Source | LinkProblem | undefined {
+    const located = this.#locate(link);
+    if (typeof located !== "object") return located;
+    return { node: located.node.id, type: this.#outputType(located) };
+  }
+
+  #outputType({ node, slot }: Located): OutputType {
     const output = node.definition.outputs[slot];
     if (output === undefined) return ANY;
-    if (output.matchTemplate === undefined) return output.type;
-    return this.#template(node, output.matchTemplate) ?? ANY;
+    return output.matchTemplate === undefined
+      ? output.type
+      : this.#template(node, output.matchTemplate);
   }
 
   /**
-   * The type a node's MatchType template resolves to: the first linked position of the template
-   * whose source has a type, as the frontend narrows it. `undefined` when nothing narrows it.
+   * The type a node's MatchType template resolves to, as the generated types infer it: the type
+   * linked at the template's inferring position, or `*` when that position is empty (the type
+   * parameter's default). Followed iteratively through chains of MatchType nodes, which can be
+   * as long as a prompt; a cycle resolves to `*`.
    */
-  #template(node: Expanded, templateId: string): OutputType | undefined {
-    const cacheKey = `${node.id}\u0000${templateId}`;
-    if (this.#templates.has(cacheKey)) return this.#templates.get(cacheKey);
-    // Guard against cycles: while resolving, the template counts as unresolved.
-    this.#templates.set(cacheKey, undefined);
-    let resolved: OutputType | undefined;
-    for (const position of node.positions) {
-      if (position.input.kind !== "matchType" || position.input.templateId !== templateId) continue;
-      if (!isList(position.value)) continue;
-      const source = this.#source(position.value);
-      if (typeof source === "object" && source.type.kind !== "any") {
-        resolved = source.type;
+  #template(start: Expanded, startTemplate: string): OutputType {
+    const chain = new Set<string>();
+    let node = start;
+    let template = startTemplate;
+    let resolved: OutputType = ANY;
+    for (;;) {
+      const cacheKey = `${node.id}\u0000${template}`;
+      const cached = this.#templates.get(cacheKey);
+      if (cached !== undefined) {
+        resolved = cached;
         break;
       }
+      if (chain.has(cacheKey)) break;
+      chain.add(cacheKey);
+      const key = inferringKey(node.definition, template);
+      const value = key === undefined ? undefined : node.byKey.get(key)?.value;
+      const located = isList(value) ? this.#locate(value) : undefined;
+      if (typeof located !== "object") break;
+      const output = located.node.definition.outputs[located.slot];
+      if (output === undefined) break;
+      if (output.matchTemplate === undefined) {
+        resolved = output.type;
+        break;
+      }
+      node = located.node;
+      template = output.matchTemplate;
     }
-    this.#templates.set(cacheKey, resolved);
+    for (const key of chain) this.#templates.set(key, resolved);
     return resolved;
   }
 
-  /**
-   * MatchType consistency (§6.3): once the first declared input of a template is linked to a
-   * typed output, every other position of the template must agree with it. The generated types
-   * check exactly this (`Match<NoInfer<T>>`); the backend checks nothing.
-   */
-  #matchTypes(node: Expanded): Diagnostic[] {
-    const diagnostics: Diagnostic[] = [];
-    const byTemplate = new Map<string, Position[]>();
-    for (const position of node.positions) {
-      if (position.input.kind !== "matchType") continue;
-      const group = byTemplate.get(position.input.templateId) ?? [];
-      group.push(position);
-      byTemplate.set(position.input.templateId, group);
-    }
-    for (const positions of byTemplate.values()) {
-      const first = positions[0]?.declared;
-      const inferred = positions
-        .filter((position) => position.declared === first)
-        .map((position) => this.#linkedType(position));
-      // Unlinked or `*`: the types infer nothing, so anything goes.
-      if (
-        inferred.length === 0 ||
-        inferred.some((type) => type === undefined || type.kind === "any")
-      )
-        continue;
-      for (const position of positions) {
-        if (position.declared === first) continue;
-        const type = this.#linkedType(position);
-        if (type === undefined || inferred.some((each) => each !== undefined && agree(each, type)))
-          continue;
-        diagnostics.push(
-          createDiagnostic(
-            "E_MATCH_TYPE_MISMATCH",
-            [node.id, "inputs", position.key],
-            `Input ${position.key} of node ${node.id} (${node.definition.classType}) is linked to ${describeOutput(type)}, but its template follows ${list(inferred.flatMap((each) => (each === undefined ? [] : [describeOutput(each)])))}.`,
-          ),
-        );
-      }
-    }
-    return diagnostics;
-  }
-
   /** The resolved type of a position's link, if it is a valid one. */
-  #linkedType(position: Position): OutputType | undefined {
-    if (!isList(position.value)) return undefined;
+  #linkedType(position: Position | undefined): OutputType | undefined {
+    if (!isList(position?.value)) return undefined;
     const source = this.#source(position.value);
     return typeof source === "object" ? source.type : undefined;
   }
 
-  /** Dependency cycles, which the backend rejects. One diagnostic per cycle found, in prompt order. */
+  /**
+   * Dependency cycles, which the backend rejects. One diagnostic per back edge found, at the node
+   * it returns to, in prompt order.
+   */
   #cycles(): Diagnostic[] {
     const diagnostics: Diagnostic[] = [];
     const state = new Map<NodeId, "open" | "done">();
-    const edges = (id: NodeId): NodeId[] =>
-      (this.#expanded.get(id)?.positions ?? []).flatMap((position) => {
-        if (!isList(position.value)) return [];
-        const source = this.#source(position.value);
-        return typeof source === "object" ? [source.node] : [];
-      });
+    // Each source once: two inputs linked to one node are one dependency.
+    const edges = (id: NodeId): NodeId[] => [
+      ...new Set(
+        (this.#expanded.get(id)?.positions ?? []).flatMap((position) => {
+          if (!isList(position.value)) return [];
+          const located = this.#locate(position.value);
+          return typeof located === "object" ? [located.node.id] : [];
+        }),
+      ),
+    ];
     for (const start of this.#expanded.keys()) {
       if (state.has(start)) continue;
       // Iterative depth-first search: prompts can be long chains.
@@ -336,7 +343,7 @@ class PromptValidator {
       while (stack.length > 0) {
         const top = stack.at(-1);
         if (top === undefined) break;
-        const next = top.next.shift();
+        const next = top.next.pop();
         if (next === undefined) {
           state.set(top.id, "done");
           stack.pop();
@@ -363,6 +370,91 @@ class PromptValidator {
   }
 }
 
+/** A prompt node's class and inputs, if it has both. */
+function readNode(
+  node: unknown,
+): { readonly classType: string; readonly inputs: JsonObject } | undefined {
+  if (typeof node !== "object" || node === null) return undefined;
+  const classType: unknown = Reflect.get(node, "class_type");
+  const inputs: unknown = Reflect.get(node, "inputs");
+  if (typeof classType !== "string") return undefined;
+  if (typeof inputs !== "object" || inputs === null || Array.isArray(inputs)) return undefined;
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- an ApiPrompt's inputs are JSON
+  return { classType, inputs: inputs as JsonObject };
+}
+
+function unreadable(id: NodeId): Diagnostic {
+  return createDiagnostic(
+    "E_INVALID_PROMPT",
+    [id],
+    `Node ${id} isn't a prompt node: an object with a class_type string and an inputs object.`,
+  );
+}
+
+function unknownClass(id: NodeId, classType: string): Diagnostic {
+  // The backend rejects the whole prompt for this, before validating anything else.
+  return createDiagnostic(
+    "E_UNKNOWN_CLASS_TYPE",
+    [id, "class_type"],
+    `Node ${id} has class type ${JSON.stringify(classType)}, which the schema doesn't have.`,
+  );
+}
+
+/** The inferring positions of a definition's templates, computed once per definition. */
+const inferring = new WeakMap<NodeDef, ReadonlyMap<string, string>>();
+
+/**
+ * The wire key whose link fixes a MatchType template's type, as the generated types choose it
+ * (codegen `#matchAtom`): the template's first position in declaration order, depth-first through
+ * every dynamic-combo option, and slot 0 of an Autogrow. It may sit in an option not chosen.
+ */
+function inferringKey(definition: NodeDef, templateId: string): string | undefined {
+  let keys = inferring.get(definition);
+  if (keys === undefined) {
+    const found = new Map<string, string>();
+    const visit = (input: InputDef, prefix: string): void => {
+      const key = `${prefix}${input.name}`;
+      if (input.kind === "matchType" && !found.has(input.templateId)) {
+        found.set(input.templateId, key);
+      } else if (input.kind === "autogrow" && input.template.kind === "matchType") {
+        const [first] = input.slots;
+        if (first !== undefined && !found.has(input.template.templateId)) {
+          found.set(input.template.templateId, `${key}.${first}`);
+        }
+      } else if (input.kind === "dynamicCombo") {
+        for (const option of input.options) {
+          for (const child of option.inputs) visit(child, `${key}.`);
+        }
+      }
+    };
+    for (const input of definition.inputs) visit(input, "");
+    keys = found;
+    inferring.set(definition, keys);
+  }
+  return keys.get(templateId);
+}
+
+/** A choice of a dynamic combo: exactly one of its keys, as the backend compares it. */
+function dynamicCombo(
+  input: DynamicComboInput,
+  value: JsonValue,
+  report: (code: DiagnosticCode, message: string) => Diagnostic[],
+  where: string,
+): Diagnostic[] {
+  if (typeof value !== "string") {
+    return report(
+      "E_INVALID_VALUE",
+      `${where} takes one of its option keys, not ${isList(value) ? "a link" : describeValue(value)}; the backend would drop it and its options' inputs.`,
+    );
+  }
+  return input.options.some((option) => option.key === value)
+    ? []
+    : report(
+        "E_UNKNOWN_DYNAMIC_OPTION",
+        `${where} is ${JSON.stringify(value)}, which isn't one of its options (${list(input.options.map((option) => option.key))}).`,
+      );
+}
+
 /**
  * A node's input positions, expanded from its wire keys as the backend expands them, and the
  * keys nothing claims.
@@ -373,37 +465,29 @@ function expand(id: NodeId, definition: NodeDef, inputs: JsonObject): Expanded {
   const claimed = new Set<string>();
   /** Prefixes whose keys are reported by the input that owns them, not as unknown keys. */
   const owned: string[] = [];
-  let declared = 0;
   const where = (key: string): string => `Input ${key} of node ${id} (${definition.classType})`;
 
-  const add = (input: InputDef, key: string, required: boolean, group: number): void => {
+  const add = (input: InputDef, key: string, required: boolean): void => {
     claimed.add(key);
     positions.push({
       key,
       input,
       required,
       value: Object.hasOwn(inputs, key) ? inputs[key] : undefined,
-      declared: group,
     });
   };
 
   const visit = (input: InputDef, prefix: string): void => {
     const key = `${prefix}${input.name}`;
-    const group = declared++;
     switch (input.kind) {
       case "autogrow":
         // Slots before `min` are required when the template is, even in an optional Autogrow.
         input.slots.forEach((slot, index) => {
-          add(
-            input.template,
-            `${key}.${slot}`,
-            index < input.min && input.template.required,
-            group,
-          );
+          add(input.template, `${key}.${slot}`, index < input.min && input.template.required);
         });
         return;
       case "dynamicCombo": {
-        add(input, key, input.required, group);
+        add(input, key, input.required);
         const chosen = Object.hasOwn(inputs, key) ? inputs[key] : undefined;
         const option = input.options.find((each) => each.key === chosen);
         if (option === undefined) {
@@ -426,7 +510,7 @@ function expand(id: NodeId, definition: NodeDef, inputs: JsonObject): Expanded {
       case "value":
       case "matchType":
       case "unknown":
-        add(input, key, input.required, group);
+        add(input, key, input.required);
     }
   };
 
@@ -480,9 +564,9 @@ function expand(id: NodeId, definition: NodeDef, inputs: JsonObject): Expanded {
       );
     }
     for (const row of [...rows].toSorted((a, b) => a - b)) {
-      const rowGroup = declared++;
-      for (const field of input.fields)
-        add(field, `${prefix}${String(row)}.${field.name}`, field.required, rowGroup);
+      for (const field of input.fields) {
+        add(field, `${prefix}${String(row)}.${field.name}`, field.required);
+      }
     }
     return found;
   };
@@ -498,7 +582,13 @@ function expand(id: NodeId, definition: NodeDef, inputs: JsonObject): Expanded {
       ),
     );
   }
-  return { id, definition, positions, diagnostics };
+  return {
+    id,
+    definition,
+    positions,
+    byKey: new Map(positions.map((position) => [position.key, position])),
+    diagnostics,
+  };
 }
 
 function combo(
@@ -551,12 +641,19 @@ function range(
   return [];
 }
 
-/** Compares two numbers exactly: bigints with each other or with integer-valued numbers. */
+/** Compares two numbers exactly, whether number or bigint. */
 function compare(a: IntValue, b: IntValue): number {
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  const x = typeof a === "bigint" ? a : BigInt(a);
-  const y = typeof b === "bigint" ? b : BigInt(b);
-  return x < y ? -1 : x > y ? 1 : 0;
+  if (typeof a === "number") return typeof b === "number" ? a - b : compareMixed(a, b);
+  if (typeof b === "number") return -compareMixed(b, a);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** A finite number against a bigint, exactly: by its floor, then by its fraction. */
+function compareMixed(value: number, big: bigint): number {
+  const floor = Math.floor(value);
+  const whole = BigInt(floor);
+  if (whole !== big) return whole < big ? -1 : 1;
+  return value === floor ? 0 : 1;
 }
 
 /** Whether two linked types of one MatchType template agree: they share a type, or one is `*`. */
@@ -573,6 +670,21 @@ function unwrap(value: JsonValue): JsonValue {
   return isJsonObject(value) && Object.hasOwn(value, "__value__")
     ? (value["__value__"] ?? null)
     : value;
+}
+
+function isNamed(type: SocketType, name: string): boolean {
+  return type.kind === "named" && type.name === name;
+}
+
+/** `*`, alone or in a comma list: the generated types infer nothing narrower from it. */
+function isAnyType(type: OutputType): boolean {
+  return (
+    type.kind === "any" || (type.kind !== "combo" && describeSocket(type).split(",").includes("*"))
+  );
+}
+
+function isArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
 }
 
 function isList(value: JsonValue | undefined): value is readonly JsonValue[] {

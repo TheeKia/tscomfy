@@ -43,7 +43,9 @@ Paths of export diagnostics point into the prompt: a node id, `inputs`, and the 
 
 ## Validating prompts
 
-Paths of validation diagnostics point into the prompt, like export paths: `[id, "inputs", key]`
+Validation diagnostics come node by node in prompt order (the node's class, its keys as they expand, then each input
+in input order), then for the prompt as a whole. Paths of validation diagnostics point into the
+prompt, like export paths: `[id, "inputs", key]`
 for an input, `[id, "class_type"]` for a node's class, `[id]` for a cycle through it and `[]` for
 the whole prompt. An error is something the generated types reject too, or something they can't
 express that the backend rejects; a warning is something the types accept that the backend
@@ -51,23 +53,24 @@ takes, but may not do what was meant.
 
 | Code | Meaning | What happens |
 |---|---|---|
+| `E_INVALID_PROMPT` | A prompt node isn't an object with a `class_type` string and an `inputs` object; the path is `[]` when the prompt itself isn't an object. | The node is skipped; links to it aren't type-checked. |
 | `E_UNKNOWN_CLASS_TYPE` | A node's class type isn't in the schema: a `raw()` node, or a pack the server doesn't have. The backend rejects the whole prompt. | The node's inputs aren't checked; links from it aren't type-checked. |
 | `E_NO_OUTPUT_NODE` | No node is an output node (save, preview, …). The backend rejects the prompt: it would run nothing. | — |
 | `E_UNKNOWN_INPUT` | A key the node doesn't have, after dynamic inputs are expanded: a misspelling, an Autogrow slot past the last one, a DynamicGroup key that isn't `<group>.<row>.<field>`. The backend ignores unknown values but still follows unknown links. | — |
 | `E_MISSING_INPUT` | A required input has no value or link, including the first `min` slots of an Autogrow whose template is required and the required fields of a DynamicGroup row that is present. | — |
 | `E_INVALID_LINK` | A list, which the backend reads as a link, that isn't `[node id (string), output slot (integer ≥ 0)]`. | — |
 | `E_DANGLING_LINK` | A link to a node the prompt doesn't have, or to an output slot its node doesn't have. | — |
-| `E_TYPE_MISMATCH` | A link from an output whose type the input doesn't accept (`accepts`, §5.2), including a MatchType input linked to a type its template doesn't allow. MatchType outputs count as the type their template resolved to. | — |
-| `E_MATCH_TYPE_MISMATCH` | The inputs of one MatchType template are linked to types that don't agree with the type its first input was linked to. The backend doesn't check this; the node would get mismatched values. | — |
+| `E_TYPE_MISMATCH` | A link from an output whose type the input doesn't accept (`accepts`, §5.2), including a MatchType input linked to a type its template doesn't allow. A MatchType output has the type linked at its template's inferring input, or `*` while that input is empty, as in the generated types. | — |
+| `E_MATCH_TYPE_MISMATCH` | An input of a MatchType template is linked to a type that doesn't agree with the template's inferring input: the one the generated types infer from (its first position, depth-first through every dynamic-combo option; slot 0 of an Autogrow). Nothing is checked while that input is empty or `*`. The backend doesn't check this; the node would get mismatched values. | — |
 | `E_NOT_A_LINK` | A value for an input that only takes links (a socket, a MatchType input, an Autogrow slot). | — |
-| `E_INVALID_VALUE` | A value of the wrong kind: not a number for INT or FLOAT, not a string or boolean, `null`, a list for a single-select combo, an option that isn't a string, number or boolean, a dynamic-combo choice that isn't a key. | — |
-| `W_NON_INTEGER_VALUE` | A fractional number for an INT input. The types allow `number`; the backend truncates it. | Truncated before the range check, as the backend does. |
+| `E_INVALID_VALUE` | A value of the wrong kind: not a number for INT or FLOAT, not a string or boolean, `null`, a list for a single-select combo, an option that isn't a string, number or boolean, a dynamic-combo choice that isn't a string (a link, a wrapped value), which the backend drops with its option inputs. | — |
+| `W_NON_INTEGER_VALUE` | A fractional number for an input typed exactly INT. The types allow `number`; the backend's `int()` truncates it. (An INT widget on another type isn't coerced, and is compared as it is.) | Truncated before the range check, as the backend does. |
 | `E_OUT_OF_RANGE` | A number below `min` or above `max`, compared exactly (bigint-aware). | — |
 | `E_NOT_IN_COMBO` | A value that isn't one of a combo's options; for a multi-select, each element is checked. | — |
 | `W_UNLISTED_COMBO_VALUE` | The same for an upload or remote combo, or one with no options: its options are runtime state, so the value may well exist. | — |
 | `E_UNKNOWN_DYNAMIC_OPTION` | A dynamic combo set to a key it doesn't have. The backend then drops the input and its option inputs without a word. | Keys under it aren't reported again. |
 | `E_TOO_FEW_DYNAMIC_INPUTS` | A DynamicGroup with fewer rows than its `min`. | — |
-| `E_DEPENDENCY_CYCLE` | Nodes that depend on each other through their links. | One diagnostic per cycle, at the node it returns to. |
+| `E_DEPENDENCY_CYCLE` | Nodes that depend on each other through their links. | One diagnostic per back edge the search meets (two inputs linked to the same node are one edge), at the node it returns to. |
 
 ## Generating types
 

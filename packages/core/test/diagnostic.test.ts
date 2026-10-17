@@ -8,6 +8,7 @@ import {
   type DiagnosticCode,
   normalizeObjectInfo,
   parse,
+  validateApi,
 } from "@tscomfy/core";
 import { readMockObjectInfo } from "@tscomfy/fixtures";
 import { parseWith } from "../src/json/parse.ts";
@@ -101,6 +102,17 @@ const PRODUCERS: Record<CoreCode, Producer> = {
   W_INVALID_INPUT_OPTION: {
     produce: malformed,
     path: ["MockBadInputSpecs", "input", "required", "options_not_object", 1],
+  },
+  E_INVALID_PROMPT: {
+    produce: () =>
+      validateApi(
+        { "1": { class_type: "VAELoader" } },
+        {
+          formatVersion: 1,
+          nodes: {},
+        },
+      ),
+    path: ["1"],
   },
   E_UNKNOWN_CLASS_TYPE: {
     produce: () => validated({ "1": node("NoSuchNode") }),

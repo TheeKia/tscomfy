@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   type ApiPrompt,
   type Diagnostic,
+  type MatchTypeInput,
+  type Schema,
   exportApi,
   toApi,
   validate,
@@ -11,7 +13,20 @@ import {
 } from "@tscomfy/core";
 import { type MockObjectInfoName, readMockObjectInfo } from "@tscomfy/fixtures";
 import { looseSchema } from "./loose.ts";
-import { node, schemaOf, validated } from "./prompts.ts";
+import { node, PIPELINE, schemaOf, validated } from "./prompts.ts";
+
+/** A MatchType input of template `t`. */
+function matchInput(name: string): MatchTypeInput {
+  return {
+    kind: "matchType",
+    name,
+    required: true,
+    lazy: false,
+    rawLink: false,
+    templateId: "t",
+    allowed: { kind: "any" },
+  };
+}
 
 // Validation (docs/plan.md §8). Each case gives the exact diagnostics, as [code, path], in order.
 
@@ -64,6 +79,36 @@ describe("prompts", () => {
     expect(await check(prompt)).toEqual([["E_UNKNOWN_CLASS_TYPE", ["x", "class_type"]]]);
   });
 
+  test("reports node by node, then the prompt as a whole", async () => {
+    const prompt = {
+      "1": node("VAEDecode", { samples: ["2", 0], vae: "v" }),
+      "2": node("NoSuchNode"),
+      "3": node("VAELoader", { vae_name: 1 }),
+    };
+    expect(found(validateApi(prompt, await schemaOf("basic-pipeline")))).toEqual([
+      ["E_NOT_A_LINK", ["1", "inputs", "vae"]],
+      ["E_UNKNOWN_CLASS_TYPE", ["2", "class_type"]],
+      ["E_NOT_IN_COMBO", ["3", "inputs", "vae_name"]],
+      ["E_NO_OUTPUT_NODE", []],
+    ]);
+  });
+
+  test("reports nodes that aren't prompt nodes, and doesn't throw on them", async () => {
+    const prompt = {
+      a: null,
+      b: { class_type: "VAELoader" },
+      c: { class_type: 3, inputs: {} },
+      d: node("VAEDecode", { samples: ["a", 0], vae: ["vae", 0] }),
+    };
+    // Validation also takes JSON from elsewhere, read with parse.
+    const diagnostics = validateApi({ ...PIPELINE, ...prompt }, await schemaOf("basic-pipeline"));
+    expect(found(diagnostics)).toEqual([
+      ["E_INVALID_PROMPT", ["a"]],
+      ["E_INVALID_PROMPT", ["b"]],
+      ["E_INVALID_PROMPT", ["c"]],
+    ]);
+  });
+
   test("reports in prompt order, then input order", async () => {
     const prompt = {
       "1": node("VAEDecode", { extra: 1, vae: "v" }),
@@ -91,6 +136,25 @@ describe("links", () => {
   ])("rejects %s", async (_name, samples, code) => {
     expect(await check({ decode: node("VAEDecode", { samples, vae: ["vae", 0] }) })).toEqual([
       [code, ["decode", "inputs", "samples"]],
+    ]);
+  });
+
+  test("checks links into inputs it can't read, except for their type", async () => {
+    const prompt = {
+      bad: node("MockBadInputSpecs", {
+        null_spec: ["nowhere", 0],
+        string_spec: [1, 2, 3],
+        number_type: ["decode", 7],
+        empty_tuple: ["vae", 0],
+      }),
+    };
+    const diagnostics = (await check(prompt, "malformed")).filter(
+      ([code]) => code !== "E_MISSING_INPUT",
+    );
+    expect(diagnostics).toEqual([
+      ["E_DANGLING_LINK", ["bad", "inputs", "null_spec"]],
+      ["E_INVALID_LINK", ["bad", "inputs", "string_spec"]],
+      ["E_DANGLING_LINK", ["bad", "inputs", "number_type"]],
     ]);
   });
 
@@ -146,10 +210,20 @@ describe("values", () => {
     ]);
   });
 
+  test("truncates only inputs typed exactly INT, as the backend's int() does", async () => {
+    const prompt = {
+      pack: node("MockIntWidgetOnPackType", { level: 10.5, ratio: 1 }),
+      exact: node("MockIntWidgetOnPackType", { level: 9.5, ratio: 100000000000000000000n }),
+    };
+    expect(await check(prompt, "widget-types")).toEqual([
+      ["E_OUT_OF_RANGE", ["pack", "inputs", "level"]],
+    ]);
+  });
+
   test.each([
     ["in range", 4, []],
     ["above the maximum", 8.5, ["E_OUT_OF_RANGE"]],
-    ["a bigint", 1n, ["E_INVALID_VALUE"]],
+    ["a big integer, which float() reads", 2n ** 60n, ["E_OUT_OF_RANGE"]],
     ["a string", "7", ["E_INVALID_VALUE"]],
   ])("checks a FLOAT: %s", async (_name, factor, codes) => {
     const prompt = {
@@ -264,14 +338,20 @@ describe("dynamic inputs", () => {
       wrong: node("MockDynamicComboSimple", { image, mode: "stretch", "mode.width": 1 }),
       missing: node("MockDynamicComboSimple", { image }),
       typed: node("MockDynamicComboSimple", { image, mode: 2 }),
+      // The backend compares the choice as it is: a link or a wrapped key drops the input.
+      linked: node("MockDynamicComboSimple", { image, mode: ["any", 0], "mode.factor": "x" }),
+      wrapped: node("MockDynamicComboSimple", { image, mode: { __value__: "scale by" } }),
+      any: node("MockAnyPassthrough", { value: ["vae", 0] }),
     };
-    expect(await check(prompt, "dynamic-combo")).toEqual([
+    expect(await check(prompt, "dynamic-combo", "sockets")).toEqual([
       ["E_UNKNOWN_INPUT", ["keep", "inputs", "mode.width"]],
       ["E_MISSING_INPUT", ["scale", "inputs", "mode.height"]],
       // The option's own keys aren't reported again.
       ["E_UNKNOWN_DYNAMIC_OPTION", ["wrong", "inputs", "mode"]],
       ["E_MISSING_INPUT", ["missing", "inputs", "mode"]],
       ["E_INVALID_VALUE", ["typed", "inputs", "mode"]],
+      ["E_INVALID_VALUE", ["linked", "inputs", "mode"]],
+      ["E_INVALID_VALUE", ["wrapped", "inputs", "mode"]],
     ]);
   });
 
@@ -318,14 +398,91 @@ describe("MatchType", () => {
       // Linked to `*`: the same.
       any: node("MockSwitch", { switch: true, on_false: ["pass", 0], on_true: ["vae", 0] }),
       pass: node("MockAnyPassthrough", { value: ["vae", 0] }),
-      // An Autogrow first: its slots infer the type together.
+      // An Autogrow: its first slot infers, the others agree.
       grow: node("MockAutogrowMatchType", {
         "values.value0": ["decode", 0],
         "values.value1": ["vae", 0],
       }),
+      // The first slot `*`: anything goes.
+      open: node("MockAutogrowMatchType", {
+        "values.value0": ["pass", 0],
+        "values.value1": ["vae", 0],
+        "values.value2": ["decode", 0],
+      }),
     };
     expect(await check(prompt, "match-type", "sockets", "autogrow")).toEqual([
       ["E_MATCH_TYPE_MISMATCH", ["differ", "inputs", "on_true"]],
+      ["E_MATCH_TYPE_MISMATCH", ["grow", "inputs", "values.value1"]],
+    ]);
+  });
+
+  test("infers from the input the types infer from, even in an option not chosen", async () => {
+    // `mode.c` (option "x") infers template t; with "y" chosen, nothing does, so a and b may differ.
+    const custom = await schemaOf("basic-pipeline");
+    const schema = {
+      ...custom,
+      nodes: {
+        ...custom.nodes,
+        DC: {
+          classType: "DC",
+          displayName: "DC",
+          category: "test",
+          pythonModule: "nodes",
+          outputNode: false,
+          isInputList: false,
+          deprecated: false,
+          experimental: false,
+          inputs: [
+            {
+              kind: "dynamicCombo",
+              name: "mode",
+              required: true,
+              lazy: false,
+              rawLink: false,
+              options: [
+                { key: "x", inputs: [matchInput("c")] },
+                { key: "y", inputs: [] },
+              ],
+            },
+            { ...matchInput("a"), required: false },
+            { ...matchInput("b"), required: false },
+          ],
+          outputs: [],
+        },
+      },
+    } satisfies Schema;
+    const prompt = {
+      ...PIPELINE,
+      y: node("DC", { mode: "y", a: ["decode", 0], b: ["vae", 0] }),
+      x: node("DC", { mode: "x", "mode.c": ["decode", 0], a: ["vae", 0] }),
+    };
+    expect(found(validateApi(prompt, schema))).toEqual([
+      ["E_MATCH_TYPE_MISMATCH", ["x", "inputs", "a"]],
+    ]);
+  });
+
+  test("leaves the output `*` when the inferring input is empty, as the types do", async () => {
+    // ComfyUI's own switch: only on_true linked. The types give Out<"*">, which fits anywhere.
+    const prompt = {
+      picked: node("MockSwitch", { switch: true, on_true: ["decode", 0] }),
+      out2: node("VAEDecode", { samples: ["picked", 0], vae: ["vae", 0] }),
+    };
+    expect(await check(prompt, "match-type")).toEqual([]);
+  });
+
+  test("resolves long MatchType chains without deep recursion", async () => {
+    const chain: { [id: string]: ReturnType<typeof node> } = {};
+    for (let index = 0; index < 20_000; index++) {
+      chain[`s${String(index)}`] = node("MockSwitch", {
+        switch: true,
+        on_false: index === 19_999 ? ["latent", 0] : [`s${String(index + 1)}`, 0],
+      });
+    }
+    chain["use"] = node("VAEDecode", { samples: ["s0", 0], vae: ["vae", 0] });
+    expect(await check(chain, "match-type")).toEqual([]);
+    chain["bad"] = node("SaveImage", { filename_prefix: "x", images: ["s0", 0] });
+    expect(await check(chain, "match-type")).toEqual([
+      ["E_TYPE_MISMATCH", ["bad", "inputs", "images"]],
     ]);
   });
 
@@ -347,7 +504,8 @@ describe("cycles", () => {
     const prompt = {
       a: node("MockSwitch", { switch: true, on_false: ["b", 0] }),
       b: node("MockSwitch", { switch: true, on_false: ["a", 0] }),
-      self: node("MockAnyPassthrough", { value: ["self", 0] }),
+      // Two inputs on the same back edge: one cycle.
+      self: node("MockSwitch", { switch: true, on_false: ["self", 0], on_true: ["self", 0] }),
     };
     const diagnostics = await validated(prompt, "match-type", "sockets");
     expect(found(diagnostics)).toEqual([
@@ -355,6 +513,7 @@ describe("cycles", () => {
       ["E_DEPENDENCY_CYCLE", ["self"]],
     ]);
     expect(diagnostics[0]?.message).toContain("a (MockSwitch) → b (MockSwitch) → a (MockSwitch)");
+    expect(diagnostics[1]?.message).toContain("self (MockSwitch) → self (MockSwitch)");
   });
 
   test("handles long chains without deep recursion", async () => {
@@ -399,4 +558,11 @@ describe("toApi", () => {
     });
     expect(found(validate(built))).toEqual([["E_NO_OUTPUT_NODE", []]]);
   });
+});
+
+test("reports a prompt that isn't an object", async () => {
+  const schema = await schemaOf("basic-pipeline");
+  for (const prompt of [null, [], "x", 1]) {
+    expect(found(validateApi(prompt, schema))).toEqual([["E_INVALID_PROMPT", []]]);
+  }
 });

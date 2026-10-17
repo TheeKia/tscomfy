@@ -101,5 +101,43 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "MockIntWidgetOnPackType": {
+    "input": {
+      "required": {
+        "level": [
+          "MOCK_LEVEL",
+          {
+            "widgetType": "INT",
+            "default": 5,
+            "min": 0,
+            "max": 10
+          }
+        ],
+        "ratio": [
+          "FLOAT",
+          {
+            "default": 0.5,
+            "min": 0,
+            "max": 1e20
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["level", "ratio"]
+    },
+    "is_input_list": false,
+    "output": ["MOCK_LEVEL"],
+    "output_is_list": [false],
+    "output_name": ["MOCK_LEVEL"],
+    "name": "MockIntWidgetOnPackType",
+    "display_name": "Mock INT Widget On Pack Type",
+    "description": "An INT widget on a pack type: the backend coerces only inputs typed exactly INT, so a fraction isn't truncated. A FLOAT whose maximum is beyond 2^53.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/widgets",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
   }
 }
