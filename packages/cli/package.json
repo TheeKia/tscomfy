@@ -1,7 +1,7 @@
 {
   "name": "@tscomfy/cli",
   "version": "0.0.0",
-  "description": "Command-line interface for tscomfy: generate types from a ComfyUI server, check drift, transpile workflows.",
+  "description": "Command-line interface for tscomfy: generate types from a ComfyUI server and check them for drift.",
   "license": "MIT",
   "bin": {
     "tscomfy": "./dist/main.js"

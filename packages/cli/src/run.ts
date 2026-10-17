@@ -5,6 +5,7 @@ import { CliError, type Io } from "./io.ts";
 /** The CLI's version. A test keeps it equal to package.json. */
 export const CLI_VERSION = "0.0.0";
 
+/** `tscomfy --help`. */
 export const USAGE: string = `Usage: tscomfy <command> [options]
 
 Commands:

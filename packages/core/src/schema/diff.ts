@@ -3,9 +3,11 @@ import type { ComboOption, InputDef, NodeDef, Schema } from "./types.ts";
 
 /** How one input differs between two schemas. */
 export interface InputChange {
+  /** The input's name (a top-level input; nested changes count as `specChanged`). */
   readonly name: string;
   /** For combos on both sides: the options only one side has. Empty for other changes. */
   readonly optionsAdded: readonly ComboOption[];
+  /** Options the old side has and the new one doesn't. */
   readonly optionsRemoved: readonly ComboOption[];
   /** Something besides the options changed: the kind, a bound, a default, nested inputs, …. */
   readonly specChanged: boolean;
@@ -14,9 +16,13 @@ export interface InputChange {
 /** How one node differs between two schemas. */
 export interface NodeChange {
   readonly classType: string;
+  /** Inputs only the new side has, in its order. */
   readonly inputsAdded: readonly string[];
+  /** Inputs only the old side has, in its order. */
   readonly inputsRemoved: readonly string[];
+  /** Inputs both sides have that differ, in the new side's order. */
   readonly inputsChanged: readonly InputChange[];
+  /** Any output slot differs: its type, name, list flag, tooltip or template. */
   readonly outputsChanged: boolean;
   /** Display name, category, description, flags or input order. */
   readonly detailsChanged: boolean;
@@ -24,8 +30,11 @@ export interface NodeChange {
 
 /** What changed from one schema to another, by class type in code-unit order. */
 export interface SchemaDiff {
+  /** Class types only the new schema has. */
   readonly added: readonly string[];
+  /** Class types only the old schema has. */
   readonly removed: readonly string[];
+  /** Nodes both have that differ. */
   readonly changed: readonly NodeChange[];
 }
 

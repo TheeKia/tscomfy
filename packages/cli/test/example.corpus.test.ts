@@ -1,10 +1,19 @@
 import { describe, expect, test } from "bun:test";
+import { normalizeObjectInfo } from "@tscomfy/core";
 import { listCorpus } from "@tscomfy/fixtures";
 import { runExample } from "./example.ts";
 
 // examples/txt2img over each real dump: it must type-check, and run when the server has a model.
 
 const dumps = await listCorpus("object-info");
+
+async function hasCheckpoints(path: string): Promise<boolean> {
+  const { schema } = normalizeObjectInfo(await Bun.file(path).text());
+  const input = schema.nodes["CheckpointLoaderSimple"]?.inputs.find(
+    (each) => each.name === "ckpt_name",
+  );
+  return input?.kind === "combo" && input.options.length > 0;
+}
 
 describe("examples/txt2img over the corpus", () => {
   if (dumps.length === 0) test.skip("object-info is empty", () => {});
@@ -15,7 +24,12 @@ describe("examples/txt2img over the corpus", () => {
       async () => {
         const { tsc, main } = await runExample(dump.path, "a cat");
         expect(tsc).toEqual({ code: 0, stdout: "", stderr: "" });
-        if (main?.code === 1 && main.stderr.startsWith("The server lists no checkpoints")) return;
+        // A server without checkpoints can't build the prompt; the example says so and exits 1.
+        if (!(await hasCheckpoints(dump.path))) {
+          expect(main?.code).toBe(1);
+          expect(main?.stderr).toStartWith("The server lists no checkpoints");
+          return;
+        }
         expect(main?.stderr).toBe("");
         expect(main?.code).toBe(0);
         const classTypes = [...(main?.stdout ?? "").matchAll(/"class_type":"(\w+)"/g)];

@@ -47,8 +47,8 @@ the generated types. [`examples/txt2img`](examples/txt2img) is a complete projec
 | Path | What |
 |---|---|
 | `packages/core` | `@tscomfy/core`: schema model, `/object_info` normalizer, graph builder, API export/import, validation. Zero dependencies, runs anywhere. |
-| `packages/codegen` | `@tscomfy/codegen`: generates node types and the runtime schema module; transpiles workflows to code. Pure. |
-| `packages/cli` | `@tscomfy/cli`: the `tscomfy` command (generate, check, transpile). The only package with I/O. |
+| `packages/codegen` | `@tscomfy/codegen`: generates node types and the runtime schema module (and, in Phase 6, transpiles workflows to code). Pure. |
+| `packages/cli` | `@tscomfy/cli`: the `tscomfy` command (`generate`, `check`; `transpile` in Phase 6). The only package with I/O. |
 | `internal/fixtures` | `@tscomfy/fixtures` (private): committed mock data and the local real-data corpus. |
 | `internal/bench` | `@tscomfy/bench` (private): the type-checking speed harness. |
 | `examples/` | Example projects, typed by your own server. |

@@ -15,6 +15,9 @@ Generated files carry a schema hash in their header, and `tscomfy check` needs a
 ## Consequences
 
 - Same nodes, same hash: whitespace, key order, node load order and a ComfyUI upgrade that changes no node don't count as drift. Anything that changes generated output (tooltips, combo options, bounds) does.
+- `tscomfy check` reports drift from the diff, which is empty exactly when the hashes are equal,
+  except that option changes of upload and remote combos don't count: they are the server's
+  files, which change with every upload, and the types already take any string there.
 - `normalizeObjectInfo` stays cheap and synchronous for runtime users who never need a hash.
 - The normalizer must build objects in a fixed field order, because `stringify` keeps insertion order.
 - About 60 lines of SHA-256 to maintain, tested against published vectors and `Bun.CryptoHasher`.

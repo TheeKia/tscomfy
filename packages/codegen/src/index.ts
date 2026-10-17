@@ -6,7 +6,7 @@
  * files as data and never touches the filesystem (see docs/plan.md §4).
  */
 
-export { emitSchemaModule } from "./emit-schema-module.ts";
+export { emitSchemaModule, isExportName } from "./emit-schema-module.ts";
 export { emitTypes, type EmitTypesResult, PRINT_WIDTH } from "./emit-types.ts";
 export {
   CODEGEN_VERSION,

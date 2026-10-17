@@ -1,5 +1,5 @@
 import { type Flags, value } from "./args.ts";
-import { type Io, CliError, withoutCredentials } from "./io.ts";
+import { type Io, CliError, redactUrl } from "./io.ts";
 import { shellQuote } from "./util.ts";
 
 /** Where node definitions come from: a server, or a saved `/object_info` response. */
@@ -34,9 +34,10 @@ export async function readSource(io: Io, flags: Flags): Promise<Source> {
       flag: `--from ${shellQuote(from)}`,
     };
   }
-  const { request, shown } = serverBase(url ?? "");
-  const text = await io.fetchText(`${request}/object_info`);
-  const comfyVersion = await readComfyVersion(io, request);
+  const base = serverBase(url ?? "");
+  const shown = redactUrl(base).replace(/\/+$/, "");
+  const text = await io.fetchText(endpoint(base, "object_info"));
+  const comfyVersion = await readComfyVersion(io, endpoint(base, "system_stats"));
   return {
     text,
     ...(comfyVersion === undefined ? {} : { comfyVersion }),
@@ -46,33 +47,33 @@ export async function readSource(io: Io, flags: Flags): Promise<Source> {
 }
 
 /**
- * The server URL without a trailing slash: as requested, and as shown, without credentials,
- * which mustn't end up in messages or generated headers.
+ * The server URL. Credentials and the query (which often carries a token) are sent with each
+ * request but never shown: messages and generated headers use {@link redactUrl}.
  */
-function serverBase(url: string): { readonly request: string; readonly shown: string } {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new CliError(`${JSON.stringify(url)} is not a URL.`, 2);
-  }
+function serverBase(url: string): URL {
+  // Not echoed: an unparseable URL may still hold a password.
+  if (!URL.canParse(url)) throw new CliError("--url is not a valid URL.", 2);
+  const parsed = new URL(url);
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new CliError(`${url} is not an http(s) URL.`, 2);
+    throw new CliError(`${redactUrl(parsed)} is not an http(s) URL.`, 2);
   }
-  return {
-    request: withoutTrailingSlash(parsed.href),
-    shown: withoutTrailingSlash(withoutCredentials(parsed.href)),
-  };
+  if (parsed.hash !== "") {
+    throw new CliError("--url can't have a #fragment: it never reaches the server.", 2);
+  }
+  return parsed;
 }
 
-function withoutTrailingSlash(href: string): string {
-  return href.replace(/\/+$/, "");
+/** An endpoint under the server's path, keeping its query: `http://h/api/?t=1` → `…/api/x?t=1`. */
+function endpoint(base: URL, name: string): string {
+  const url = new URL(base.href);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/${name}`;
+  return url.href;
 }
 
 /** The ComfyUI version from `/system_stats`; optional, so a failure only loses the version. */
-async function readComfyVersion(io: Io, base: string): Promise<string | undefined> {
+async function readComfyVersion(io: Io, url: string): Promise<string | undefined> {
   try {
-    const stats: unknown = JSON.parse(await io.fetchText(`${base}/system_stats`));
+    const stats: unknown = JSON.parse(await io.fetchText(url));
     const system: unknown =
       typeof stats === "object" && stats !== null ? Reflect.get(stats, "system") : undefined;
     const version: unknown =

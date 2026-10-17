@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { CODEGEN_VERSION, emitSchemaModule, generate } from "@tscomfy/codegen";
+import { CODEGEN_VERSION, emitSchemaModule, generate, isExportName } from "@tscomfy/codegen";
 import { normalizeObjectInfo } from "@tscomfy/core";
 import { MOCK_OBJECT_INFO_NAMES, readMockObjectInfo } from "@tscomfy/fixtures";
 import {
@@ -84,9 +84,17 @@ describe("generate", () => {
     expect(manifest).toMatchObject({ version: CODEGEN_VERSION });
   });
 
-  test("rejects an export name that isn't an identifier", async () => {
-    const { schema } = normalizeObjectInfo(await readMockObjectInfo("basic-pipeline"));
-    expect(() => emitSchemaModule(schema, "my-schema", "./nodes.js")).toThrow(TypeError);
+  test.each(["my-schema", "default", "await", "Nodes", "defineSchema", "", "1st"])(
+    "rejects the export name %p",
+    async (name) => {
+      const { schema } = normalizeObjectInfo(await readMockObjectInfo("basic-pipeline"));
+      expect(isExportName(name)).toBeFalse();
+      expect(() => emitSchemaModule(schema, name, "./nodes.js")).toThrow(TypeError);
+    },
+  );
+
+  test.each(["local", "$comfy", "_server2", "nodes"])("accepts the export name %p", (name) => {
+    expect(isExportName(name)).toBeTrue();
   });
 });
 

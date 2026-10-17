@@ -259,6 +259,7 @@ src/comfy/local/
   object_info.json   # raw snapshot: offline regeneration (--from), drift diffs. Never imported.
   nodes.ts           # types only: interface Nodes + input interfaces + combo aliases
   index.ts           # export const local: TypedSchema<Nodes> = defineSchema<Nodes>('…')
+  tscomfy.json       # manifest, written last: codegen version, schema hash, options, content hash per file
 ```
 
 Every file starts with a header: generator version, schema hash (`hashSchema`, D15), ComfyUI version, the command to regenerate.
@@ -577,20 +578,24 @@ The diagnostic model is §5.4.
   - diagnostics: `W_EMPTY_COMBO`, `W_UNTYPED_INPUT` (docs/diagnostics.md)
 - **CLI** (`packages/cli`, the only I/O; commands take an injected `Io`, so tests run without a
   disk or network):
-  - `generate (--url <server> | --from <file>) --out <dir>` writes `nodes.ts`, `index.ts` and
-    `object_info.json`, the raw response byte for byte. The snapshot lets `--from` regenerate
-    offline and gives `check` its baseline. With `--url` it GETs `/object_info` and
-    `/system_stats` (for `comfyui_version`; optional) and nothing else. The headers record the
-    schema hash and the command that regenerates the files, shell-quoted, with credentials
-    taken out of the URL. Credentials are also kept out of every message. A response that
-    isn't JSON or isn't an object of nodes is fatal (exit 1, nothing written). Anything less is
-    reported and generated.
-  - `check (--url | --from) --out <dir>` normalizes the server and the snapshot and compares
-    their `hashSchema` (D15), so differences in fields the schema doesn't keep don't count. On
-    drift it prints the diff (`diffSchemas` in core): nodes added, removed and changed, and per
-    node the inputs, combo options, outputs and details. It also checks that `nodes.ts` and
-    `index.ts` carry the snapshot's hash, which catches edited or half-regenerated files. It
-    exits 1 on either, and suggests the command recorded in the header.
+  - `generate (--url <server> | --from <file>) --out <dir>` writes `nodes.ts`, `index.ts`,
+    `object_info.json` (the raw response, byte for byte) and last the `tscomfy.json` manifest
+    (§6.1). Each file is replaced in one step (a temporary file, then a rename). The snapshot
+    lets `--from` regenerate offline and gives `check` its baseline. With `--url` it GETs
+    `/object_info` and `/system_stats` (for `comfyui_version`; optional) under the URL's path,
+    keeping its query, and nothing else. Credentials and the query (where servers put tokens)
+    are sent but never shown or written. The headers record the schema hash and the command
+    that regenerates the files, for a POSIX shell in the directory generate ran in; paths with
+    control characters are refused. A response with no usable node (not JSON, not an object,
+    an error body such as `{"detail": …}`, or `{}`) is fatal: exit 1, nothing written, so it
+    can't replace good types. Anything less is reported and generated (exit 0).
+  - `check (--url | --from) --out <dir>` normalizes the server and the snapshot and diffs them
+    (`diffSchemas` in core; empty exactly when `hashSchema` is equal, D15), so differences in
+    fields the schema doesn't keep don't count. Option changes of upload and remote combos are
+    runtime state (§6.2), not drift: they are mentioned and ignored. It also checks every file
+    against the manifest's content hashes and codegen version, which catches edited,
+    truncated, missing or half-written files and output of another version. It exits 1 on
+    any of these and suggests `generate` with the checked source and the recorded options.
   - Exit codes: 0 on success, 1 on a failure or drift, 2 on a usage error (with the usage).
 - **Report**: counts plus diagnostics grouped by node pack (`python_module`; the dump has 203
   packs), 5 per pack unless `--verbose`. `--quiet` prints errors only, to stderr.
@@ -880,4 +885,5 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | CLI against the live server (§9) | `generate --url` on ComfyUI 0.41.0: 1,758 node types in 1.6 s; 0 errors and 67 warnings (54 `W_EMPTY_COMBO` for loaders with no model files, plus the 13 normalizer warnings above). `check --url` takes 0.36 s. `examples/txt2img` generates, type-checks and prints a prompt over the live types |
 | Schema identity across responses (D15) | A corpus dump saved earlier and the live response differ only in the order of `vhs_path_extensions` on `VHS_LoadImagePath`, a field the normalizer doesn't keep. The hashes are equal and `check` reports up to date, as intended |
 | Credentials in `--url` | Bun's `fetch` turns `http://user:pw@host` into `Authorization: Basic …` (checked with `Bun.serve` in `system.test.ts`), so authenticated servers work. The CLI strips the credentials from every message and header |
+| Phase 4 review | An independent review found 10 issues, each reproduced: a `?token=` query appended before `/object_info` (and shown), `check` trusting header lines over file contents, an error body (`{"detail": …}`) generating 0 nodes over good types with exit 0, reserved-word export names, upload combos counted as drift, an unguarded response body read, a fix command that named the old source, credentials in usage errors, control characters in recorded paths, and doc gaps. All fixed with tests |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

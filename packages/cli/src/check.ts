@@ -1,17 +1,26 @@
 import { join } from "node:path";
-import { diffSchemas, hashSchema, type NodeChange, type SchemaDiff } from "@tscomfy/core";
+import { CODEGEN_VERSION } from "@tscomfy/codegen";
+import {
+  diffSchemas,
+  type InputChange,
+  type NodeChange,
+  type Schema,
+  type SchemaDiff,
+} from "@tscomfy/core";
 import { parseFlags } from "./args.ts";
-import { loadSchema, required, SNAPSHOT } from "./generate.ts";
+import { loadSchema, path, regenerateCommand, SNAPSHOT } from "./generate.ts";
 import { CliError, type Io } from "./io.ts";
+import { contentHash, MANIFEST, readManifest } from "./manifest.ts";
 import { count } from "./report.ts";
 import { readSource } from "./source.ts";
-import { shellQuote } from "./util.ts";
 
+/** `tscomfy check --help`. */
 export const CHECK_USAGE: string = `Usage: tscomfy check (--url <server> | --from <object_info.json>) --out <dir>
 
 Compares the server's node definitions with the snapshot in <dir>/${SNAPSHOT}, and checks
-that <dir>/nodes.ts and <dir>/index.ts were generated from that snapshot. Exits with 1 when
-anything differs, so it can guard a build.
+that the files in <dir> are exactly what \`tscomfy generate\` wrote (<dir>/${MANIFEST}). Exits
+with 1 when anything differs, so it can guard a build. New files in upload and remote combos
+(an uploaded image) are runtime state, not drift.
 
 Options:
   --url <server>   A ComfyUI server, e.g. http://127.0.0.1:8188. Only GET requests.
@@ -31,9 +40,6 @@ const FLAGS = [
 /** How many combo options a change lists before the rest are summarized, unless verbose. */
 const SHOWN_OPTIONS = 5;
 
-const HEADER_HASH = /^\/\/ Schema (sha256:[0-9a-f]{64})\b/m;
-const HEADER_COMMAND = /^\/\/ Regenerate with: (tscomfy generate .+)$/m;
-
 /** `tscomfy check`. */
 export async function checkCommand(io: Io, args: readonly string[]): Promise<number> {
   const flags = parseFlags(args, FLAGS);
@@ -41,54 +47,103 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
     io.out(CHECK_USAGE);
     return 0;
   }
-  const out = required(flags, "out");
+  const out = path(flags, "out");
+  if (flags.has("from")) path(flags, "from");
+  const manifest = await readManifest(io, out);
   const snapshotPath = join(out, SNAPSHOT);
   const snapshotText = await io.readText(snapshotPath);
-  if (snapshotText === undefined) {
-    throw new CliError(`There is no snapshot at ${snapshotPath}; run tscomfy generate first.`);
+  if (manifest === undefined || snapshotText === undefined) {
+    throw new CliError(
+      `There is no ${manifest === undefined ? MANIFEST : SNAPSHOT} in ${out}; run tscomfy generate first.`,
+    );
   }
   const snapshot = loadSchema({ text: snapshotText, label: snapshotPath, flag: "" }).schema;
   const source = await readSource(io, flags);
   const current = loadSchema(source).schema;
-  const expected = hashSchema(snapshot);
 
-  // Generated files that don't match the snapshot were edited or left behind.
+  // Files that don't hash as recorded were edited, removed or left half-written.
   const stale: string[] = [];
-  let command: string | undefined;
-  for (const file of ["nodes.ts", "index.ts"]) {
-    // Sequential: two small reads, and a stable order for the message.
+  for (const [file, hash] of Object.entries(manifest.files)) {
+    // Sequential: a few small reads, and a stable order for the message.
     // oxlint-disable-next-line no-await-in-loop
-    const text = await io.readText(join(out, file));
-    if (text === undefined || HEADER_HASH.exec(text)?.[1] !== expected) stale.push(file);
-    command ??= text === undefined ? undefined : HEADER_COMMAND.exec(text)?.[1];
+    const text = file === SNAPSHOT ? snapshotText : await io.readText(join(out, file));
+    if (text === undefined || contentHash(text) !== hash) stale.push(file);
   }
-  const drifted = hashSchema(current) !== expected;
+  const outdated = manifest.codegen !== CODEGEN_VERSION;
+  const { diff, runtime } = withoutRuntimeOptions(diffSchemas(snapshot, current), current);
+  const drifted = diff.added.length + diff.removed.length + diff.changed.length > 0;
 
-  if (!drifted && stale.length === 0) {
+  const ignored =
+    runtime.length === 0
+      ? ""
+      : ` (new files in ${count(runtime.length, "upload or remote combo")} aren't drift: ${runtime.join(", ")})`;
+  if (!drifted && stale.length === 0 && !outdated) {
     const nodes = Object.keys(current.nodes).length;
     io.out(
-      `Up to date: ${count(nodes, "node type")} ${nodes === 1 ? "matches" : "match"} ${snapshotPath}.\n`,
+      `Up to date: ${count(nodes, "node type")} ${nodes === 1 ? "matches" : "match"} ${snapshotPath}${ignored}.\n`,
     );
     return 0;
   }
   const lines: string[] = [];
   if (stale.length > 0) {
     lines.push(
-      `${stale.join(" and ")} in ${out} ${stale.length === 1 ? "wasn't" : "weren't"} generated from ${snapshotPath}.`,
+      `${list(stale)} in ${out} ${stale.length === 1 ? "isn't" : "aren't"} what tscomfy generate wrote: edited, missing, or from an interrupted run.`,
+    );
+  }
+  if (outdated) {
+    lines.push(
+      `${out} was generated by @tscomfy/codegen ${manifest.codegen}; this is ${CODEGEN_VERSION}.`,
     );
   }
   if (drifted) {
     lines.push(
-      `${source.label} differs from ${snapshotPath}:`,
-      ...formatDiff(diffSchemas(snapshot, current), flags.has("verbose")),
+      `${source.label} differs from ${snapshotPath}${ignored}:`,
+      ...formatDiff(diff, flags.has("verbose")),
     );
   }
-  // The recorded command keeps the options generate was given; this one is a fallback.
-  lines.push(
-    `Run ${command ?? `tscomfy generate ${source.flag} --out ${shellQuote(out)}`} to update.`,
-  );
+  const command = regenerateCommand({
+    flag: source.flag,
+    out,
+    exportName: manifest.exportName,
+    importExtension: manifest.importExtension,
+  });
+  lines.push(`Run ${command} to update.`);
   io.out(`${lines.join("\n")}\n`);
   return 1;
+}
+
+/**
+ * The diff without option changes of upload and remote combos (docs/plan.md §6.5): their options
+ * are the server's files, which change with every upload, and the types take any string there.
+ * Also returns those inputs, as `Class.input`.
+ */
+function withoutRuntimeOptions(
+  diff: SchemaDiff,
+  current: Schema,
+): { readonly diff: SchemaDiff; readonly runtime: readonly string[] } {
+  const runtime: string[] = [];
+  const changed: NodeChange[] = [];
+  for (const change of diff.changed) {
+    const inputs = current.nodes[change.classType]?.inputs ?? [];
+    const kept = change.inputsChanged.filter((input: InputChange) => {
+      const definition = inputs.find((each) => each.name === input.name);
+      const runtimeOnly =
+        !input.specChanged &&
+        definition?.kind === "combo" &&
+        (definition.upload || definition.remote);
+      if (runtimeOnly) runtime.push(`${change.classType}.${input.name}`);
+      return !runtimeOnly;
+    });
+    const rest = { ...change, inputsChanged: kept };
+    const empty =
+      kept.length === 0 &&
+      rest.inputsAdded.length === 0 &&
+      rest.inputsRemoved.length === 0 &&
+      !rest.outputsChanged &&
+      !rest.detailsChanged;
+    if (!empty) changed.push(rest);
+  }
+  return { diff: { ...diff, changed }, runtime };
 }
 
 /** The diff as indented lines. */
@@ -126,8 +181,15 @@ function formatChange(change: NodeChange, verbose: boolean): string[] {
   return lines;
 }
 
-function options(list: readonly (string | number | boolean)[], verbose: boolean): string {
-  const shown = verbose ? list : list.slice(0, SHOWN_OPTIONS);
-  const rest = list.length - shown.length;
+function options(values: readonly (string | number | boolean)[], verbose: boolean): string {
+  const shown = verbose ? values : values.slice(0, SHOWN_OPTIONS);
+  const rest = values.length - shown.length;
   return ` ${shown.map((option) => JSON.stringify(option)).join(", ")}${rest > 0 ? `, … ${String(rest)} more` : ""}`;
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function list(items: readonly string[]): string {
+  return items.length <= 1
+    ? items.join("")
+    : `${items.slice(0, -1).join(", ")} and ${items.at(-1) ?? ""}`;
 }

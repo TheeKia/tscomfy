@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Io, run, systemIo } from "@tscomfy/cli";
@@ -96,6 +96,49 @@ describe("systemIo", () => {
     const io = captured();
     expect(await run(["generate", "--url", url, "--out", join(file, "sub")], io)).toBe(1);
     expect(io.output()).toStartWith(`tscomfy: Could not write ${join(file, "sub")}/`);
+  });
+});
+
+describe("systemIo failures", () => {
+  test("reports a body that breaks off", async () => {
+    // Promises 100,000 bytes, sends one, and hangs up.
+    const broken = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: {
+        data: (socket) => {
+          socket.write("HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n{");
+          socket.end();
+        },
+      },
+    });
+    try {
+      const io = captured();
+      const at = `http://127.0.0.1:${String(broken.port)}`;
+      expect(await run(["generate", "--url", at, "--out", join(temp, "broken")], io)).toBe(1);
+      expect(io.output()).toStartWith(`tscomfy: Could not reach ${at}/object_info: `);
+    } finally {
+      broken.stop(true);
+    }
+  });
+
+  test("reports a directory given as a file", async () => {
+    const io = captured();
+    expect(await run(["generate", "--from", temp, "--out", join(temp, "x")], io)).toBe(1);
+    expect(io.output()).toStartWith(`tscomfy: Could not read ${temp}: `);
+  });
+
+  test("replaces files whole and leaves no temporary files", async () => {
+    const out = join(temp, "atomic");
+    const io = captured();
+    expect(await run(["generate", "--url", url, "--out", out], io)).toBe(0);
+    expect(await run(["generate", "--url", url, "--out", out], io)).toBe(0);
+    expect((await readdir(out)).toSorted()).toEqual([
+      "index.ts",
+      "nodes.ts",
+      "object_info.json",
+      "tscomfy.json",
+    ]);
   });
 });
 
