@@ -4,6 +4,8 @@ import {
   DIAGNOSTIC_CODES,
   exportApi,
   importApi,
+  importUi,
+  toUi,
   workflow,
   type Diagnostic,
   type DiagnosticCode,
@@ -11,7 +13,7 @@ import {
   parse,
   validateApi,
 } from "@tscomfy/core";
-import { readMockObjectInfo } from "@tscomfy/fixtures";
+import { readMockObjectInfo, readMockUiWorkflow } from "@tscomfy/fixtures";
 import { parseWith } from "../src/json/parse.ts";
 import { looseSchema } from "./loose.ts";
 import { node, validated } from "./prompts.ts";
@@ -133,6 +135,70 @@ const PRODUCERS: Record<CoreCode, Producer> = {
         looseSchema(await readMockObjectInfo("dynamic-group")),
       ).diagnostics,
     path: ["9"],
+  },
+  E_INVALID_WORKFLOW: {
+    produce: async () =>
+      importUi("[]", looseSchema(await readMockObjectInfo("basic-pipeline"))).diagnostics,
+    path: [],
+  },
+  W_UNRESOLVED_LINK: {
+    produce: async () =>
+      importUi(
+        JSON.stringify({
+          version: 0.4,
+          nodes: [{ id: 2, type: "VAEDecode", inputs: [{ name: "samples", link: 1 }] }],
+          links: [[1, 9, 0, 2, 0, "LATENT"]],
+        }),
+        looseSchema(await readMockObjectInfo("basic-pipeline")),
+      ).diagnostics,
+    path: ["links", 1],
+  },
+  W_WIDGET_VALUES_MISMATCH: {
+    produce: async () =>
+      importUi(
+        JSON.stringify({
+          version: 0.4,
+          nodes: [{ id: 5, type: "EmptyLatentImage", widgets_values: [512] }],
+          links: [],
+        }),
+        looseSchema(await readMockObjectInfo("basic-pipeline")),
+      ).diagnostics,
+    path: ["5", "widgets_values"],
+  },
+  W_FRONTEND_QUIRK: {
+    produce: async () =>
+      importUi(
+        await readMockUiWorkflow("subgraph-modes"),
+        looseSchema(await readMockObjectInfo("basic-pipeline")),
+      ).diagnostics,
+    path: ["40", "31"],
+  },
+  W_UNKNOWN_UI_CLASS: {
+    produce: async () => {
+      const schema = looseSchema(await readMockObjectInfo("basic-pipeline"));
+      return toUi(workflow(schema, ({ raw }) => raw("NoSuchNode", {}, { id: "1" }))).diagnostics;
+    },
+    path: ["1"],
+  },
+  W_UNSAFE_INTEGER: {
+    produce: async () => {
+      const schema = looseSchema(await readMockObjectInfo("basic-pipeline"));
+      const built = workflow(schema, ({ n }) => {
+        n["MockSeed"]?.({ seed: 18446744073709551615n }, { id: "2" });
+      });
+      return toUi(built).diagnostics;
+    },
+    path: ["2", "inputs", "seed"],
+  },
+  W_UI_VALUE_LOST: {
+    produce: async () => {
+      const schema = looseSchema(await readMockObjectInfo("dynamic-group"));
+      const built = workflow(schema, ({ n }) => {
+        n["MockDynamicGroupOptionalMin"]?.({ rows: [{ value: 3 }] }, { id: "4" });
+      });
+      return toUi(built).diagnostics;
+    },
+    path: ["4", "inputs", "rows.0.value"],
   },
   E_UNKNOWN_CLASS_TYPE: {
     produce: () => validated({ "1": node("NoSuchNode") }),

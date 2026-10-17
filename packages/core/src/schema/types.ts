@@ -69,6 +69,8 @@ export type IntInput = WidgetBase & {
   readonly min?: IntValue;
   readonly max?: IntValue;
   readonly step?: number;
+  /** `control_after_generate` as the server states it; see {@link FloatInput.control}. */
+  readonly control?: boolean | string;
 };
 
 /** A FLOAT widget. Bounds the server wrote beyond 2^53 are rounded inward (docs/plan.md §9). */
@@ -80,6 +82,13 @@ export type FloatInput = WidgetBase & {
   readonly step?: number;
   /** Rounding precision the frontend applies, or `false` for none. */
   readonly round?: number | false;
+  /**
+   * `control_after_generate` as the server states it. The frontend adds a control widget
+   * (randomize, fixed, …) when it is truthy, named after it when it is a string; for INT also when
+   * it is absent and the input is named `seed` or `noise_seed`. The control is saved in UI
+   * workflows but never sent.
+   */
+  readonly control?: boolean | string;
 };
 
 /** A STRING widget. */
@@ -96,6 +105,9 @@ export type BooleanInput = WidgetBase & {
   readonly kind: "boolean";
   readonly default?: boolean;
 };
+
+/** An upload flag of a combo: `image_upload`, `video_upload`, … without `_upload`. */
+export type ComboUpload = "image" | "video" | "animated_image" | "audio" | "file";
 
 /** A combo, from either the legacy `[[…]]` form or the `["COMBO", {options}]` form. */
 export type ComboInput = WidgetBase & {
@@ -116,8 +128,12 @@ export type ComboInput = WidgetBase & {
   readonly multiselect: boolean;
   /** Options are files the user can upload, so they change at runtime. */
   readonly upload: boolean;
+  /** Which upload flags the server sets (`image_upload` → `image`), when any. */
+  readonly uploads?: readonly ComboUpload[];
   /** Options are fetched by the frontend at runtime. */
   readonly remote: boolean;
+  /** `control_after_generate` as the server states it; see {@link FloatInput.control}. */
+  readonly control?: boolean | string;
   /**
    * A legacy combo with `forceInput`: the frontend draws a socket and no widget, so it sends a
    * link or nothing, and no default is filled in.

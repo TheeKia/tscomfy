@@ -4,10 +4,10 @@
 
 import { createDiagnostic, type Diagnostic } from "../diagnostic/diagnostic.ts";
 import type { InputValue, Workflow } from "../graph/graph.ts";
-import type { NodeId, Out } from "../graph/types.ts";
+import type { NodeId, NodeMode, Out } from "../graph/types.ts";
 import { assembleWorkflow, type AssembledNode } from "../graph/workflow.ts";
 import { parse } from "../json/parse.ts";
-import { isJsonObject, type JsonValue } from "../json/value.ts";
+import { isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
 import { sendsValue } from "../schema/frontend.ts";
 import type { TypedSchema } from "../schema/typed.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
@@ -51,7 +51,8 @@ export function importApi<N>(text: string, schema: TypedSchema<N>): ImportResult
   return { workflow, diagnostics };
 }
 
-type Link = (node: NodeId, slot: number) => Out<string>;
+/** Makes an output reference of the workflow being built. */
+export type Link = (node: NodeId, slot: number) => Out<string>;
 
 function readNode(
   id: NodeId,
@@ -74,11 +75,39 @@ function readNode(
   if (!isJsonObject(inputs))
     return invalid(["inputs"], `Node ${id}'s inputs aren't an object; dropping it.`);
   const meta = value["_meta"];
-  const shownTitle =
-    isJsonObject(meta) && typeof meta["title"] === "string" ? meta["title"] : undefined;
+  const title = isJsonObject(meta) && typeof meta["title"] === "string" ? meta["title"] : undefined;
+  return wireNode(
+    { id, classType, inputs, ...(title === undefined ? {} : { title }) },
+    schema,
+    link,
+    diagnostics,
+  );
+}
+
+/** A node as the wire carries it: class, wire keys (links as `[id, slot]`), title and mode. */
+export interface WireNode {
+  readonly id: NodeId;
+  readonly classType: string;
+  readonly inputs: JsonObject;
+  /** The title shown, if any; one equal to the display name isn't kept. */
+  readonly title?: string;
+  readonly mode?: NodeMode;
+}
+
+/**
+ * A node of the wire, folded into structured inputs by the schema (the API and UI importers
+ * share it). Raw when the class is unknown or its keys don't fold back.
+ */
+export function wireNode(
+  node: WireNode,
+  schema: TypedSchema<unknown>,
+  link: Link,
+  diagnostics: Diagnostic[],
+): AssembledNode {
+  const { id, classType, inputs } = node;
   const definition = Object.hasOwn(schema.nodes, classType) ? schema.nodes[classType] : undefined;
   // The exporter writes the display name when there is no title, so only a different one is kept.
-  const title = shownTitle === (definition?.displayName ?? classType) ? undefined : shownTitle;
+  const title = node.title === (definition?.displayName ?? classType) ? undefined : node.title;
 
   const decoded: [string, InputValue][] = [];
   for (const [key, wire] of Object.entries(inputs)) {
@@ -96,7 +125,12 @@ function readNode(
     decoded.push([key, decodedValue]);
   }
   const wireInputs = Object.fromEntries(decoded);
-  const base = { id, classType, ...(title === undefined ? {} : { title }) };
+  const base = {
+    id,
+    classType,
+    ...(title === undefined ? {} : { title }),
+    ...(node.mode === undefined ? {} : { mode: node.mode }),
+  };
   if (definition === undefined) return { ...base, inputs: wireInputs, raw: true };
   const folded = fold(definition, wireInputs);
   if (typeof folded === "string") {

@@ -97,6 +97,7 @@ describe("schema", () => {
       "default",
       "min",
       "max",
+      "control",
     ]);
     expect(Object.keys(node.outputs[0]!)).toEqual(["index", "name", "type", "isList", "tooltip"]);
   });

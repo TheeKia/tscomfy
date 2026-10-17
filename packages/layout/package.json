@@ -1,0 +1,24 @@
+{
+  "name": "@tscomfy/layout",
+  "version": "0.0.0",
+  "description": "Automatic layout for tscomfy workflows exported to the ComfyUI frontend's UI format.",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@tscomfy/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@tscomfy/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@tscomfy/fixtures": "workspace:*"
+  }
+}

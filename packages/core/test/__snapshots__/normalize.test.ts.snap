@@ -917,6 +917,7 @@ exports[`snapshots basic-pipeline 1`] = `
             },
           },
           {
+            "control": true,
             "default": 0,
             "kind": "int",
             "lazy": false,
@@ -1083,6 +1084,7 @@ exports[`snapshots basic-pipeline 1`] = `
         "experimental": false,
         "inputs": [
           {
+            "control": true,
             "default": 0,
             "kind": "int",
             "lazy": false,
@@ -1486,6 +1488,7 @@ exports[`snapshots combos 1`] = `
             "upload": false,
           },
           {
+            "control": true,
             "form": "legacy",
             "kind": "combo",
             "lazy": false,
@@ -1796,6 +1799,9 @@ exports[`snapshots combos 1`] = `
               "name": "COMBO",
             },
             "upload": true,
+            "uploads": [
+              "image",
+            ],
           },
           {
             "form": "combo",
@@ -1813,6 +1819,9 @@ exports[`snapshots combos 1`] = `
               "name": "COMBO",
             },
             "upload": true,
+            "uploads": [
+              "image",
+            ],
           },
         ],
         "isInputList": false,
@@ -4404,6 +4413,7 @@ exports[`snapshots numbers 1`] = `
         "experimental": false,
         "inputs": [
           {
+            "control": true,
             "default": 0,
             "kind": "int",
             "lazy": false,
@@ -5313,6 +5323,381 @@ exports[`snapshots sockets 1`] = `
             "type": {
               "kind": "named",
               "name": "MOCK_CUSTOM_TYPE",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+    },
+  },
+}
+`;
+
+exports[`snapshots ui-widgets 1`] = `
+{
+  "diagnostics": [],
+  "schema": {
+    "formatVersion": 1,
+    "nodes": {
+      "MockAnimatedUpload": {
+        "category": "mock/ui",
+        "classType": "MockAnimatedUpload",
+        "deprecated": false,
+        "displayName": "Mock Animated Upload",
+        "experimental": false,
+        "inputs": [
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "image",
+            "options": [
+              "a.webp",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": true,
+            "uploads": [
+              "animated_image",
+            ],
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "IMAGE",
+            "type": {
+              "kind": "named",
+              "name": "IMAGE",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockAudioUpload": {
+        "category": "mock/ui",
+        "classType": "MockAudioUpload",
+        "deprecated": false,
+        "displayName": "Mock Audio Upload",
+        "experimental": false,
+        "inputs": [
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "audio",
+            "options": [
+              "a.wav",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": true,
+            "uploads": [
+              "audio",
+            ],
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "AUDIO",
+            "type": {
+              "kind": "named",
+              "name": "AUDIO",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockAudioUploadOtherName": {
+        "category": "mock/ui",
+        "classType": "MockAudioUploadOtherName",
+        "deprecated": false,
+        "displayName": "Mock Audio Upload Other Name",
+        "experimental": false,
+        "inputs": [
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "clip",
+            "options": [
+              "a.wav",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": true,
+            "uploads": [
+              "audio",
+            ],
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "AUDIO",
+            "type": {
+              "kind": "named",
+              "name": "AUDIO",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockControls": {
+        "category": "mock/ui",
+        "classType": "MockControls",
+        "deprecated": false,
+        "displayName": "Mock Controls",
+        "experimental": false,
+        "inputs": [
+          {
+            "default": 0,
+            "kind": "int",
+            "lazy": false,
+            "max": 1000,
+            "min": 0,
+            "name": "seed",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "control": false,
+            "default": 0,
+            "kind": "int",
+            "lazy": false,
+            "max": 1000,
+            "min": 0,
+            "name": "noise_seed",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "control": "fixed",
+            "default": 64,
+            "kind": "int",
+            "lazy": false,
+            "name": "value",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "default": 20,
+            "kind": "int",
+            "lazy": false,
+            "name": "steps",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "control": true,
+            "default": 1,
+            "kind": "float",
+            "lazy": false,
+            "name": "strength",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "FLOAT",
+            },
+          },
+          {
+            "control": true,
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "mode",
+            "options": [
+              "a",
+              "b",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "INT",
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockUploadOptional": {
+        "category": "mock/ui",
+        "classType": "MockUploadOptional",
+        "deprecated": false,
+        "displayName": "Mock Upload Optional",
+        "experimental": false,
+        "inputs": [
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "image",
+            "options": [
+              "a.png",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": false,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": true,
+            "uploads": [
+              "image",
+            ],
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "IMAGE",
+            "type": {
+              "kind": "named",
+              "name": "IMAGE",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockUploads": {
+        "category": "mock/ui",
+        "classType": "MockUploads",
+        "deprecated": false,
+        "displayName": "Mock Uploads",
+        "experimental": false,
+        "inputs": [
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "image",
+            "options": [
+              "a.png",
+              "b.png",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": true,
+            "uploads": [
+              "image",
+            ],
+          },
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "video",
+            "options": [
+              "a.mp4",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": true,
+            "uploads": [
+              "video",
+            ],
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "IMAGE",
+            "type": {
+              "kind": "named",
+              "name": "IMAGE",
             },
           },
         ],

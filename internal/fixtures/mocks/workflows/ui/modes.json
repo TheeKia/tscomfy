@@ -1,0 +1,84 @@
+{
+  "last_node_id": 7,
+  "last_link_id": 7,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        { "name": "MODEL", "type": "MODEL", "links": [6] },
+        { "name": "CLIP", "type": "CLIP", "links": null },
+        { "name": "VAE", "type": "VAE", "links": [1] }
+      ],
+      "widgets_values": ["model-a.safetensors"]
+    },
+    {
+      "id": 2,
+      "type": "EmptyLatentImage",
+      "mode": 0,
+      "inputs": [],
+      "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [5] }],
+      "widgets_values": [512, 512, 1]
+    },
+    {
+      "id": 3,
+      "type": "VAEDecode",
+      "mode": 0,
+      "inputs": [
+        { "name": "samples", "type": "LATENT", "link": 7 },
+        { "name": "vae", "type": "VAE", "link": 2 }
+      ],
+      "outputs": [{ "name": "IMAGE", "type": "IMAGE", "links": [3] }]
+    },
+    {
+      "id": 4,
+      "type": "Reroute",
+      "mode": 2,
+      "inputs": [{ "name": "", "type": "*", "link": 1 }],
+      "outputs": [{ "name": "", "type": "VAE", "links": [2] }]
+    },
+    {
+      "id": 5,
+      "type": "SaveImage",
+      "mode": 0,
+      "inputs": [{ "name": "images", "type": "IMAGE", "link": 3 }],
+      "outputs": [],
+      "widgets_values": ["ComfyUI"]
+    },
+    {
+      "id": 6,
+      "type": "VAELoader",
+      "mode": 2,
+      "inputs": [],
+      "outputs": [{ "name": "VAE", "type": "VAE", "links": null }],
+      "widgets_values": ["pixel_space"]
+    },
+    {
+      "id": 7,
+      "type": "KSampler",
+      "mode": 4,
+      "inputs": [
+        { "name": "model", "type": "MODEL", "link": 6 },
+        { "name": "positive", "type": "CONDITIONING", "link": null },
+        { "name": "negative", "type": "CONDITIONING", "link": null },
+        { "name": "latent_image", "type": "LATENT", "link": 5 }
+      ],
+      "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [7] }],
+      "widgets_values": [5, "fixed", 20, 8, "euler", "normal", 1]
+    }
+  ],
+  "links": [
+    [1, 1, 2, 4, 0, "*"],
+    [2, 4, 0, 3, 1, "VAE"],
+    [3, 3, 0, 5, 0, "IMAGE"],
+    [5, 2, 0, 7, 3, "LATENT"],
+    [6, 1, 0, 7, 0, "MODEL"],
+    [7, 7, 0, 3, 0, "LATENT"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

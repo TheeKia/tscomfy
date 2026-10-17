@@ -5,6 +5,7 @@ import type {
   AutogrowInput,
   ComboInput,
   ComboOption,
+  ComboUpload,
   DynamicComboInput,
   DynamicComboOption,
   DynamicGroupInput,
@@ -62,7 +63,21 @@ const GROUP_FIELD_KINDS: ReadonlySet<InputDef["kind"]> = new Set([
   "value",
 ]);
 
-const UPLOAD_FLAGS = ["image_upload", "video_upload", "audio_upload", "file_upload"] as const;
+/** Upload flags, and the kind of upload each names. */
+const UPLOADS: Readonly<Record<(typeof UPLOAD_FLAGS)[number], ComboUpload>> = {
+  image_upload: "image",
+  video_upload: "video",
+  animated_image_upload: "animated_image",
+  audio_upload: "audio",
+  file_upload: "file",
+};
+const UPLOAD_FLAGS = [
+  "image_upload",
+  "video_upload",
+  "animated_image_upload",
+  "audio_upload",
+  "file_upload",
+] as const;
 
 type Section = "required" | "optional";
 
@@ -392,6 +407,7 @@ class SpecReader {
           ...(min === undefined ? {} : { min }),
           ...(max === undefined ? {} : { max }),
           ...(step === undefined ? {} : { step }),
+          ...this.#control(),
         };
       }
       case "FLOAT": {
@@ -413,6 +429,7 @@ class SpecReader {
           ...(max === undefined ? {} : { max }),
           ...(step === undefined ? {} : { step }),
           ...(round === undefined ? {} : { round }),
+          ...this.#control(),
         };
       }
       case "STRING": {
@@ -634,6 +651,24 @@ class SpecReader {
   }
 
   /** A boolean flag; absent means false. */
+  /**
+   * `control_after_generate`, kept as given: the frontend adds a control widget when it is truthy
+   * (or, for INT, when absent and the input is a seed), names it after a string, and an explicit
+   * `false` turns the seed default off.
+   */
+  #control(): { readonly control?: boolean | string } {
+    const raw = this.#options["control_after_generate"];
+    if (raw === undefined || raw === null) return {};
+    if (typeof raw === "boolean" || typeof raw === "string") return { control: raw };
+    report(
+      this.#context,
+      "W_INVALID_INPUT_OPTION",
+      [...this.#path, "control_after_generate"],
+      `Expected control_after_generate to be a boolean or a string, got ${describe(raw)}; ignoring it.`,
+    );
+    return {};
+  }
+
   flag(key: string): boolean {
     return (
       readOptional(
@@ -692,6 +727,7 @@ class SpecReader {
       options,
       multiselect && frontendMultiselect !== undefined && frontendMultiselect !== false,
     );
+    const uploads = UPLOAD_FLAGS.filter((flag) => this.flag(flag)).map((flag) => UPLOADS[flag]);
     return {
       kind: "combo",
       ...this.base(),
@@ -700,7 +736,9 @@ class SpecReader {
       options,
       ...(value === undefined ? {} : { default: value }),
       multiselect,
-      upload: UPLOAD_FLAGS.some((flag) => this.flag(flag)),
+      upload: uploads.length > 0,
+      ...(uploads.length === 0 ? {} : { uploads }),
+      ...this.#control(),
       remote: this.#object("remote") !== undefined,
     };
   }

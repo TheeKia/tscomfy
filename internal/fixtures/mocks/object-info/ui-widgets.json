@@ -1,0 +1,210 @@
+{
+  "MockControls": {
+    "input": {
+      "required": {
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 1000
+          }
+        ],
+        "noise_seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 1000,
+            "control_after_generate": false
+          }
+        ],
+        "value": [
+          "INT",
+          {
+            "default": 64,
+            "control_after_generate": "fixed"
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "default": 20
+          }
+        ],
+        "strength": [
+          "FLOAT",
+          {
+            "default": 1.0,
+            "control_after_generate": true
+          }
+        ],
+        "mode": [
+          "COMBO",
+          {
+            "options": ["a", "b"],
+            "control_after_generate": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["seed", "noise_seed", "value", "steps", "strength", "mode"]
+    },
+    "is_input_list": false,
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["INT"],
+    "name": "MockControls",
+    "display_name": "Mock Controls",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockUploads": {
+    "input": {
+      "required": {
+        "image": [
+          ["a.png", "b.png"],
+          {
+            "image_upload": true
+          }
+        ],
+        "video": [
+          ["a.mp4"],
+          {
+            "video_upload": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image", "video"]
+    },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockUploads",
+    "display_name": "Mock Uploads",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockUploadOptional": {
+    "input": {
+      "required": {},
+      "optional": {
+        "image": [
+          ["a.png"],
+          {
+            "image_upload": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [],
+      "optional": ["image"]
+    },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockUploadOptional",
+    "display_name": "Mock Upload Optional",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockAnimatedUpload": {
+    "input": {
+      "required": {
+        "image": [
+          ["a.webp"],
+          {
+            "animated_image_upload": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image"]
+    },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockAnimatedUpload",
+    "display_name": "Mock Animated Upload",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockAudioUpload": {
+    "input": {
+      "required": {
+        "audio": [
+          ["a.wav"],
+          {
+            "audio_upload": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["audio"]
+    },
+    "is_input_list": false,
+    "output": ["AUDIO"],
+    "output_is_list": [false],
+    "output_name": ["AUDIO"],
+    "name": "MockAudioUpload",
+    "display_name": "Mock Audio Upload",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockAudioUploadOtherName": {
+    "input": {
+      "required": {
+        "clip": [
+          ["a.wav"],
+          {
+            "audio_upload": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["clip"]
+    },
+    "is_input_list": false,
+    "output": ["AUDIO"],
+    "output_is_list": [false],
+    "output_name": ["AUDIO"],
+    "name": "MockAudioUploadOtherName",
+    "display_name": "Mock Audio Upload Other Name",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  }
+}

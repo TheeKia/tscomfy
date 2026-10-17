@@ -13,10 +13,18 @@ import {
 } from "@tscomfy/core";
 import {
   MOCK_API_WORKFLOW_NAMES,
+  MOCK_UI_WORKFLOW_NAMES,
+  type MockUiWorkflowName,
   readMockApiWorkflow,
   readMockObjectInfo,
+  readMockUiApiWorkflow,
 } from "@tscomfy/fixtures";
-import { TRANSPILED_DIR, transpileMock } from "./generated-fixtures.ts";
+import {
+  TRANSPILED_DIR,
+  TRANSPILED_UI_DIR,
+  transpileMock,
+  transpileUiMock,
+} from "./generated-fixtures.ts";
 import { mock as autogrow } from "./generated/autogrow/index.ts";
 import { mock as basic } from "./generated/basic-pipeline/index.ts";
 import { mock as combos } from "./generated/combos/index.ts";
@@ -26,8 +34,8 @@ import { mock as combos } from "./generated/combos/index.ts";
 
 const OPTIONS = { name: "prompt", schemaModule: "./index.js", schemaName: "mock" } as const;
 
-async function load(name: string): Promise<Workflow> {
-  const module: unknown = await import(join(TRANSPILED_DIR, `${name}.ts`));
+async function load(name: string, dir = TRANSPILED_DIR): Promise<Workflow> {
+  const module: unknown = await import(join(dir, `${name}.ts`));
   const prompt: unknown =
     typeof module === "object" && module !== null ? Reflect.get(module, "prompt") : undefined;
   if (typeof prompt !== "object" || prompt === null || !("graph" in prompt)) {
@@ -52,6 +60,41 @@ describe("committed transpiled prompts", () => {
     async (name) => {
       const expected = stringify(parse(await readMockApiWorkflow(name)).value ?? null);
       expect(stringify(toApi(await load(name), { validate: false }))).toBe(expected);
+    },
+  );
+});
+
+/** Nodes missing a required input (a bypassed sampler, a decoder behind a muted Reroute): raw. */
+const RAW_UI_NODES: Record<MockUiWorkflowName, [string, string][]> = {
+  modes: [
+    ["W_TRANSPILED_AS_RAW", "7"],
+    ["W_TRANSPILED_AS_RAW", "3"],
+  ],
+  "subgraph-modes": [["W_TRANSPILED_AS_RAW", "5"]],
+  "subgraph-primitive": [],
+  subgraphs: [],
+  txt2img: [],
+};
+
+describe("committed transpiled UI workflows", () => {
+  test.each(MOCK_UI_WORKFLOW_NAMES)(
+    "%s is up to date (bun run generate:fixtures)",
+    async (name) => {
+      const { code, diagnostics } = await transpileUiMock(name);
+      expect(diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path.join(":")])).toEqual(
+        RAW_UI_NODES[name],
+      );
+      expect(await Bun.file(join(TRANSPILED_UI_DIR, `${name}.ts`)).text()).toBe(code);
+    },
+  );
+
+  test.each(MOCK_UI_WORKFLOW_NAMES)(
+    "%s runs and exports the prompt the frontend queues for it",
+    async (name) => {
+      const expected = stringify(parse(await readMockUiApiWorkflow(name)).value ?? null);
+      expect(stringify(toApi(await load(name, TRANSPILED_UI_DIR), { validate: false }))).toBe(
+        expected,
+      );
     },
   );
 });

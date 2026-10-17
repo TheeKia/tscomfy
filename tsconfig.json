@@ -11,6 +11,9 @@
       "path": "packages/cli"
     },
     {
+      "path": "packages/layout"
+    },
+    {
       "path": "packages/core/test"
     },
     {
@@ -18,6 +21,9 @@
     },
     {
       "path": "packages/cli/test"
+    },
+    {
+      "path": "packages/layout/test"
     },
     {
       "path": "internal/fixtures"

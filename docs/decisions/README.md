@@ -1,6 +1,6 @@
 # Architecture decision records
 
-One short record per decision in docs/plan.md §3. All accepted 2026-10-17.
+One short record per decision in docs/plan.md §3. Accepted 2026-10-17 unless noted.
 
 | ADR | Decision |
 |---|---|
@@ -20,3 +20,4 @@ One short record per decision in docs/plan.md §3. All accepted 2026-10-17.
 | [0014](0014-diagnostic-model.md) | One diagnostic model, from Phase 1 |
 | [0015](0015-schema-identity.md) | Schema identity: sorted nodes and an on-demand SHA-256 |
 | [0016](0016-widget-classification.md) | An input is a widget exactly when the frontend makes it one |
+| [0017](0017-ui-format.md) | UI import reproduces the frontend's prompt; UI export is flat (2026-10-18) |

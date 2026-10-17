@@ -6,8 +6,13 @@ import {
   MOCK_API_WORKFLOW_NAMES,
   MOCK_OBJECT_INFO_DIR,
   MOCK_OBJECT_INFO_NAMES,
+  MOCK_UI_API_WORKFLOW_DIR,
+  MOCK_UI_WORKFLOW_DIR,
+  MOCK_UI_WORKFLOW_NAMES,
   readMockApiWorkflow,
   readMockObjectInfo,
+  readMockUiApiWorkflow,
+  readMockUiWorkflow,
 } from "@tscomfy/fixtures";
 
 describe("mock object_info", () => {
@@ -41,8 +46,28 @@ describe("mock API workflows", () => {
   });
 });
 
+describe("mock UI workflows", () => {
+  test.each([MOCK_UI_WORKFLOW_DIR, MOCK_UI_API_WORKFLOW_DIR])(
+    "the name list matches the files in %s",
+    async (dir) => {
+      const onDisk = (await readdir(dir))
+        .filter((name) => name.endsWith(".json"))
+        .map((name) => name.slice(0, -".json".length))
+        .toSorted();
+      expect(onDisk).toEqual([...MOCK_UI_WORKFLOW_NAMES]);
+    },
+  );
+
+  test.each(MOCK_UI_WORKFLOW_NAMES)("%s and its prompt are JSON objects", async (name) => {
+    const ui: unknown = JSON.parse(await readMockUiWorkflow(name));
+    const prompt: unknown = JSON.parse(await readMockUiApiWorkflow(name));
+    expect(ui).toBeObject();
+    expect(prompt).toBeObject();
+  });
+});
+
 describe("corpus", () => {
-  const sections = ["object-info", "workflows/api", "workflows/ui"] as const;
+  const sections = ["object-info", "workflows/api", "workflows/ui", "workflows/ui-api"] as const;
 
   test.each(sections)("%s lists only JSON files, sorted", async (section) => {
     const names = (await listCorpus(section)).map((file) => file.name);

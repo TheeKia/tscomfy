@@ -64,6 +64,7 @@ differences in §7.4.
 | D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
 | D15 | **Schema identity.** `Schema.nodes` is built in code-unit order of class type (JavaScript still lists integer-like keys first). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
 | D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its core widget registry. When `type` is primitive (INT/FLOAT/STRING/BOOLEAN/COMBO) the kind follows `type`, because the backend coerces and validates by it, and `widgetType` is recorded. Otherwise a primitive widget gives its kind, another core widget (COLOR, BOUNDING_BOX, CURVE, …) gives a `value` kind holding JSON, and anything else, `TYPE:name` types included, is a socket. The socket type is always `type` | This is the only rule that matches which inputs get values in exported prompts and stays sound. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
+| D17 | **`importUi` reproduces the frontend's prompt, quirks included** (with a warning), except that a node of a missing class keeps its class; values by name win over positions; **`toUi` writes a flat graph**; layout is its own package | The user gets the prompt they would get from the frontend, checked against the frontend itself. Where the frontend sends something the backend rejects, there is nothing to be faithful to. **[verified]** |
 
 ## 4. Architecture
 
@@ -82,7 +83,9 @@ differences in §7.4.
   validate/     workflow checks
   diagnostic/   Diagnostic model and code registry (every module may import it)
   json/         lossless parse and serialize
-later: ui/ (UI-format import/export) and layout/ (auto-layout package)
+  ui/           UI workflows: importUi (as the frontend queues them), toUi (flat, format 0.4)
+
+@tscomfy/layout        pure: positions for toUi (layered, left to right)
 ```
 
 **Dependency rules**:
@@ -105,6 +108,7 @@ workflow(local, ({ n, raw }) => …) ─► Workflow { schema, graph }
    ├─► validate(wf)             → Diagnostic[]
    └─► transpile(wf)            → TS source
 parse(json) ─► importApi(prompt, schema) ─► Workflow
+UI JSON (text) ─► importUi(text, schema) ─► Workflow ─► toUi(wf, { positions: layout(wf) }) ─► UI JSON
 ```
 
 The core API is free functions over immutable data, so every operation is pure and composable
@@ -419,7 +423,7 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
 - **Object arguments.** The second argument holds node options: `{ id?, title?, mode? }` (§12).
 - **Templates are plain TS functions** (above). There is no template DSL and no `ParamRef` in the IR:
   re-running the builder is cheap, and plain parameters give the best types.
-- **Composition is plain functions** taking `n` and refs. Mapping them to UI subgraphs comes with the UI format.
+- **Composition is plain functions** taking `n` and refs. `toUi` writes them flat; exporting them as UI subgraphs is not supported (§11).
 - **Escape hatch**: `raw(classType, inputs, options?)` from the context. It is untyped and kept separate
   from `n`, so no `class_type` can collide with it. Its inputs are wire keys and are exported as
   given, without defaults or flattening; `raw(…).output(slot)` is an `Out<"*">`, which fits any
@@ -696,16 +700,69 @@ mock prompt and every corpus API workflow. Other prompts come back normalized: d
 `_meta` added (unless `meta: false`), keys in the frontend's order. Ids that aren't integers may
 also come back in another order after transpiling, since creation order follows dependencies.
 
-## 11. UI format (later phases)
+## 11. UI format (Phase 8)
 
-**Import first**:
-- formats 0.4 and 1.0 (tuple vs object links)
-- `widgets_values` / `widgets_values_named`, skipping control widgets
-- Reroute, PrimitiveNode (its value copied into the target), Note and MarkdownNote (dropped)
-- bypass and mute (§12)
-- subgraph expansion with `parent:child` ids
+`core/src/ui/` reads and writes the JSON the frontend saves (D17, ADR-0017). The frontend
+behavior it follows is in `docs/research/ui-format.md`, read in frontend 1.55.17 and checked
+with probes in the frontend itself.
 
-**Export** comes after that, with auto-layout in a separate package. The upstream frontend source is a specification only.
+**The frontend's node.** `ui/frontend.ts` rebuilds a node as the frontend creates it from its
+definition, the one model both directions share:
+- **Widgets**, in input order, the order `widgets_values` lists them: a value widget per input;
+  after an INT or FLOAT with `control_after_generate` (on by default for INT inputs named `seed`
+  or `noise_seed`; an explicit `false` turns it off) a control widget, named after the option
+  when it is a string; after a combo with one, a control and a `control_filter_list`; a dynamic
+  combo followed by the chosen option's widgets, depth-first; then the `upload` button the
+  upload extensions add (for the first required combo that uploads images or videos, or a
+  required `audio` combo that uploads audio). IMAGECOMPARE, RESOLUTION_PREVIEW and
+  CAMERA_INFO_STATE aren't saved. The schema keeps what this needs: `control` on INT, FLOAT and
+  COMBO inputs and `uploads` on combos.
+- **Slots**, the order links target: sockets in input order (`forceInput` legacy combos,
+  MatchType inputs and Autogrow slots among them), then widget slots; a chosen option's slots
+  right after its combo's.
+
+**Import** (`importUi(text, schema)`): `toApi` of the result is the frontend's prompt.
+- **Versions.** Format 0.4 has tuple links; anything else, object links. Tuple links outside
+  0.4 are dropped, as the frontend drops them.
+- **Links** come from the `links` array, placed on the input that references them by name, else
+  on the slot they name. An `inputs[].link` missing from the array connects nothing.
+- **Widget values** by name (`widgets_values_named`) when present, else by position over the
+  layout above, which settles as dynamic-combo options add widgets. Widgets without a value keep
+  their initial one. Fixups on load: a combo saved as `null` takes its first option; KSampler's
+  old `sample_` sampler names lose the prefix.
+- **Frontend-only nodes.** Reroutes are resolved through (a muted one passes nothing on, a
+  bypassed one passes no type). A PrimitiveNode writes its value into every widget it links to,
+  whatever its mode. Notes and MarkdownNotes are dropped.
+- **Subgraphs** are expanded: inner ids join the instance path with `:` (`40:31:21`); inner ids
+  that collide with the root's or an earlier definition's are reminted from `last_node_id`, as
+  the frontend does; links across the boundary go through the definition's `-10` and `-20`
+  nodes; a promoted input's value is the instance's saved value for it (one per input that
+  reaches a widget, in input order), else the interior widget's. Interiors come after their
+  instance, in the definition's node order, depth-first; root nodes in the frontend's execution
+  order.
+- **Modes.** Real nodes keep theirs, for the exporter (§12). A muted or bypassed subgraph
+  instance at the root isn't expanded and its outputs resolve by its mode, over its definition's
+  inputs. One nested in another still sends its interior (`W_FRONTEND_QUIRK`, ADR-0017).
+- **Unknown classes** stay raw with their class, links and values by name; unlinked ones are
+  dropped. Pack JavaScript that changes the prompt at queue time isn't reproduced.
+
+**Export** (`toUi(workflow, { positions? })`): a flat format 0.4 file the frontend loads to the
+same prompt.
+- Integer node ids stay; others (`ckpt`, `40:31`) get the next free numbers in graph order, and
+  the result maps each id to its number (`ids`).
+- Every slot is written, in the frontend's order, with its link; links into inputs a pack's
+  JavaScript adds become extra slots typed by their source. Outputs list their links.
+- `widgets_values` and `widgets_values_named` hold every saved widget: controls `fixed`, so the
+  frontend doesn't change a seed after queueing; a linked widget keeps its initial value.
+- A muted node is mode 2, a bypassed one mode 4. The file's `id` is a uuid derived from its
+  content, so the output is deterministic.
+- Optional widgets left out are sent by the frontend with their initial values, as for a node
+  added by hand. Reported: `W_UI_VALUE_LOST` (DynamicGroup rows, IMAGECOMPARE values),
+  `W_UNKNOWN_UI_CLASS`, `W_UNSAFE_INTEGER` (the frontend rounds integers beyond 2^53).
+
+**Layout** (`@tscomfy/layout`): `layout(workflow)` places nodes in columns by their longest path
+from a source, ordered within a column by their sources' rows (`layered`, iterative, cycles
+broken deterministically). Sizes come from `uiNodeSize`.
 
 ## 12. Graph operations (Phase 7)
 
@@ -781,11 +838,13 @@ tscomfy/
       src/  test/  package.json  tsconfig.json  test/tsconfig.json
     codegen/               # @tscomfy/codegen
     cli/                   # @tscomfy/cli
+    layout/                # @tscomfy/layout: positions for toUi
   internal/                # private workspace packages, never published
     fixtures/              # @tscomfy/fixtures: all test data, typed loaders
       src/index.ts         #   readMockObjectInfo(name), listCorpus(section)
       mocks/object-info/   #   committed hand-written mocks, one theme per file
-      mocks/workflows/     #   committed mock API and UI workflows (Phase 3)
+      mocks/workflows/     #   committed mock API and UI workflows, and the frontend's prompts for the UI ones
+      scripts/frontend.ts  #   asks the server's own frontend, in headless Chromium, what it would queue
       corpus/              #   local real data; only its README is committed
     bench/                 # @tscomfy/bench: bench:types, synthetic schemas from the mocks
   docs/
@@ -946,10 +1005,14 @@ Exit: every corpus API workflow re-exports byte for byte, key order included:
 
 Exit: tests mirror the frontend algorithms case by case.
 
-**Phase 8: UI format**
-- Import (§11), then export, then the layout package.
+**Phase 8: UI format** (done)
+- Import (§11), then export, then the layout package. `tscomfy transpile --workflow` takes UI
+  workflows.
 
-Exit: the UI corpus imports and round-trips through API format; exported UI JSON opens in the frontend (checked by hand).
+Exit: the UI corpus imports to the prompts the frontend builds for it and round-trips through
+`toUi`; exported UI JSON opens in the frontend, which builds the same prompt from it. Both are
+checked against the frontend itself, in a headless browser (`internal/fixtures/scripts/frontend.ts`),
+rather than by hand.
 
 **Phase 9: polish**
 - README and guides, examples, an API-surface snapshot (`dist/*.d.ts`), and (optionally) publishing under the `@tscomfy` npm org.
@@ -1012,4 +1075,7 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Phase 6 review | An independent review found 11 issues, each reproduced: raw-written known-class sources typed by their schema outputs (4 of 1,494 differential pairs failed to compile), CURVE in rows wrapped twice, unfoldable keys imported typed (rows past `max`, double-claimed keys, display-only widgets), hostile row indices throwing, four oxfmt layout classes (short keys, the declaration, long destructuring, exponents and number arrays; ~10% of 2,400 fuzzed workflows), CLI names and specifiers that don't compile, exporter errors ignored, quadratic name claims and fans, `__proto__` keys, and cycle reporting. All fixed; a fuzz test now checks oxfmt, `tsc` and the round trip |
 | Bypass and mute (§12) | Read in the frontend 1.55.17 bundle installed with the server (`settingStore-*.js`): `_getBypassSlotIndex`, `resolveInput`/`resolveOutput`, `isValidConnection`, `addInputs`/`addInputSocket`/`addInputWidget`, `addOutputs`, `withComfyMatchType`/`commonType`, `graphToPrompt` (widget values written before links). It corrected one note: each step past a bypassed node is checked against that node's input type, not the consumer's. `modes.test.ts` follows the five rules, the slot order (forceInput combos, dynamic-combo options), MatchType narrowing, widget fallbacks, chains, mutes behind bypasses and cycles case by case |
 | Phase 7 review | An independent review found 11 issues, each reproduced: raw nodes transpiled after modes applied, MatchType narrowing missing (a switch fed through a bypass took the wrong input), `forceInput` legacy combos in the widget group (rgthree's Context Big rerouted a width to the seed), option inputs sockets-first, widgets dropped instead of keeping their value, links to missing outputs hidden by a bypass, `prune` leaving links to removed nodes, two quadratic paths, frontend throw cases misdescribed, stale docs, and missing case tests. All fixed with tests |
+| UI format (§11) | Read in frontend 1.55.17 (the TypeScript in the installed bundle's source maps): `LGraph.configure`/`serialize`, `ComfyNode.configure`, `addInputs`, `getOrderedInputSpecs`, `dynamicWidgets.ts`, `widgets.ts` `addValueControlWidgets`, the upload extensions, `widgetInputs.ts` (PrimitiveNode), `rerouteNode.ts`, `SubgraphNode.ts`, `subgraphDeduplication.ts`, `ExecutableNodeDTO.ts`, `computeExecutionOrder`. 45 synthetic files loaded in the live frontend settled the cases the source leaves open (links only in the array or only on inputs, wrong `target_slot`s, versions, named vs positional values, too few or many values, null combos, Reroute and PrimitiveNode modes, nested, muted and bypassed subgraphs, colliding inner ids, missing `linkIds`). Our `InputDef` order equals `getOrderedInputSpecs` for all 1,758 classes |
+| `importUi` against the frontend | `frontend.ts` loads files into the server's own frontend in headless Chromium and saves what `graphToPrompt` builds; every request but a GET is answered locally. For the 10 corpus UI files `importUi` gives 248 of the 259 prompt entries byte for byte, and every file's node order. The other 11 are pack JavaScript at queue time (4 VHS date substitutions, 2 rgthree Any Switch, 2 pack widgets) and 3 nodes of classes the server doesn't have, which the frontend sends without `class_type`. Of the five committed mock UI files, four match the captured prompts exactly; `txt2img` uses the mock class `MockSeed`, which the server lacks, and its expected prompt is the hand-written parity prompt, which the capture matches on every other node |
+| `toUi` against the frontend | The frontend loads `toUi` output of every corpus file to the prompt `importUi` reads from it in 247 of 259 entries; the other 12 are the 11 above and use-everywhere's Anything Everywhere, whose JavaScript rebuilds its inputs from properties we don't write. Sizes after loading: 221 of 231 nodes of core classes are no larger than `uiNodeSizes` (the frontend snaps to 10 px); the others carry frontend-extension widgets the schema doesn't show (audio players, PreviewAny's preview) or long labels, up to 60 px taller or 40 px wider |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

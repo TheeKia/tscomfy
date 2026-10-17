@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { CLI_VERSION, run } from "@tscomfy/cli";
 import { CODEGEN_VERSION } from "@tscomfy/codegen";
-import { readMockApiWorkflow, readMockObjectInfo } from "@tscomfy/fixtures";
+import { readMockApiWorkflow, readMockObjectInfo, readMockUiWorkflow } from "@tscomfy/fixtures";
 import { type MemoryIo, memoryIo, rawNode } from "./memory-io.ts";
 
 const basic = await readMockObjectInfo("basic-pipeline");
@@ -104,7 +104,7 @@ describe("generate", () => {
     const manifest: unknown = JSON.parse(io.files.get("src/my-server/tscomfy.json") ?? "");
     expect(manifest).toEqual({
       codegen: "0.0.0",
-      schema: "sha256:35783d14e93453b9508b252e19e9be14c98482c96ee8db46554e506efc169cb1",
+      schema: "sha256:ab29f52b84343ba44b273cc27844b755c9decd3babc988dc155af74170510552",
       exportName: "myServer",
       importExtension: ".js",
       files: {
@@ -136,7 +136,7 @@ describe("generate", () => {
     expect(await run(["generate", ...args, ...options], io)).toBe(0);
     const index = io.files.get("it's/index.ts") ?? "";
     expect(index).toContain(
-      "// Schema sha256:35783d14e93453b9508b252e19e9be14c98482c96ee8db46554e506efc169cb1, ComfyUI 0.41.0.\n" +
+      "// Schema sha256:ab29f52b84343ba44b273cc27844b755c9decd3babc988dc155af74170510552, ComfyUI 0.41.0.\n" +
         `// Regenerate with: tscomfy generate --from 'my info.json' --out 'it'\\''s' --name comfy --import-extension .ts --comfy-version 0.41.0\n`,
     );
     expect(index).toContain('from "./nodes.ts";');
@@ -181,7 +181,7 @@ describe("generate", () => {
     );
     expect(await run(["generate", "--url", SERVER, "--out", "gen"], io)).toBe(0);
     expect(io.stdout()).toStartWith(`Generated 8 node types from ${SERVER} into gen:\n`);
-    expect(io.files.get("gen/nodes.ts")).toContain("cb1.\n");
+    expect(io.files.get("gen/nodes.ts")).toContain("552.\n");
   });
 
   test("fails with exit 1 when the server can't be reached or the file is missing", async () => {
@@ -511,7 +511,12 @@ describe("transpile", () => {
   });
 
   test.each([
-    [["--schema", "gen"], 2, "--prompt is required."],
+    [["--schema", "gen"], 2, "--prompt or --workflow is required."],
+    [
+      ["--prompt", "p.json", "--workflow", "w.json", "--schema", "gen"],
+      2,
+      "Pass --prompt or --workflow, not both.",
+    ],
     [["--prompt", "p.json"], 2, "--schema is required."],
     [
       ["--prompt", "prompts/My Txt2Img.json", "--schema", "gen", "--name", "gen"],
@@ -531,6 +536,41 @@ describe("transpile", () => {
     const io = await withPrompt("{}");
     expect(await run(["transpile", ...args], io)).toBe(exit);
     expect(io.stderr()).toStartWith(`tscomfy: ${message}`);
+  });
+
+  test("transpiles a UI workflow, as the frontend would queue it", async () => {
+    const io = await withPrompt(await readMockUiWorkflow("txt2img"));
+    const args = ["--workflow", "prompts/My Txt2Img.json", "--schema", "gen"];
+    expect(await run(["transpile", ...args], io)).toBe(0);
+    expect(io.stderr()).toBe("");
+    // The Reroute, the PrimitiveNode and the Note are resolved away.
+    expect(io.stdout()).toContain('text: "a cat"');
+    expect(io.stdout()).not.toContain("Reroute");
+    expect(io.stdout()).toContain(
+      "// Regenerate with: tscomfy transpile --workflow 'prompts/My Txt2Img.json' --schema gen\n",
+    );
+  });
+
+  test.each([
+    ["--prompt", "ui", "isn't a prompt: it is a UI workflow; pass it with --workflow instead."],
+    [
+      "--workflow",
+      "api",
+      "isn't a UI workflow: it is an API prompt; pass it with --prompt instead.",
+    ],
+    ["--workflow", "[]", "isn't a UI workflow: Expected a UI workflow"],
+  ] as const)("%s refuses the other format (%s)", async (flag, given, message) => {
+    const text =
+      given === "ui"
+        ? await readMockUiWorkflow("txt2img")
+        : given === "api"
+          ? await readMockApiWorkflow("txt2img")
+          : given;
+    const io = await withPrompt(text);
+    expect(await run(["transpile", flag, "prompts/My Txt2Img.json", "--schema", "gen"], io)).toBe(
+      1,
+    );
+    expect(io.stderr()).toStartWith(`tscomfy: prompts/My Txt2Img.json ${message}`);
   });
 
   test("fails for a file that isn't a prompt", async () => {

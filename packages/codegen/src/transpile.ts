@@ -76,7 +76,8 @@ export interface TranspileResult {
  * the generated types over `options.schemaName`. Nodes keep their ids and titles and come in
  * dependency order; inputs equal to their default are left out, since the exporter fills them
  * in. Running it and exporting gives the same prompt as `toApi(workflow)`, except that ids that
- * aren't integers may come in another order. Pure and deterministic.
+ * aren't integers (`40:31`) come in dependency order, where the workflow lists one before a node
+ * it depends on. Pure and deterministic.
  *
  * Reports `W_TRANSPILED_AS_RAW` for a node the types can't express, which is written as
  * `raw(…)`, and `E_DEPENDENCY_CYCLE` and `E_DANGLING_LINK` for what no program can build: those
@@ -294,9 +295,11 @@ class Transpiler {
     if (used.length === 0) return [call, ";"];
     if (outputs.length === 1) {
       const key = slotKey(node.id, 0);
-      // Used once, by a node written later, and inlining nothing itself: written in place.
+      // Used once, by a node written later, and inlining nothing itself: written in place. Not
+      // with an id that isn't an array index: such keys keep the order nodes are created in.
       if (
         this.#options.inline !== false &&
+        isArrayIndex(node.id) &&
         uses.get(key) === 1 &&
         references(node.inputs).every((ref) => !this.#inlined.has(ref.node))
       ) {
@@ -578,6 +581,11 @@ function inCycles(nodes: readonly GraphNode[]): Set<NodeId> {
     }
   }
   return cyclic;
+}
+
+/** Whether a key is an array index, which objects order numerically rather than by creation. */
+function isArrayIndex(key: string): boolean {
+  return /^(?:0|[1-9][0-9]{0,9})$/.test(key) && Number(key) < 2 ** 32 - 1;
 }
 
 /** A binary min-heap of graph positions, for the dependency order's ready list. */

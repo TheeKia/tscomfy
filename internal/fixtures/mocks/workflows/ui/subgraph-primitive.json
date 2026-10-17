@@ -1,0 +1,249 @@
+{
+  "last_node_id": 100,
+  "last_link_id": 100,
+  "nodes": [
+    { "id": 1, "type": "CheckpointLoaderSimple", "widgets_values": ["model-a.safetensors"] },
+    {
+      "id": 3,
+      "type": "CLIPTextEncode",
+      "inputs": [{ "name": "clip", "type": "CLIP", "link": 2 }],
+      "widgets_values": ["neg"]
+    },
+    { "id": 4, "type": "EmptyLatentImage", "widgets_values": [512, 512, 1] },
+    {
+      "id": 5,
+      "type": "KSampler",
+      "inputs": [
+        { "name": "model", "type": "MODEL", "link": 3 },
+        { "name": "positive", "type": "CONDITIONING", "link": 40 },
+        { "name": "negative", "type": "CONDITIONING", "link": 5 },
+        { "name": "latent_image", "type": "LATENT", "link": 6 }
+      ],
+      "widgets_values": [5, "fixed", 20, 7, "euler", "normal", 1],
+      "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [7] }]
+    },
+    {
+      "id": 40,
+      "type": "00000000-0000-0000-0000-000000000011",
+      "inputs": [
+        { "name": "clip", "type": "CLIP", "link": 41 },
+        { "name": "text", "type": "STRING", "link": 90, "widget": { "name": "text" } }
+      ],
+      "widgets_values": ["promoted outer"],
+      "outputs": [{ "name": "CONDITIONING", "type": "CONDITIONING", "links": [40] }]
+    },
+    {
+      "id": 60,
+      "type": "00000000-0000-0000-0000-000000000011",
+      "inputs": [
+        { "name": "clip", "type": "CLIP", "link": 61 },
+        { "name": "text", "type": "STRING", "link": null, "widget": { "name": "text" } }
+      ],
+      "widgets_values": ["second instance"],
+      "outputs": [{ "name": "CONDITIONING", "type": "CONDITIONING", "links": [] }]
+    },
+    {
+      "id": 32,
+      "type": "VAEDecode",
+      "inputs": [
+        { "name": "samples", "type": "LATENT", "link": 7 },
+        { "name": "vae", "type": "VAE", "link": 8 }
+      ],
+      "outputs": [{ "name": "IMAGE", "type": "IMAGE", "links": [9] }]
+    },
+    {
+      "id": 33,
+      "type": "SaveImage",
+      "inputs": [{ "name": "images", "type": "IMAGE", "link": 9 }],
+      "widgets_values": ["ComfyUI"]
+    },
+    {
+      "id": 90,
+      "type": "PrimitiveNode",
+      "widgets_values": ["lost"],
+      "outputs": [
+        { "name": "STRING", "type": "STRING", "widget": { "name": "text" }, "links": [90] }
+      ]
+    }
+  ],
+  "links": [
+    [41, 1, 1, 40, 0, "CLIP"],
+    [40, 40, 0, 5, 1, "CONDITIONING"],
+    [2, 1, 1, 3, 0, "CLIP"],
+    [3, 1, 0, 5, 0, "MODEL"],
+    [5, 3, 0, 5, 2, "CONDITIONING"],
+    [6, 4, 0, 5, 3, "LATENT"],
+    [61, 1, 1, 60, 0, "CLIP"],
+    [7, 5, 0, 32, 0, "LATENT"],
+    [8, 1, 2, 32, 1, "VAE"],
+    [9, 32, 0, 33, 0, "IMAGE"],
+    [90, 90, 0, 40, 1, "STRING"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4,
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "00000000-0000-0000-0000-000000000011",
+        "version": 1,
+        "state": { "lastGroupId": 0, "lastNodeId": 300, "lastLinkId": 300, "lastRerouteId": 0 },
+        "revision": 0,
+        "config": {},
+        "name": "Outer",
+        "inputNode": { "id": -10, "bounding": [0, 0, 100, 100] },
+        "outputNode": { "id": -20, "bounding": [500, 0, 100, 100] },
+        "inputs": [
+          {
+            "id": "00000000-0000-0000-0000-000000001396",
+            "name": "clip",
+            "type": "CLIP",
+            "linkIds": [101, 104]
+          },
+          {
+            "id": "00000000-0000-0000-0000-00000000109f",
+            "name": "text",
+            "type": "STRING",
+            "linkIds": [102]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "00000000-0000-0000-0000-0000000010b0",
+            "name": "CONDITIONING",
+            "type": "CONDITIONING",
+            "linkIds": [103]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 31,
+            "type": "00000000-0000-0000-0000-000000000022",
+            "inputs": [
+              { "name": "clip", "type": "CLIP", "link": 101 },
+              { "name": "text", "type": "STRING", "link": 102, "widget": { "name": "text" } }
+            ],
+            "widgets_values": ["promoted inner"],
+            "outputs": [{ "name": "CONDITIONING", "type": "CONDITIONING", "links": [103] }]
+          },
+          {
+            "id": 32,
+            "type": "CLIPTextEncode",
+            "inputs": [{ "name": "clip", "type": "CLIP", "link": 104 }],
+            "widgets_values": ["sibling"]
+          }
+        ],
+        "links": [
+          {
+            "id": 101,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 31,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 104,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 32,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 102,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 31,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 103,
+            "origin_id": 31,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "CONDITIONING"
+          }
+        ],
+        "groups": [],
+        "extra": {}
+      },
+      {
+        "id": "00000000-0000-0000-0000-000000000022",
+        "version": 1,
+        "state": { "lastGroupId": 0, "lastNodeId": 300, "lastLinkId": 300, "lastRerouteId": 0 },
+        "revision": 0,
+        "config": {},
+        "name": "Inner",
+        "inputNode": { "id": -10, "bounding": [0, 0, 100, 100] },
+        "outputNode": { "id": -20, "bounding": [500, 0, 100, 100] },
+        "inputs": [
+          {
+            "id": "00000000-0000-0000-0000-000000001393",
+            "name": "clip",
+            "type": "CLIP",
+            "linkIds": [201]
+          },
+          {
+            "id": "00000000-0000-0000-0000-00000000109c",
+            "name": "text",
+            "type": "STRING",
+            "linkIds": [202]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "00000000-0000-0000-0000-0000000010ad",
+            "name": "CONDITIONING",
+            "type": "CONDITIONING",
+            "linkIds": [203]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 21,
+            "type": "CLIPTextEncode",
+            "inputs": [
+              { "name": "clip", "type": "CLIP", "link": 201 },
+              { "name": "text", "type": "STRING", "link": 202, "widget": { "name": "text" } }
+            ],
+            "widgets_values": ["inner default"]
+          }
+        ],
+        "links": [
+          {
+            "id": 201,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 21,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 202,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 21,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 203,
+            "origin_id": 21,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "CONDITIONING"
+          }
+        ],
+        "groups": [],
+        "extra": {}
+      }
+    ]
+  }
+}

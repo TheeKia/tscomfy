@@ -41,15 +41,19 @@ console.log(stringify({ prompt })); // the body of POST /prompt
 
 `tscomfy check --url … --out src/comfy/local` exits 1 when the server's nodes no longer match
 the generated types. `tscomfy transpile --prompt workflow.json --schema src/comfy/local` turns a
-prompt saved with the frontend's "Export (API)" into code like the above. [`examples/txt2img`](examples/txt2img) is a complete project.
+prompt saved with the frontend's "Export (API)" into code like the above, and `--workflow` does
+the same for a workflow the frontend saved, Reroutes, PrimitiveNodes and subgraphs included.
+For a workflow built in code (the argument of `toApi` above), `toUi(built, { positions:
+layout(built) })` writes the JSON the frontend opens (`layout` is from `@tscomfy/layout`). [`examples/txt2img`](examples/txt2img) is a complete project.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `packages/core` | `@tscomfy/core`: schema model, `/object_info` normalizer, graph builder, API export/import, validation. Zero dependencies, runs anywhere. |
+| `packages/core` | `@tscomfy/core`: schema model, `/object_info` normalizer, graph builder, API and UI export/import, validation. Zero dependencies, runs anywhere. |
 | `packages/codegen` | `@tscomfy/codegen`: generates node types and the runtime schema module, and transpiles workflows to code. Pure. |
 | `packages/cli` | `@tscomfy/cli`: the `tscomfy` command (`generate`, `check`, `transpile`). The only package with I/O. |
+| `packages/layout` | `@tscomfy/layout`: positions for workflows exported to the frontend's UI format. Pure. |
 | `internal/fixtures` | `@tscomfy/fixtures` (private): committed mock data and the local real-data corpus. |
 | `internal/bench` | `@tscomfy/bench` (private): the type-checking speed harness. |
 | `examples/` | Example projects, typed by your own server. |

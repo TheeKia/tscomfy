@@ -20,12 +20,18 @@ const isApiWorkflow: ShapeCheck = (value) =>
     (node) => isRecord(node) && typeof node["class_type"] === "string" && isRecord(node["inputs"]),
   );
 
+// The frontend sends a node of a missing class without `class_type`.
+const isFrontendPrompt: ShapeCheck = (value) =>
+  isRecord(value) &&
+  Object.values(value).every((node) => isRecord(node) && isRecord(node["inputs"]));
+
 const isUiWorkflow: ShapeCheck = (value) => isRecord(value) && Array.isArray(value["nodes"]);
 
 const sections: readonly (readonly [CorpusSection, string, ShapeCheck])[] = [
   ["object-info", "an /object_info response", isObjectInfo],
   ["workflows/api", "an API-format workflow", isApiWorkflow],
   ["workflows/ui", "a UI-format workflow", isUiWorkflow],
+  ["workflows/ui-api", "the frontend's prompt for a UI-format workflow", isFrontendPrompt],
 ];
 
 const listings = await Promise.all(sections.map(([section]) => listCorpus(section)));

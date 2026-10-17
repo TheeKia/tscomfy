@@ -4,12 +4,21 @@
 
 import { join } from "node:path";
 import { generate, type GenerateResult, transpile, type TranspileResult } from "@tscomfy/codegen";
-import { accepts, defineSchema, importApi, normalizeObjectInfo, stringify } from "@tscomfy/core";
+import {
+  accepts,
+  defineSchema,
+  importApi,
+  importUi,
+  normalizeObjectInfo,
+  stringify,
+} from "@tscomfy/core";
 import {
   type MockApiWorkflowName,
   type MockObjectInfoName,
+  type MockUiWorkflowName,
   readMockApiWorkflow,
   readMockObjectInfo,
+  readMockUiWorkflow,
 } from "@tscomfy/fixtures";
 
 /** Where the committed fixtures live. */
@@ -77,6 +86,21 @@ export async function transpileMock(name: MockApiWorkflowName): Promise<Transpil
   return transpile(workflow, {
     name: "prompt",
     schemaModule: `../${schemaName}/index.ts`,
+    schemaName: "mock",
+    header: ["Regenerate with: bun run generate:fixtures"],
+  });
+}
+
+/** Where the transpiled mock UI workflows live, all over the basic-pipeline fixture. */
+export const TRANSPILED_UI_DIR: string = join(TRANSPILED_DIR, "ui");
+
+/** A mock UI workflow transpiled exactly as committed: `export const prompt`, over `mock`. */
+export async function transpileUiMock(name: MockUiWorkflowName): Promise<TranspileResult> {
+  const { schema } = normalizeObjectInfo(await readMockObjectInfo("basic-pipeline"));
+  const { workflow } = importUi(await readMockUiWorkflow(name), defineSchema(stringify(schema)));
+  return transpile(workflow, {
+    name: "prompt",
+    schemaModule: "../../basic-pipeline/index.ts",
     schemaName: "mock",
     header: ["Regenerate with: bun run generate:fixtures"],
   });

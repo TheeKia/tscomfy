@@ -31,6 +31,7 @@ export const MOCK_OBJECT_INFO_NAMES = [
   "numbers",
   "outputs",
   "sockets",
+  "ui-widgets",
   "widget-types",
 ] as const;
 
@@ -68,8 +69,43 @@ export function readMockApiWorkflow(name: MockApiWorkflowName): Promise<string> 
   return Bun.file(join(MOCK_API_WORKFLOW_DIR, `${name}.json`)).text();
 }
 
-/** Sections of the local corpus. */
-export type CorpusSection = "object-info" | "workflows/api" | "workflows/ui";
+/**
+ * Names of the committed mock UI-format workflows in `mocks/workflows/ui/`, all over the
+ * `basic-pipeline` mock schema. Each has, under the same name in `mocks/workflows/ui-api/`, the
+ * prompt the ComfyUI frontend itself builds when it loads the file: the expected output of
+ * `importUi` (docs/plan.md §11).
+ */
+export const MOCK_UI_WORKFLOW_NAMES = [
+  "modes",
+  "subgraph-modes",
+  "subgraph-primitive",
+  "subgraphs",
+  "txt2img",
+] as const;
+
+export type MockUiWorkflowName = (typeof MOCK_UI_WORKFLOW_NAMES)[number];
+
+/** Absolute path of the directory holding the mock UI-format workflows. */
+export const MOCK_UI_WORKFLOW_DIR: string = join(root, "mocks", "workflows", "ui");
+
+/** Absolute path of the directory holding the prompts the frontend builds for them. */
+export const MOCK_UI_API_WORKFLOW_DIR: string = join(root, "mocks", "workflows", "ui-api");
+
+/** Raw JSON text of one mock UI-format workflow. */
+export function readMockUiWorkflow(name: MockUiWorkflowName): Promise<string> {
+  return Bun.file(join(MOCK_UI_WORKFLOW_DIR, `${name}.json`)).text();
+}
+
+/** Raw JSON text of the prompt the frontend builds for one mock UI-format workflow. */
+export function readMockUiApiWorkflow(name: MockUiWorkflowName): Promise<string> {
+  return Bun.file(join(MOCK_UI_API_WORKFLOW_DIR, `${name}.json`)).text();
+}
+
+/**
+ * Sections of the local corpus. `workflows/ui-api` holds, under the same names as
+ * `workflows/ui`, the prompts the frontend builds for those files (`scripts/frontend.ts`).
+ */
+export type CorpusSection = "object-info" | "workflows/api" | "workflows/ui" | "workflows/ui-api";
 
 /** One file of the local corpus. */
 export interface CorpusFile {

@@ -39,6 +39,32 @@ Adding a file means adding its name to `MOCK_API_WORKFLOW_NAMES`; a test enforce
 | `value-widgets.json` | JSON values, list wrapping, CURVE marking, display-only widgets left out, `widgetType` defaults |
 | `lists.json` | Multi-selects (empty when not given), boolean options, a raw node's list input |
 
+## `mocks/workflows/ui/` and `mocks/workflows/ui-api/`
+
+UI workflows as the frontend saves them, all over the `basic-pipeline` mock schema, and under the
+same name in `ui-api/` the prompt frontend 1.55.17 itself builds for each, captured with
+`scripts/frontend.ts` (below). They are written by us: most started as probes of the frontend's
+behavior, with mock file names in place of real ones. `importUi` must give each prompt byte for
+byte (`packages/core/test/ui.test.ts`), and the transpiled modules in
+`packages/codegen/test/generated/transpiled/ui/` must rebuild it. Adding a file means adding its
+name to `MOCK_UI_WORKFLOW_NAMES`; a test enforces this.
+
+| File | Covers |
+|---|---|
+| `txt2img.json` | The `api/txt2img.json` graph in UI form: a Reroute, a PrimitiveNode feeding a widget, a Note, a seed node feeding a widget slot, control widgets in `widgets_values`, a title. `MockSeed` isn't a server class, so its expected prompt is `api/txt2img.json`, which the capture matches on every other node |
+| `modes.json` | A muted Reroute in front of a widget-less socket (the input is left out), a bypassed sampler passing its latent through, a muted loader |
+| `subgraphs.json` | Nested subgraphs, two instances of one definition, promoted widget values (outer over inner over interior), a root id an inner node also uses (reminted from `last_node_id`) |
+| `subgraph-modes.json` | A muted subgraph inside another: its interior is still sent, its output resolves to nothing (`W_FRONTEND_QUIRK`) |
+| `subgraph-primitive.json` | A PrimitiveNode linked to a promoted subgraph input: the value never arrives, and the instance's order changes (`W_FRONTEND_QUIRK`) |
+
+## `scripts/frontend.ts`
+
+`bun internal/fixtures/scripts/frontend.ts --out DIR UI.json…` loads UI workflows into the local
+server's own frontend in a headless Chromium (`TSCOMFY_CHROME`, or the one Playwright caches) and
+writes the prompt `graphToPrompt` builds for each, without queueing it: every request but a GET
+is answered by the script and never reaches the server. Use it to capture `ui-api/` prompts and
+to settle any question about the frontend's behavior. Development tooling: no test runs it.
+
 ## `mocks/object-info/`
 
 Each file is a complete `/object_info` response containing a few nodes around one theme. Adding a
@@ -61,6 +87,7 @@ Node class names start with `Mock` unless the name itself is the thing being tes
 | `hidden.json` | Hidden inputs in every observed shape: server-filled names, tuple specs, `*`, empty string, plain widget type, object |
 | `numbers.json` | Integer bounds beyond 2⁵³ (exact in the file), also as FLOAT bounds, beyond the double range and on an `INT:seed` type, defaults outside the bounds, widgets with no default, list-valued defaults, every widget option variant |
 | `malformed.json` | Inputs that must produce diagnostics instead of crashes: null, string, numeric type, empty tuple, bad options, V3 types missing their payload, unknown V3 type, non-record section, mismatched output arrays, dangling `input_order`, missing fields, `name` disagreeing with its key, an input declared in two sections, null options, a legacy combo or output list with an unrepresentable option, out-of-range Autogrow and DynamicGroup counts, duplicate dynamic-combo keys and nested inputs, a MatchType output without a template, an incomplete `input_order` |
+| `ui-widgets.json` | Widgets the frontend adds without an input of their own (docs/plan.md §11): controls after INT (on by default for `seed`, off with an explicit `false`, named after a string option), FLOAT and combo (with its filter) inputs; the `upload` button for the first required image or video upload combo, an animated-image upload, a required `audio` upload combo, and none for an optional one or another name |
 | `widget-types.json` | Core frontend value widgets (COLOR, BOUNDING_BOX, COLORS, IMAGECOMPARE, CURVE with `forceInput`, a CURVE value, display-only RESOLUTION_PREVIEW); `widgetType` (FLOAT on a `FLOAT,INT` socket, PAINTER on STRING, pack-registered widgets, COMBO on a pack type and on INT); a pack type with a default that stays a socket |
 | `nulls.json` | `null` where the server means "not set": `display_name`, `description`, `default`, `tooltip`, an input section, an `output_is_list` entry |
 | `legacy-and-flags.json` | Older servers: no `input_order`, `output_name` or `output_is_list`; empty `input`; `deprecated`, `experimental`, `dev_only`, `advanced`, `essentials_category` |

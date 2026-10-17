@@ -82,7 +82,31 @@ and `E_INVALID_LINK` (the input is left out).
 
 | Code | Meaning | What happens |
 |---|---|---|
-| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. | The node is kept as a raw node with its wire keys, so it exports as it came. |
+| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. From `importUi`: a node of a class the schema doesn't have. | The node is kept as a raw node with its wire keys, so it exports as it came. `importUi` keeps a node of an unknown class raw, with its links and its values by name, while it is linked; one linked to nothing (a pack's frontend-only node, such as a label) is left out. |
+
+## Importing UI workflows
+
+`importUi` reads a UI workflow (plan §11) into the workflow the frontend would queue. Paths
+point into the file: `["links", <link id>]`, or the node's id, after the ids of the subgraph
+instances it sits in (`["40", "31"]`). It also reports the parser's codes and `W_IMPORTED_AS_RAW`.
+
+| Code | Meaning | What happens |
+|---|---|---|
+| `E_INVALID_WORKFLOW` | The file isn't an object with a `nodes` list, or a node or link can't be read: no id, an id taken twice, a link that isn't a tuple (format 0.4) or an object (format 1). | An unreadable file gives an empty workflow; an unreadable node or link is left out. A tuple link in a format 1 file is left out, as the frontend drops it. |
+| `W_UNRESOLVED_LINK` | A link comes from a node the graph doesn't have, or loops back on itself through Reroutes or subgraph boundaries. The frontend refuses to build a prompt for either. | The link is left out. |
+| `W_WIDGET_VALUES_MISMATCH` | A node saves a different number of positional widget values than its definition has widgets, and no values by name: a pack's own widgets, or a file older than the definition. | Values are read by position, as the frontend reads them; widgets without one keep their initial values. |
+| `W_FRONTEND_QUIRK` | The file relies on frontend behavior that looks unintended: a muted or bypassed subgraph inside another subgraph, whose interior the frontend still sends, or a PrimitiveNode linked to a subgraph's promoted input, whose value never reaches it. | Reproduced as the frontend does it, so the prompt matches the frontend's. |
+
+## Exporting UI workflows
+
+`toUi` writes a workflow as a UI workflow (plan §11). Paths point into the workflow, as the
+exporter's do.
+
+| Code | Meaning | What happens |
+|---|---|---|
+| `W_UNKNOWN_UI_CLASS` | A node's class isn't in the schema, so its slots and widgets can't be laid out as the frontend lays them out. | Its links and its values by name are written; the frontend shows it as missing, and `importUi` reads it back raw. |
+| `W_UNSAFE_INTEGER` | A widget value is an integer beyond 2^53 (a seed up to 2^64−1). | The value is written exactly, but the frontend's JSON parser rounds it, so the frontend queues a different number. `importUi` reads it exactly. |
+| `W_UI_VALUE_LOST` | An input has nowhere to go in a UI workflow: a DynamicGroup row (frontend 1.55.17 has no widgets for them) or a widget the frontend doesn't save (IMAGECOMPARE). | The value isn't written; the frontend sends its own value for it, or nothing. |
 
 ## Generating types
 

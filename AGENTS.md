@@ -16,7 +16,8 @@ GUIs, MCP servers. Don't add these.
 the `/object_info` normalizer), 2 (the type emitter in `codegen`), 3 (`workflow()` and `toApi`) and
 4 (the `tscomfy` CLI: `generate`, `check`), 5 (validation: `validateApi`, `validate`, `toApi`
 validating by default), 6 (`importApi`, `transpile`, `tscomfy transpile`) and 7 (bypass and mute,
-`prune`, `splitOutputs`) are done. Next is Phase 8: the UI format. Phases and exit criteria are in
+`prune`, `splitOutputs`) and 8 (the UI format: `importUi`, `toUi`, `@tscomfy/layout`,
+`tscomfy transpile --workflow`) are done. Next is Phase 9: polish. Phases and exit criteria are in
 `docs/plan.md` §14.
 
 ## Where things are
@@ -27,8 +28,8 @@ validating by default), 6 (`importApi`, `transpile`, `tscomfy transpile`) and 7 
 | `docs/decisions/` | One ADR per decision in plan §3 |
 | `docs/diagnostics.md` | Every diagnostic code; a test keeps it in sync with `DIAGNOSTIC_CODES` |
 | `docs/research/` | Ground-truth notes on ComfyUI's serialization and the prior-art review, with source citations |
-| `packages/{core,codegen,cli}` | The publishable packages, `@tscomfy/<folder>` |
-| `internal/fixtures` | `@tscomfy/fixtures` (private): mocks and the local corpus |
+| `packages/{core,codegen,cli,layout}` | The publishable packages, `@tscomfy/<folder>` |
+| `internal/fixtures` | `@tscomfy/fixtures` (private): mocks, the local corpus, and `scripts/frontend.ts`, which asks the server's own frontend what it would queue for a UI workflow |
 | `internal/bench` | `@tscomfy/bench` (private): `bench:types`, synthetic schemas built from the mocks |
 | `examples/` | Example projects, workspace members outside `tsc -b`; their generated types are gitignored |
 
@@ -59,9 +60,10 @@ These come from the project owner. Follow them unless told otherwise.
 
 Enforced by package boundaries, lint, or review:
 
-- Dependencies point downward: `cli` → `codegen` → `core`. No package has runtime dependencies.
-- `core` and `codegen` are runtime-agnostic: no `node:*`, `bun`, `bun:*` or DOM APIs. oxlint
-  enforces this for `packages/{core,codegen}/src/**`. `types: []` alone is not a guard, because
+- Dependencies point downward: `cli` → `codegen` → `core`, and `layout` → `core`. No package has
+  runtime dependencies.
+- `core`, `codegen` and `layout` are runtime-agnostic: no `node:*`, `bun`, `bun:*` or DOM APIs. oxlint
+  enforces this for `packages/{core,codegen,layout}/src/**`. `types: []` alone is not a guard, because
   Bun's types pull in `@types/node`.
 - Only `cli` does I/O. `codegen` returns `{ path, contents }[]`.
 - Only `packages/core/src/object-info/` knows the raw `/object_info` format. Everything else uses
@@ -122,6 +124,11 @@ bun run clean     # tsc never deletes stale outputs; clean when files are remove
   treat it as absent.
 - Widget or socket is decided by the frontend's widget registry, keyed by `widgetType ?? type`
   (plan D16). `INT:seed` is a socket type, not an INT.
+- In a UI workflow the `links` array decides connectivity, not `inputs[].link`; only
+  `version: 0.4` has tuple links (the frontend drops them otherwise); `widgets_values` holds
+  widgets no input owns (`control_after_generate`, `upload`, dynamic-combo options). Check UI
+  behavior against the real frontend with `internal/fixtures/scripts/frontend.ts` rather than
+  by reasoning: it found every rule in plan §11 that the source left open.
 
 ## Local environment
 

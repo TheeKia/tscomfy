@@ -64,6 +64,16 @@
         "@tscomfy/fixtures": "workspace:*",
       },
     },
+    "packages/layout": {
+      "name": "@tscomfy/layout",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tscomfy/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@tscomfy/fixtures": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@oxfmt/binding-android-arm-eabi": ["@oxfmt/binding-android-arm-eabi@0.73.0", "", { "os": "android", "cpu": "arm" }, "sha512-dhunAdMbi/4o0Y66/+Wl6rpsNqpvE4i26Qw6bB77A97L2lJoktWg6m+X9QOon8iOEEqzD9rEZqFi5uZ4oIzhCA=="],
@@ -165,6 +175,8 @@
     "@tscomfy/example-txt2img": ["@tscomfy/example-txt2img@workspace:examples/txt2img"],
 
     "@tscomfy/fixtures": ["@tscomfy/fixtures@workspace:internal/fixtures"],
+
+    "@tscomfy/layout": ["@tscomfy/layout@workspace:packages/layout"],
 
     "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 

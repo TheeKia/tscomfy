@@ -50,3 +50,22 @@ export async function validated(
 ): Promise<readonly Diagnostic[]> {
   return validateApi({ ...PIPELINE, ...prompt }, await schemaOf("basic-pipeline", ...names));
 }
+
+/** A prompt with its node ids, and the links to them, renamed by `ids` (as `toUi` numbers them). */
+export function renumbered(prompt: ApiPrompt, ids: ReadonlyMap<string, number>): ApiPrompt {
+  const id = (key: string): string => String(ids.get(key) ?? key);
+  return Object.fromEntries(
+    Object.entries(prompt).map(([key, each]) => [
+      id(key),
+      {
+        ...each,
+        inputs: Object.fromEntries(
+          Object.entries(each.inputs).map(([input, value]) => [
+            input,
+            Array.isArray(value) && typeof value[0] === "string" ? [id(value[0]), value[1]] : value,
+          ]),
+        ),
+      },
+    ]),
+  );
+}
