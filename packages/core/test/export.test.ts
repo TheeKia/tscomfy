@@ -3,7 +3,9 @@ import { exportApi, stringify, toApi, ValidationError, workflow } from "@tscomfy
 import { readMockObjectInfo } from "@tscomfy/fixtures";
 import { looseSchema } from "./loose.ts";
 
-// Exporter rules not covered by the parity prompts (packages/codegen/test/parity.test.ts).
+// Exporter rules not covered by the parity prompts (packages/codegen/test/parity.test.ts). These
+// graphs are fragments, not prompts the backend would run, so validation (validate.test.ts) is
+// off.
 
 const basic = looseSchema(await readMockObjectInfo("basic-pipeline"));
 const combos = looseSchema(await readMockObjectInfo("combos"));
@@ -14,7 +16,7 @@ describe("toApi", () => {
     const built = workflow(basic, ({ n }) => {
       n["VAELoader"]?.({ vae_name: "pixel_space" });
     });
-    expect(toApi(built, { meta: false })).toEqual({
+    expect(toApi(built, { meta: false, validate: false })).toEqual({
       "1": { inputs: { vae_name: "pixel_space" }, class_type: "VAELoader" },
     });
   });
@@ -23,7 +25,7 @@ describe("toApi", () => {
     const built = workflow(basic, ({ n }) => {
       for (let index = 0; index < 11; index++) n["VAELoader"]?.({ vae_name: "pixel_space" });
     });
-    expect(Object.keys(toApi(built))).toEqual([
+    expect(Object.keys(toApi(built, { validate: false }))).toEqual([
       "1",
       "2",
       "3",
@@ -42,14 +44,14 @@ describe("toApi", () => {
     const built = workflow(basic, ({ n }) => {
       n["KSampler"]?.({ seed: 18446744073709551615n });
     });
-    expect(stringify(toApi(built))).toContain('"seed":18446744073709551615,');
+    expect(stringify(toApi(built, { validate: false }))).toContain('"seed":18446744073709551615,');
   });
 
   test("passes inputs the schema doesn't know through, after the known ones", () => {
     const built = workflow(basic, ({ n }) => {
       n["VAELoader"]?.({ extra: [1], vae_name: "pixel_space" });
     });
-    expect(Object.entries(toApi(built)["1"]?.inputs ?? {})).toEqual([
+    expect(Object.entries(toApi(built, { validate: false })["1"]?.inputs ?? {})).toEqual([
       ["vae_name", "pixel_space"],
       ["extra", { __value__: [1] }],
     ]);
@@ -60,7 +62,7 @@ describe("toApi", () => {
       n["MockComboNumeric"]?.({ v2_mixed: 2 });
     });
     // legacy_numeric's default 10 and v2_numeric's 5 are kept; falsy_default's 0 becomes "auto".
-    expect(toApi(built)["1"]?.inputs).toEqual({
+    expect(toApi(built, { validate: false })["1"]?.inputs).toEqual({
       legacy_numeric: 10,
       v2_numeric: 5,
       v2_mixed: 2,
@@ -72,8 +74,8 @@ describe("toApi", () => {
     const built = workflow(dynamicCombo, ({ n }) => {
       n["MockDynamicComboCollision"]?.({ format: "mp4" });
     });
-    expect(() => toApi(built)).toThrow(ValidationError);
-    const { prompt, diagnostics } = exportApi(built);
+    expect(() => toApi(built, { validate: false })).toThrow(ValidationError);
+    const { prompt, diagnostics } = exportApi(built, { validate: false });
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(["E_INPUT_KEY_COLLISION"]);
     expect(prompt["1"]?.inputs).toEqual({ format: "mp4", "format.codec": "h264" });
   });
@@ -83,7 +85,7 @@ describe("toApi", () => {
       const vae = n["VAELoader"]!({ vae_name: "pixel_space" });
       raw("X", { nested: { vae } });
     });
-    expect(() => toApi(built)).toThrow(TypeError);
+    expect(() => toApi(built, { validate: false })).toThrow(TypeError);
   });
 
   test("sends an explicit null, rather than the default", async () => {
@@ -91,7 +93,7 @@ describe("toApi", () => {
     const built = workflow(widgets, ({ n }) => {
       n["MockValueWidgets"]?.({ compare: null, color: null, curve_value: null });
     });
-    expect(toApi(built)["1"]?.inputs).toMatchObject({
+    expect(toApi(built, { validate: false })["1"]?.inputs).toMatchObject({
       color: null,
       compare: null,
       curve_value: null,
@@ -103,7 +105,7 @@ describe("toApi", () => {
     const built = workflow(groups, ({ n }) => {
       n["MockDynamicGroupOptional"]?.({ replacements: [{ find: "a", extra: 1 }] });
     });
-    expect(toApi(built)["1"]?.inputs).toEqual({
+    expect(toApi(built, { validate: false })["1"]?.inputs).toEqual({
       text: "",
       "replacements.0.find": "a",
       "replacements.0.replace": "",
@@ -116,7 +118,7 @@ describe("toApi", () => {
     const built = workflow(groups, ({ n }) => {
       n["MockDynamicGroupOptionalMin"]?.({ rows: [{}, {}, {}, {}] });
     });
-    const { prompt, diagnostics } = exportApi(built);
+    const { prompt, diagnostics } = exportApi(built, { validate: false });
     expect(diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toEqual([
       ["E_TOO_MANY_DYNAMIC_INPUTS", ["1", "inputs", "rows"]],
     ]);

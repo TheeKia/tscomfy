@@ -14,14 +14,8 @@ export {
   type DiagnosticPath,
   type Severity,
 } from "./diagnostic/diagnostic.ts";
-export {
-  type ApiLink,
-  type ApiNode,
-  type ApiPrompt,
-  exportApi,
-  toApi,
-  type ToApiOptions,
-} from "./api/export.ts";
+export { exportApi, toApi, type ToApiOptions, validate } from "./api/export.ts";
+export type { ApiLink, ApiNode, ApiPrompt } from "./api/prompt.ts";
 export { ValidationError } from "./diagnostic/validation-error.ts";
 export type {
   BuildContext,
@@ -52,7 +46,7 @@ export {
   type NormalizeOptions,
   type NormalizeResult,
 } from "./object-info/normalize.ts";
-export { accepts } from "./schema/accepts.ts";
+export { accepts, acceptsType, socketAccepts } from "./schema/accepts.ts";
 export { namedOutputs, sendsValue } from "./schema/frontend.ts";
 export { diffSchemas, type InputChange, type NodeChange, type SchemaDiff } from "./schema/diff.ts";
 export { hashSchema } from "./schema/hash.ts";
@@ -80,3 +74,4 @@ export type {
   UnknownInput,
   ValueInput,
 } from "./schema/types.ts";
+export { validateApi } from "./validate/validate-api.ts";

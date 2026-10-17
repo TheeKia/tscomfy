@@ -14,7 +14,8 @@ GUIs, MCP servers. Don't add these.
 
 **Status:** Phases 0 (foundation), 1 (lossless JSON, diagnostics, the schema model, `accepts()`,
 the `/object_info` normalizer), 2 (the type emitter in `codegen`), 3 (`workflow()` and `toApi`) and
-4 (the `tscomfy` CLI: `generate`, `check`) are done. Next is Phase 5: validation. Phases and exit
+4 (the `tscomfy` CLI: `generate`, `check`) and 5 (validation: `validateApi`, `validate`, `toApi`
+validating by default) are done. Next is Phase 6: API import and the transpiler. Phases and exit
 criteria are in `docs/plan.md` §14.
 
 ## Where things are

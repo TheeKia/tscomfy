@@ -423,7 +423,7 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
 - **Escape hatch**: `raw(classType, inputs, options?)` from the context. It is untyped and kept separate
   from `n`, so no `class_type` can collide with it. Its inputs are wire keys and are exported as
   given, without defaults or flattening; `raw(…).output(slot)` is an `Out<"*">`, which fits any
-  socket. Validation warns when it is used.
+  socket. Validation checks raw nodes like any other (§8): an unknown class is an error.
 - **Results** follow the generated types exactly: the rule for which outputs are also reachable by
   name (`namedOutputs`) lives in core and serves both codegen and the builder. Results and output
   references are frozen; references are instances only the builder creates.
@@ -499,24 +499,51 @@ Researched in frontend 1.55.17 (the version the corpus came from) and backend 0.
 
 ## 8. Validation
 
-`validate(wf): Diagnostic[]`. `toApi(wf, { validate: "error" | "warn" | "off" })` defaults to `"error"`,
-which throws a single `ValidationError` carrying all diagnostics.
+`validateApi(prompt, schema): Diagnostic[]` checks an API-format prompt the way the backend does,
+and `validate(workflow)` checks what `toApi` would send. `toApi(wf, { validate })` validates by
+default and throws one `ValidationError` carrying every diagnostic when there is an error;
+`validate: false` skips validation (problems building the prompt itself still throw).
+`exportApi` returns the prompt with every diagnostic, warnings included. (An earlier draft had
+`"error" | "warn" | "off"`; a pure library has nowhere to send a warning, so `exportApi` is the
+way to see them.)
 
-**Checks**:
-- unknown class type (the backend rejects the whole prompt for this)
-- **unknown input**: stricter than the backend, which silently ignores unknown values but still follows
-  unknown *links*
+**On the wire.** Validation runs on the prompt, keyed by wire keys, because that is what the
+backend validates. Dynamic inputs are expanded as `get_finalized_class_inputs` expands them
+(backend `comfy_api/latest/_io.py`): an Autogrow's slots before `min` are required when its
+template is, even in an optional Autogrow; a dynamic combo's chosen option adds its inputs (an
+unknown key makes the backend drop the input silently); DynamicGroup keys are
+`<group>.<row>.<field>` with decimal rows below `max` and no leading zeros, rows may have gaps,
+and the present rows count against `min`. Each position is then checked as `validate_inputs`
+(`execution.py`) checks it: links by `accepts`, values after unwrapping `__value__` and after
+the backend's `int()` truncation for bounds. `raw()` nodes are validated like any other, so
+the plan's earlier "validation warns when raw is used" became plain validation.
+
+**Severity follows the soundness ordering.** A check is an error when the generated types reject
+the same thing, or when the types can't express it and the backend rejects it (bounds, unknown
+classes, cycles, a prompt with no output node). Where the types accept a value the backend still
+takes, it is a warning: a fractional INT (`number` in the types; the backend truncates it), a value
+outside an upload, remote or empty combo's options (`Alias | (string & {})`). MatchType
+consistency follows the types too: the first declared input of a template infers it, and only
+once that input is linked to a typed output must the others agree. The parity workflows check the
+first half of the ordering (`what compiles passes validation`); the corpus API workflows, exported
+by the frontend, validate without an error.
+
+**Checks** (codes in docs/diagnostics.md):
+- unknown class type (the backend rejects the whole prompt) and no output node
+- **unknown input**: stricter than the backend, which silently ignores unknown values but still
+  follows unknown *links*
 - missing required input
-- dangling ref, slot out of range
-- socket compatibility (`accepts`)
-- MatchType consistency (all inputs of a template agree)
-- combo membership (an error, or a warning for upload, remote and empty combos)
-- int/float coercion, min/max (bigint-aware)
-- Autogrow count against min/max
-- DynamicCombo option exists
-- DynamicGroup row count, ≤ 20 rows
-- flattened-key collisions
-- cycles
+- malformed links, dangling links (node or slot), socket compatibility (`accepts`, with MatchType
+  outputs resolved to their template's type), a value where only a link fits
+- MatchType: allowed types, consistency
+- value kinds; combo membership (an error, or a warning for upload, remote and empty combos;
+  multi-selects element-wise); int/float coercion, min/max (bigint-aware)
+- Autogrow minimum, DynamicCombo option exists, DynamicGroup keys and row count
+- flattened-key collisions (the exporter) and cycles
+
+Not checked, because no schema says: what a node's own `VALIDATE_INPUTS` accepts (the backend
+then skips its built-in checks for those inputs; `LoadImage` takes annotated file names this
+way), and `step`, which the backend ignores.
 
 Diagnostic codes are stable string constants (`E_UNKNOWN_INPUT`, …). Each code gets one negative test and a doc entry.
 The diagnostic model is §5.4.
@@ -810,7 +837,7 @@ the importer, so it is Phase 6's exit.
 
 Exit: an example project generates from the live server and builds `txt2img` end to end.
 
-**Phase 5: validation**
+**Phase 5: validation** (done)
 - Everything in §8.
 
 Exit: a negative test for every code; `toApi({ validate })`.
@@ -887,4 +914,5 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Schema identity across responses (D15) | A corpus dump saved earlier and the live response differ only in the order of `vhs_path_extensions` on `VHS_LoadImagePath`, a field the normalizer doesn't keep. The hashes are equal and `check` reports up to date, as intended |
 | Credentials in `--url` | Bun's `fetch` turns `http://user:pw@host` into `Authorization: Basic …` (checked with `Bun.serve` in `system.test.ts`), so authenticated servers work. The CLI strips the credentials from every message and header |
 | Phase 4 review | An independent review found 10 issues, each reproduced: a `?token=` query appended before `/object_info` (and shown), `check` trusting header lines over file contents, an error body (`{"detail": …}`) generating 0 nodes over good types with exit 0, reserved-word export names, upload combos counted as drift, an unguarded response body read, a fix command that named the old source, credentials in usage errors, control characters in recorded paths, and doc gaps. All fixed with tests |
+| Backend validation (§8) | Read in backend 0.41 `execution.py` (`validate_inputs`, `validate_prompt`) and `comfy_api/latest/_io.py` (`get_finalized_class_inputs`, the Autogrow, DynamicCombo and DynamicGroup expanders): coercion with `int()`/`float()`/`str()`/`bool()` before bounds, combo membership with multi-selects element-wise, `VALIDATE_INPUTS` skipping built-in checks, an unknown dynamic-combo key dropping the input silently, DynamicGroup key grammar and row counts, Autogrow minimums from the template's section, cycles and "no outputs" rejecting the prompt. The corpus Anima export (13 nodes) validates with no diagnostic in 0.8 ms; a 20,000-node chain validates without deep recursion |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

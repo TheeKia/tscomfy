@@ -17,27 +17,44 @@ import type { ComboOption, InputDef, OutputDef, OutputType, SocketType } from ".
 export function accepts(input: InputDef, output: OutputDef): boolean {
   if (input.kind === "dynamicGroup" || input.kind === "unknown") return false;
   if (input.kind === "autogrow") return accepts(input.template, output);
-  if (input.kind === "matchType" || output.matchTemplate !== undefined) return true;
+  if (output.matchTemplate !== undefined) return true;
+  return acceptsType(input, output.type);
+}
+
+/**
+ * {@link accepts} for an output of a known type: a MatchType output once its template has
+ * resolved, for example. A MatchType input takes any type here; its template's allowed types
+ * are checked with {@link socketAccepts}.
+ */
+export function acceptsType(input: InputDef, output: OutputType): boolean {
   switch (input.kind) {
+    case "dynamicGroup":
+    case "unknown":
+      return false;
+    case "autogrow":
+      return acceptsType(input.template, output);
+    case "matchType":
+      return true;
     case "socket":
     case "int":
     case "float":
     case "string":
     case "boolean":
     case "value":
-      return typeAccepts(input.type, output.type);
+      return socketAccepts(input.type, output);
     case "combo":
       return input.form === "legacy"
-        ? legacyComboAccepts(input.options, output.type)
-        : typeAccepts(input.type, output.type);
+        ? legacyComboAccepts(input.options, output)
+        : socketAccepts(input.type, output);
     case "dynamicCombo":
-      return typeAccepts(DYNAMIC_COMBO, output.type);
+      return socketAccepts(DYNAMIC_COMBO, output);
   }
 }
 
 const DYNAMIC_COMBO: SocketType = { kind: "named", name: "COMFY_DYNAMICCOMBO_V3" };
 
-function typeAccepts(input: SocketType, output: OutputType): boolean {
+/** Whether a socket of type `input` takes a link from an output of type `output` (§5.2). */
+export function socketAccepts(input: SocketType, output: OutputType): boolean {
   if (input.kind === "any" || output.kind === "any") return true;
   // The backend lets an option list into an input typed exactly COMBO, and nothing else.
   if (output.kind === "combo") return input.kind === "named" && input.name === "COMBO";

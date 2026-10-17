@@ -16,24 +16,18 @@ import type { NodeId } from "../graph/types.ts";
 import type { JsonValue } from "../json/value.ts";
 import { sendsValue } from "../schema/frontend.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
+import { validateApi } from "../validate/validate-api.ts";
+import type { ApiNode, ApiPrompt } from "./prompt.ts";
 
-/** A link in a prompt: the source node's id and output slot. */
-export type ApiLink = readonly [NodeId, number];
-
-/** One node of an API-format prompt. */
-export type ApiNode = {
-  readonly inputs: { readonly [key: string]: JsonValue };
-  readonly class_type: string;
-  readonly _meta?: { readonly title: string };
-};
-
-/** An API-format prompt: what `POST /prompt` takes as `prompt`. May hold bigint; see `stringify`. */
-export type ApiPrompt = { readonly [id: NodeId]: ApiNode };
-
-/** Options for {@link toApi}. */
+/** Options for {@link toApi} and {@link exportApi}. */
 export interface ToApiOptions {
   /** Emit `_meta.title`, as the frontend does. Default `true`. */
   readonly meta?: boolean;
+  /**
+   * Validate the prompt against the schema (docs/plan.md §8, {@link validateApi}). Default
+   * `true`. Problems building the prompt itself are reported either way.
+   */
+  readonly validate?: boolean;
 }
 
 /**
@@ -41,10 +35,11 @@ export interface ToApiOptions {
  * defaults filled in, dynamic inputs flattened to their wire keys, list values wrapped, keys in
  * the frontend's order. Serialize it with `stringify`, which keeps big integers exact.
  *
- * Throws a {@link ValidationError} when the prompt can't be built faithfully: a flattened
- * dynamic key that collides with another input of the node (`E_INPUT_KEY_COLLISION`), or more
- * Autogrow slots or group rows than exist (`E_TOO_MANY_DYNAMIC_INPUTS`). Throws a `TypeError` for
- * an output reference nested inside a JSON value, which no input can carry.
+ * Throws a {@link ValidationError}, carrying every diagnostic, when there is an error: the
+ * prompt can't be built faithfully (`E_INPUT_KEY_COLLISION`, `E_TOO_MANY_DYNAMIC_INPUTS`), or,
+ * unless `validate` is `false`, the backend would reject it (§8). Warnings don't throw; use
+ * {@link exportApi} to see them. Throws a `TypeError` for an output reference nested inside a
+ * JSON value, which no input can carry.
  */
 export function toApi(workflow: Workflow, options: ToApiOptions = {}): ApiPrompt {
   const { prompt, diagnostics } = exportApi(workflow, options);
@@ -54,7 +49,9 @@ export function toApi(workflow: Workflow, options: ToApiOptions = {}): ApiPrompt
   return prompt;
 }
 
-/** {@link toApi} without throwing: the prompt and what went wrong building it. */
+/**
+ * {@link toApi} without throwing: the prompt, and what went wrong building and validating it.
+ */
 export function exportApi(
   workflow: Workflow,
   options: ToApiOptions = {},
@@ -79,7 +76,17 @@ export function exportApi(
       },
     ]);
   }
-  return { prompt: Object.fromEntries(entries), diagnostics };
+  const prompt: ApiPrompt = Object.fromEntries(entries);
+  if (options.validate !== false) diagnostics.push(...validateApi(prompt, workflow.schema));
+  return { prompt, diagnostics };
+}
+
+/**
+ * Every problem with a workflow (docs/plan.md §8): what {@link toApi} would throw for, and the
+ * warnings. Empty for a workflow the backend accepts as it is.
+ */
+export function validate(workflow: Workflow): readonly Diagnostic[] {
+  return exportApi(workflow).diagnostics;
 }
 
 /** The inputs of one node, gathered in the frontend's three groups. */

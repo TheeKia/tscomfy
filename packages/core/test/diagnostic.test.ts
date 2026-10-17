@@ -12,6 +12,7 @@ import {
 import { readMockObjectInfo } from "@tscomfy/fixtures";
 import { parseWith } from "../src/json/parse.ts";
 import { looseSchema } from "./loose.ts";
+import { node, validated } from "./prompts.ts";
 
 const isCode = (key: string): key is DiagnosticCode => Object.hasOwn(DIAGNOSTIC_CODES, key);
 const codes = Object.keys(DIAGNOSTIC_CODES).filter(isCode);
@@ -100,6 +101,103 @@ const PRODUCERS: Record<CoreCode, Producer> = {
   W_INVALID_INPUT_OPTION: {
     produce: malformed,
     path: ["MockBadInputSpecs", "input", "required", "options_not_object", 1],
+  },
+  E_UNKNOWN_CLASS_TYPE: {
+    produce: () => validated({ "1": node("NoSuchNode") }),
+    path: ["1", "class_type"],
+  },
+  E_NO_OUTPUT_NODE: {
+    produce: async () =>
+      (await validated({ out: node("VAELoader", { vae_name: "pixel_space" }) })).filter(
+        (diagnostic) => diagnostic.code === "E_NO_OUTPUT_NODE",
+      ),
+    path: [],
+  },
+  E_UNKNOWN_INPUT: {
+    produce: () => validated({ "1": node("VAELoader", { vae_name: "pixel_space", colour: 1 }) }),
+    path: ["1", "inputs", "colour"],
+  },
+  E_MISSING_INPUT: {
+    produce: () => validated({ "1": node("VAEDecode", { vae: ["vae", 0] }) }),
+    path: ["1", "inputs", "samples"],
+  },
+  E_INVALID_LINK: {
+    produce: () => validated({ "1": node("VAEDecode", { samples: [0, 0], vae: ["vae", 0] }) }),
+    path: ["1", "inputs", "samples"],
+  },
+  E_DANGLING_LINK: {
+    produce: () =>
+      validated({ "1": node("VAEDecode", { samples: ["latent", 3], vae: ["vae", 0] }) }),
+    path: ["1", "inputs", "samples"],
+  },
+  E_TYPE_MISMATCH: {
+    produce: () => validated({ "1": node("VAEDecode", { samples: ["vae", 0], vae: ["vae", 0] }) }),
+    path: ["1", "inputs", "samples"],
+  },
+  E_MATCH_TYPE_MISMATCH: {
+    produce: () =>
+      validated(
+        { "1": node("MockSwitch", { switch: true, on_false: ["vae", 0], on_true: ["latent", 0] }) },
+        "match-type",
+      ),
+    path: ["1", "inputs", "on_true"],
+  },
+  E_NOT_A_LINK: {
+    produce: () => validated({ "1": node("VAEDecode", { samples: "latent", vae: ["vae", 0] }) }),
+    path: ["1", "inputs", "samples"],
+  },
+  E_INVALID_VALUE: {
+    produce: () =>
+      validated({
+        "1": node("CLIPTextEncode", { text: 5, clip: ["c", 1] }),
+        c: node("CheckpointLoaderSimple", { ckpt_name: "model-a.safetensors" }),
+      }),
+    path: ["1", "inputs", "text"],
+  },
+  W_NON_INTEGER_VALUE: {
+    produce: () =>
+      validated({ latent: node("EmptyLatentImage", { width: 512.5, height: 512, batch_size: 1 }) }),
+    path: ["latent", "inputs", "width"],
+  },
+  E_OUT_OF_RANGE: {
+    produce: () =>
+      validated({ latent: node("EmptyLatentImage", { width: 8, height: 512, batch_size: 1 }) }),
+    path: ["latent", "inputs", "width"],
+  },
+  E_NOT_IN_COMBO: {
+    produce: () => validated({ vae: node("VAELoader", { vae_name: "vae-z.safetensors" }) }),
+    path: ["vae", "inputs", "vae_name"],
+  },
+  W_UNLISTED_COMBO_VALUE: {
+    produce: () =>
+      validated(
+        { "1": node("MockComboUploadRemote", { upload: "new.png", remote: "x.png" }) },
+        "combos",
+      ),
+    path: ["1", "inputs", "upload"],
+  },
+  E_UNKNOWN_DYNAMIC_OPTION: {
+    produce: () =>
+      validated(
+        {
+          "1": node("MockDynamicComboOptional", { audio: ["a", 0], format: "ogg" }),
+          a: node("NoSuchNode"),
+        },
+        "dynamic-combo",
+      ),
+    path: ["1", "inputs", "format"],
+  },
+  E_TOO_FEW_DYNAMIC_INPUTS: {
+    produce: () => validated({ "1": node("MockDynamicGroupOptionalMin") }, "dynamic-group"),
+    path: ["1", "inputs", "rows"],
+  },
+  E_DEPENDENCY_CYCLE: {
+    produce: () =>
+      validated({
+        "1": node("VAEDecode", { samples: ["2", 0], vae: ["vae", 0] }),
+        "2": node("KSampler", { latent_image: ["1", 0] }),
+      }),
+    path: ["1"],
   },
 };
 

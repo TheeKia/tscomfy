@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parse, stringify, toApi, type Workflow, workflow } from "@tscomfy/core";
+import { parse, stringify, toApi, validate, type Workflow, workflow } from "@tscomfy/core";
 import {
   MOCK_API_WORKFLOW_NAMES,
   type MockApiWorkflowName,
@@ -107,6 +107,19 @@ describe("frontend parity", () => {
     const expected = parse(await readMockApiWorkflow(name));
     expect(expected.diagnostics).toEqual([]);
     expect(expected.value).toBeDefined();
-    expect(stringify(toApi(WORKFLOWS[name]()))).toBe(stringify(expected.value ?? null));
+    // Raw nodes of classes the mock schemas don't have make these fragments, not runnable prompts.
+    const prompt = toApi(WORKFLOWS[name](), { validate: false });
+    expect(stringify(prompt)).toBe(stringify(expected.value ?? null));
+  });
+});
+
+describe("what compiles passes validation", () => {
+  // The soundness ordering (AGENTS.md): the typed nodes of each workflow are valid; only the raw
+  // nodes standing in for other packs, and the missing output node they imply, are reported.
+  test.each(MOCK_API_WORKFLOW_NAMES)("%s", (name) => {
+    const codes = new Set(validate(WORKFLOWS[name]()).map((diagnostic) => diagnostic.code));
+    codes.delete("E_UNKNOWN_CLASS_TYPE");
+    codes.delete("E_NO_OUTPUT_NODE");
+    expect([...codes]).toEqual([]);
   });
 });
