@@ -32,8 +32,10 @@ const built = workflow(mock, ({ n, raw }) => {
     scheduler: "normal",
   });
   n.SaveImage({ images: n.VAEDecode({ samples: sampled, vae }) }, { title: "Result", id: "save" });
-  // @ts-expect-error -- bypass and mute arrive with graph operations (§12)
   n.VAELoader({ vae_name: "pixel_space" }, { mode: "bypass" });
+  n.VAELoader({ vae_name: "pixel_space" }, { mode: "mute" });
+  // @ts-expect-error -- the frontend's other modes (always, on event, on trigger) aren't modes here
+  n.VAELoader({ vae_name: "pixel_space" }, { mode: "always" });
 });
 
 expectTypeOf(built).toEqualTypeOf<Workflow<Nodes>>();

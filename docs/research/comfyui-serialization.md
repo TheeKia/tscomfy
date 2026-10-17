@@ -68,8 +68,9 @@ tscomfy deliberately fills only explicit schema defaults (plan §7.2).
 - Both modes are skipped in output; a bypassed or muted subgraph node is not expanded.
 - **Mute**: resolving through a muted node yields nothing, so the dependent's input is omitted
   while the dependent itself is still emitted (the BE then reports `required_input_missing`).
-- **Bypass** (`ExecutableNodeDTO.ts` `_getBypassSlotIndex`), checked against the final target
-  input's type, in order:
+- **Bypass** (`ExecutableNodeDTO.ts` `_getBypassSlotIndex`), checked against the type the link
+  must have (first the consumer's input type, then at each bypassed node the type of the input
+  passed through, since `resolveInput` passes no type on), in order:
   1. target type `*` or empty: the input at the same index, else input 0;
   2. the same-index input, if valid for both the output type and the target type;
   3. the first input whose type equals the target type exactly;

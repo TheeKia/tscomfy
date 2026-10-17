@@ -124,6 +124,16 @@ const CRAFTED: readonly Case[] = [
     options: { name: "aWorkflowWithAQuiteLongNameThatNeedsMoreRoom" },
   },
   {
+    name: "bypassed and muted nodes",
+    schema: "basic-pipeline",
+    built: workflow(basic, ({ n }) => {
+      const [, clip, vae] = n.CheckpointLoaderSimple({ ckpt_name: "model-a.safetensors" });
+      n.CLIPTextEncode({ clip, text: "muted" }, { mode: "mute" });
+      const latent = n.EmptyLatentImage({}, { mode: "bypass", title: "Skipped" });
+      n.SaveImage({ images: n.VAEDecode({ samples: latent, vae }) });
+    }),
+  },
+  {
     name: "numbers and keys",
     schema: "widget-types",
     built: workflow(widgetTypes, ({ n }) => {

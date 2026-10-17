@@ -331,11 +331,12 @@ class Transpiler {
     return this.#names.claim(isExportName(base) ? base : `${base}Node`);
   }
 
-  /** `{ id: "5" }`, and the title if there is one. */
+  /** `{ id: "5" }`, and the title and mode if there are. */
   #nodeOptions(node: GraphNode): Doc {
     return objectDoc([
       propertyDoc("id", quote(node.id)),
       ...(node.title === undefined ? [] : [propertyDoc("title", quote(node.title))]),
+      ...(node.mode === undefined ? [] : [propertyDoc("mode", quote(node.mode))]),
     ]);
   }
 

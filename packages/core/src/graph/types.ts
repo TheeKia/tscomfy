@@ -53,4 +53,13 @@ export interface NodeOptions {
   readonly id?: NodeId;
   /** Sent as `_meta.title`. */
   readonly title?: string;
+  /**
+   * `"bypass"`: the node isn't sent, and links through it reroute to one of its inputs, as the
+   * frontend's bypass does (docs/plan.md §12). `"mute"`: the node isn't sent, and inputs linked
+   * to it are left out.
+   */
+  readonly mode?: NodeMode;
 }
+
+/** How a node takes part in a prompt, besides normally (§12). */
+export type NodeMode = "bypass" | "mute";

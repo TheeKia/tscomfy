@@ -99,6 +99,17 @@ const PRODUCERS: Record<CoreCode, Producer> = {
     path: ["MockBadInputSpecs", "input", "required", "unknown_v3_type", 0],
   },
   E_INPUT_KEY_COLLISION: { produce: collision, path: ["5", "inputs", "format.codec"] },
+  W_LINK_DROPPED: {
+    produce: async () => {
+      const schema = looseSchema(await readMockObjectInfo("basic-pipeline"));
+      const built = workflow(schema, ({ n }) => {
+        const vae = n["VAELoader"]!({ vae_name: "pixel_space" }, { mode: "mute" });
+        n["VAEDecode"]?.({ vae }, { id: "7" });
+      });
+      return exportApi(built, { validate: false }).diagnostics;
+    },
+    path: ["7", "inputs", "vae"],
+  },
   E_TOO_MANY_DYNAMIC_INPUTS: { produce: tooManySlots, path: ["2", "inputs", "images"] },
   W_INVALID_INPUT_OPTION: {
     produce: malformed,

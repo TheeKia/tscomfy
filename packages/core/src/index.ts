@@ -34,10 +34,12 @@ export type {
   Match,
   NodeHandle,
   NodeId,
+  NodeMode,
   NodeOptions,
   OptionList,
   Out,
 } from "./graph/types.ts";
+export { prune, splitOutputs } from "./graph/operations.ts";
 export { workflow } from "./graph/workflow.ts";
 export { parse, type ParseResult } from "./json/parse.ts";
 export { stringify } from "./json/stringify.ts";

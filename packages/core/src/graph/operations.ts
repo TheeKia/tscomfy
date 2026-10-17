@@ -1,0 +1,103 @@
+// Graph operations (docs/plan.md §12): free functions from a workflow to new workflows.
+
+import type { GraphNode, InputValue, Workflow } from "./graph.ts";
+import { isOutputRef } from "./output-ref.ts";
+import type { NodeId, Out } from "./types.ts";
+import { type AssembledNode, assembleWorkflow } from "./workflow.ts";
+
+/**
+ * The workflow without the nodes no output node needs (§12): what remains are the output nodes
+ * that run (not bypassed or muted) and everything they depend on. Bypassed nodes are followed
+ * through, as the exporter resolves links through them; a muted node is kept, so links to it
+ * stay what they were, but what it depends on isn't. Nodes of classes the schema doesn't know
+ * are kept only when something kept depends on them. Cosmetic: the backend only runs output
+ * nodes and their ancestors anyway.
+ */
+export function prune<N>(workflow: Workflow<N>): Workflow<N> {
+  return subset(workflow, needed(workflow, outputNodes(workflow)));
+}
+
+/**
+ * One workflow per output node that runs, in graph order, each holding that node and everything
+ * it depends on (§12), as `prune` keeps them. An output node another one depends on is in both.
+ */
+export function splitOutputs<N>(workflow: Workflow<N>): readonly Workflow<N>[] {
+  return outputNodes(workflow).map((root) => subset(workflow, needed(workflow, [root])));
+}
+
+/** The output nodes that run: the schema says so, and they aren't bypassed or muted. */
+function outputNodes(workflow: Workflow): GraphNode[] {
+  return [...workflow.graph.nodes.values()].filter(
+    (node) =>
+      node.mode === undefined &&
+      Object.hasOwn(workflow.schema.nodes, node.classType) &&
+      workflow.schema.nodes[node.classType]?.outputNode === true,
+  );
+}
+
+/** `roots` and what they depend on, following links, but not into muted nodes' inputs. */
+function needed(workflow: Workflow, roots: readonly GraphNode[]): ReadonlySet<NodeId> {
+  const kept = new Set<NodeId>();
+  const pending = roots.map((root) => root.id);
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+    if (kept.has(id)) continue;
+    const node = workflow.graph.nodes.get(id);
+    if (node === undefined) continue;
+    kept.add(id);
+    if (node.mode === "mute") continue;
+    for (const ref of references(node.inputs)) if (!kept.has(ref)) pending.push(ref);
+  }
+  return kept;
+}
+
+/** The nodes in `ids`, in graph order, as a new workflow. */
+function subset<N>(workflow: Workflow<N>, ids: ReadonlySet<NodeId>): Workflow<N> {
+  return assembleWorkflow(workflow.schema, (link) =>
+    [...workflow.graph.nodes.values()]
+      .filter((node) => ids.has(node.id))
+      .map((node) => copy(node, link)),
+  );
+}
+
+/** A node for another workflow: references belong to the workflow that made them. */
+function copy(node: GraphNode, link: (node: NodeId, slot: number) => Out<string>): AssembledNode {
+  const inputs = Object.fromEntries(
+    Object.entries(node.inputs).map(([name, value]) => [name, relink(value, link)]),
+  );
+  const { id, classType, raw, title, mode } = node;
+  return {
+    id,
+    classType,
+    inputs,
+    raw,
+    ...(title === undefined ? {} : { title }),
+    ...(mode === undefined ? {} : { mode }),
+  };
+}
+
+function relink(value: InputValue, link: (node: NodeId, slot: number) => Out<string>): InputValue {
+  if (isOutputRef(value)) return link(value.node, value.slot);
+  if (isList(value)) return value.map((item) => relink(item, link));
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, relink(item, link)]),
+    );
+  }
+  return value;
+}
+
+/** The ids of the nodes a node's inputs link to. */
+function references(inputs: { readonly [name: string]: InputValue }): NodeId[] {
+  const found: NodeId[] = [];
+  const pending: InputValue[] = Object.values(inputs);
+  for (let value = pending.pop(); value !== undefined; value = pending.pop()) {
+    if (isOutputRef(value)) found.push(value.node);
+    else if (isList(value)) pending.push(...value);
+    else if (typeof value === "object" && value !== null) pending.push(...Object.values(value));
+  }
+  return found;
+}
+
+function isList(value: InputValue): value is readonly InputValue[] {
+  return Array.isArray(value);
+}

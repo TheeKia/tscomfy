@@ -17,6 +17,7 @@ import type { JsonValue } from "../json/value.ts";
 import { sendsValue } from "../schema/frontend.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
 import { validateApi } from "../validate/validate-api.ts";
+import { applyModes, type ModalNode } from "./modes.ts";
 import type { ApiNode, ApiPrompt } from "./prompt.ts";
 
 /** Options for {@link toApi} and {@link exportApi}. */
@@ -58,6 +59,7 @@ export function exportApi(
 ): { readonly prompt: ApiPrompt; readonly diagnostics: readonly Diagnostic[] } {
   const diagnostics: Diagnostic[] = [];
   const entries: [NodeId, ApiNode][] = [];
+  const modal: ModalNode[] = [];
   for (const node of workflow.graph.nodes.values()) {
     const definition = Object.hasOwn(workflow.schema.nodes, node.classType)
       ? workflow.schema.nodes[node.classType]
@@ -67,16 +69,18 @@ export function exportApi(
         ? rawInputs(node)
         : new NodeExport(node, definition, diagnostics).inputs();
     const title = node.title ?? definition?.displayName ?? node.classType;
-    entries.push([
-      node.id,
-      {
-        inputs,
-        class_type: node.classType,
-        ...(options.meta === false ? {} : { _meta: { title } }),
-      },
-    ]);
+    const exported: ApiNode = {
+      inputs,
+      class_type: node.classType,
+      ...(options.meta === false ? {} : { _meta: { title } }),
+    };
+    entries.push([node.id, exported]);
+    modal.push({ id: node.id, node: exported, definition, mode: node.mode });
   }
-  const prompt: ApiPrompt = Object.fromEntries(entries);
+  // Bypassed and muted nodes aren't sent; links through them are resolved as the frontend does.
+  const prompt: ApiPrompt = Object.fromEntries(
+    modal.some((node) => node.mode !== undefined) ? applyModes(modal, diagnostics) : entries,
+  );
   if (options.validate !== false) diagnostics.push(...validateApi(prompt, workflow.schema));
   return { prompt, diagnostics };
 }

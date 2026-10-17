@@ -5,7 +5,7 @@ ComfyUI server's `/object_info`, so wiring a `LATENT` into a `MODEL` input, a mi
 sampler or a missing required input fails at compile time. The output is API-format JSON that
 any ComfyUI client can queue. Executing workflows is out of scope.
 
-Status: early development (Phases 0–6 of [the plan](docs/plan.md) are complete). Nothing is
+Status: early development (Phases 0–7 of [the plan](docs/plan.md) are complete). Nothing is
 published yet.
 
 ## Quick start

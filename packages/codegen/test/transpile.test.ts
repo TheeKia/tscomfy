@@ -250,3 +250,17 @@ describe("large workflows", () => {
     expect(result.code).toContain('{ id: "m0" }');
   }, 30_000);
 });
+
+describe("modes", () => {
+  test("are written as node options", () => {
+    const built = workflow(basic, ({ n }) => {
+      const vae = n.VAELoader({ vae_name: "pixel_space" }, { mode: "bypass" });
+      n.SaveImage({
+        images: n.VAEDecode({ samples: n.EmptyLatentImage({}), vae }, { mode: "mute" }),
+      });
+    });
+    const { code } = transpiled(built);
+    expect(code).toContain('{ id: "1", mode: "bypass" }');
+    expect(code).toContain('{ id: "3", mode: "mute" }');
+  });
+});

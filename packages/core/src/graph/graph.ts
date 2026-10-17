@@ -1,5 +1,5 @@
 import type { TypedSchema } from "../schema/typed.ts";
-import type { NodeHandle, NodeId, NodeOptions, Out } from "./types.ts";
+import type { NodeHandle, NodeId, NodeMode, NodeOptions, Out } from "./types.ts";
 
 /**
  * A value in a node's inputs, as the builder records it (docs/plan.md §5.3): structured, with
@@ -26,6 +26,8 @@ export interface GraphNode {
   readonly title?: string;
   /** Added with `raw`: inputs are wire keys, exported as given, without schema rules. */
   readonly raw: boolean;
+  /** Bypassed or muted (§12); absent for a node that runs. */
+  readonly mode?: NodeMode;
 }
 
 /** The nodes of a workflow, in creation order. */

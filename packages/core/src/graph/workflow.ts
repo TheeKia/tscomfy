@@ -3,7 +3,7 @@ import type { TypedSchema } from "../schema/typed.ts";
 import type { NodeDef } from "../schema/types.ts";
 import type { BuildContext, Graph, GraphNode, InputValue, RawNode, Workflow } from "./graph.ts";
 import { isOutputRef, outputRef, ownerOf } from "./output-ref.ts";
-import type { NodeHandle, NodeId, Out } from "./types.ts";
+import type { NodeHandle, NodeId, NodeMode, Out } from "./types.ts";
 
 /**
  * Builds a workflow (docs/plan.md §7): `build` calls node functions on `n`, which add nodes and
@@ -42,6 +42,7 @@ export interface AssembledNode {
   readonly inputs: { readonly [name: string]: InputValue };
   readonly title?: string;
   readonly raw: boolean;
+  readonly mode?: NodeMode;
 }
 
 /**
@@ -124,6 +125,7 @@ class GraphBuilder<N> {
         inputs: freezeInputs(node.inputs, this),
         ...(node.title === undefined ? {} : { title: node.title }),
         raw: node.raw,
+        ...(node.mode === undefined ? {} : { mode: node.mode }),
       }),
     );
   }
@@ -148,7 +150,7 @@ class GraphBuilder<N> {
     if (!this.#open) {
       throw new TypeError("workflow: a node was added after the build function returned");
     }
-    const { id: requested, title } = readOptions(options);
+    const { id: requested, title, mode } = readOptions(options);
     let id: NodeId;
     if (requested === undefined) {
       while (this.#nodes.has(String(this.#next))) this.#next++;
@@ -167,6 +169,7 @@ class GraphBuilder<N> {
         inputs: freezeInputs(inputs, this),
         ...(title === undefined ? {} : { title }),
         raw,
+        ...(mode === undefined ? {} : { mode }),
       }),
     );
     return id;
@@ -186,19 +189,31 @@ function result(owner: object, definition: NodeDef, id: NodeId): unknown {
   return Object.freeze(refs);
 }
 
-function readOptions(options: unknown): { readonly id?: NodeId; readonly title?: string } {
+function readOptions(options: unknown): {
+  readonly id?: NodeId;
+  readonly title?: string;
+  readonly mode?: NodeMode;
+} {
   if (options === undefined) return {};
   if (typeof options !== "object" || options === null) {
     throw new TypeError("workflow: node options must be an object");
   }
   const id: unknown = Reflect.get(options, "id");
   const title: unknown = Reflect.get(options, "title");
+  const mode: unknown = Reflect.get(options, "mode");
+  if (mode !== undefined && mode !== "bypass" && mode !== "mute") {
+    throw new TypeError('workflow: options.mode must be "bypass" or "mute"');
+  }
   if (id !== undefined && typeof id !== "string")
     throw new TypeError("workflow: options.id must be a string");
   if (title !== undefined && typeof title !== "string") {
     throw new TypeError("workflow: options.title must be a string");
   }
-  return { ...(id === undefined ? {} : { id }), ...(title === undefined ? {} : { title }) };
+  return {
+    ...(id === undefined ? {} : { id }),
+    ...(title === undefined ? {} : { title }),
+    ...(mode === undefined ? {} : { mode }),
+  };
 }
 
 /** A frozen copy of the given inputs; `undefined` values are left out, as if not given. */

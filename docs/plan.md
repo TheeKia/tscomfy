@@ -709,20 +709,44 @@ also come back in another order after transpiling, since creation order follows 
 
 ## 12. Graph operations (Phase 7)
 
-Each follows the frontend algorithm exactly, as found in the research:
-- **Bypass**: the outputs of a bypassed node reroute to an input chosen in this order:
-  1. if the target type is `*` or empty, the input at the same index, else input 0;
-  2. the same-index input, if it is valid for both the output type and the target type;
-  3. the first input whose type exactly equals the target type;
-  4. the first input valid for both types;
-  5. otherwise the input is dropped, with a warning.
+`NodeOptions.mode` is `"bypass"` or `"mute"` (the frontend's other modes, always and the event
+modes, aren't modes here). The exporter applies modes to the prompt it builds
+(`core/src/api/modes.ts`), exactly as the frontend does in `graphToPrompt`
+(ComfyUI_frontend 1.55.17 `ExecutableNodeDTO.ts` `resolveInput`/`resolveOutput`/
+`_getBypassSlotIndex`, LiteGraph `isValidConnection`, read in the installed bundle):
+- **Neither kind of node is sent.**
+- **Mute**: a link from a muted node resolves to nothing, so the input is left out; the
+  dependent is still sent (the backend, and validation, then report a required input missing).
+- **Bypass**: a link from output `slot` of a bypassed node reroutes to one of its inputs:
+  1. if the target type is `*` or empty, the input at the same index if there is one, else
+     input 0;
+  2. the same-index input, if it is valid for both the output's type and the target type;
+  3. the first input whose type equals the target type exactly;
+  4. the first input valid for both;
+  5. otherwise the link is dropped.
 
-  This resolves recursively. Input index order: socket-only inputs come first, then widget sockets.
-- **Mute**: the node is left out; inputs that depended on it are left out too, and the
-  dependents themselves are still emitted (the backend then reports `required_input_missing`).
-- **Prune**: drop nodes that don't feed any output node. This is cosmetic, since the backend only
-  executes output nodes and their ancestors.
-- **Split per output**, as ComfyScript does.
+  The chosen input is then resolved in turn: an input that isn't linked resolves to nothing,
+  and a link continues from its source. The target type of that next step is the type of the
+  bypassed node's input (`resolveInput` passes no type on), not the original consumer's.
+  Validity is LiteGraph's: `*` and `""` match anything, comparison ignores case, comma lists
+  match when any members match.
+- **Slot order** is the frontend's (`litegraphService.ts` `addInputs`): socket inputs in input
+  order, then widgets that have a socket, with a chosen dynamic-combo option's inputs right after
+  the combo's own slot. Slot types are the declared types (a MatchType input's allowed types; a
+  widget's `type`, not its `widgetType`); MatchType outputs are `*`, as the frontend shows them
+  until a link narrows them. Approximations, both documented in the code: an Autogrow lists the
+  slots the prompt gives (the frontend shows one more, empty), and DynamicGroup fields have no
+  slots (the frontend has no handler).
+- Every link that resolves to nothing is reported (`W_LINK_DROPPED`); the frontend only logs the
+  "no input matches" case. A cycle through bypassed nodes, which the frontend throws on, is
+  dropped and reported too.
+- **Prune** (`prune(workflow)`): the output nodes that run, and everything they need. Bypassed
+  nodes are followed through; a muted node is kept (links to it stay as they were) but what it
+  needs isn't. Cosmetic, since the backend only runs output nodes and their ancestors.
+- **Split per output** (`splitOutputs(workflow)`), as ComfyScript does: one workflow per output
+  node that runs, each with what it needs; an output another depends on is in both.
+
+The transpiler writes modes as node options (`{ id, mode: "bypass" }`).
 
 ## 13. Repository and tooling
 
@@ -904,7 +928,7 @@ Exit: every corpus API workflow re-exports byte for byte, key order included:
 `stringify(toApi(importApi(parse(x))))` equals `stringify(parse(x))`. The transpiler round-trip
 (§10) passes on the same corpus.
 
-**Phase 7: graph operations**
+**Phase 7: graph operations** (done)
 - Everything in §12, and `NodeOptions.mode` (`bypass`, `mute`) to use them.
 
 Exit: tests mirror the frontend algorithms case by case.
@@ -973,4 +997,5 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Phase 5 review | An independent review found 10 issues, each reproduced: MatchType outputs narrowed by inputs the types don't infer from (typed code over the real `ComfySwitchNode` failed validation), the inferring position in an unchosen dynamic-combo option, links and wrapped keys into dynamic combos that the backend drops, `[{}]` rows that send nothing, recursive MatchType resolution overflowing the stack at 16,000 nodes, unchecked links into unknown inputs, Autogrow slots never checked against slot 0, `int()` truncation assumed for non-INT types, misdescribed ordering and duplicate cycle reports, and tests whose sources were all untyped. All fixed; `soundness.test.ts` now builds typed workflows |
 | Import and transpile round trip (§10) | The corpus Anima export (13 nodes) imports without a diagnostic or raw node, re-exports byte for byte with validation on, and transpiles to typed code (no `raw`) that type-checks against the corpus types, is oxfmt-formatted, and rebuilds the prompt byte for byte. The six mock prompts do the same over their mock schemas |
 | Phase 6 review | An independent review found 11 issues, each reproduced: raw-written known-class sources typed by their schema outputs (4 of 1,494 differential pairs failed to compile), CURVE in rows wrapped twice, unfoldable keys imported typed (rows past `max`, double-claimed keys, display-only widgets), hostile row indices throwing, four oxfmt layout classes (short keys, the declaration, long destructuring, exponents and number arrays; ~10% of 2,400 fuzzed workflows), CLI names and specifiers that don't compile, exporter errors ignored, quadratic name claims and fans, `__proto__` keys, and cycle reporting. All fixed; a fuzz test now checks oxfmt, `tsc` and the round trip |
+| Bypass and mute (§12) | Read in the frontend 1.55.17 bundle installed with the server (`settingStore-*.js`): `_getBypassSlotIndex`, `resolveInput`/`resolveOutput`, `isValidConnection`, `addInputs`/`addInputSocket`/`addInputWidget`, `addOutputs` (MatchType outputs typed `*`). It corrected one note: each step past a bypassed node is checked against that node's input type, not the consumer's. `modes.test.ts` follows the five rules, the slot order, chains, mutes behind bypasses and cycles case by case |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |
