@@ -10,5 +10,6 @@ server does.
 | `workflows/api/` | API-format workflows | ComfyUI menu → Export (API) |
 | `workflows/ui/` | UI-format workflows | ComfyUI menu → Export, or saved workflows from the server's user data |
 
-Corpus tests skip a section that is empty or missing. When a corpus run finds something no mock
+Corpus tests (`*.corpus.test.ts`) run with `bun run test:corpus`, never as part of `bun run check`. They
+skip a section that is empty or missing. When a corpus run finds something no mock
 covers, distill it into a mock in `../mocks/` first (see `../README.md`).

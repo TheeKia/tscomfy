@@ -13,8 +13,11 @@ INT values accept `number | bigint`. Our own deterministic serializer writes big
 ## Consequences
 
 - No dependency for big-number JSON.
+- Everything that reads JSON from outside (the normalizer, the importer) takes raw text, never a parsed value, which has already lost precision.
+- The parser turns every integer literal beyond 2^53 into a bigint; each consumer decides per field (e.g. FLOAT bounds become numbers rounded inward, plan §9).
+- `parse` and `stringify` land in Phase 1, because the normalizer needs them.
 - `toApi()` may return objects holding bigint; `stringify()` is the way to serialize them.
 
 ## Evidence
 
-Verified in Bun 1.4.3 and Node 26.
+Verified in Bun 1.4.3 and Node 26. Parsing the 3.4 MB dump with source-text access takes 26 ms, vs 4 ms without, and recovers 134 bounds beyond 2^53 (plan §16).

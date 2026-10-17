@@ -1,7 +1,7 @@
 # tscomfy: implementation plan
 
 > Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`). MIT.
-> Publishing is not a priority. Status: revision 2 after a verification round, 2026-10-17. **Phase 0 complete.**
+> Publishing is not a priority. Status: revision 3, 2026-10-17: Phase 1 prerequisites settled (D14, D15, §14). **Phase 0 complete.**
 > Every claim marked **[verified]** was checked hands-on; the evidence is in [§16](#16-verification-log).
 
 ## 1. Goal
@@ -57,10 +57,12 @@ differences in §7.4.
 | D7 | **API format first.** UI format later, as separate import/export modules | API format maps 1:1 onto the graph. |
 | D8 | **The schema is passed explicitly as a typed value**; no global module augmentation | Several servers in one project, isolated tests, no hidden state. |
 | D9 | **Refs are frozen `OutputRef` instances typed as a branded, covariant `Out<T>`** | Lists are meaningful values (they get wrapped as `__value__`, §7.4), so refs can't be tuples. **[verified]** |
-| D10 | **Lossless integers.** INT accepts `number \| bigint`. Our own small deterministic serializer writes bigint as a JSON number. The importer reads big ints via `JSON.parse` source-text access | Seeds go up to 2⁶⁴−1, and 102 INT inputs in the real dump have `max` beyond 2⁵³. **[verified]** in Bun 1.4.3 and Node 26. |
+| D10 | **Lossless integers.** INT accepts `number \| bigint`. Our own small deterministic serializer writes bigint as a JSON number. The parser reads big ints via `JSON.parse` source-text access. The normalizer and the importer take **raw text**, never an already-parsed value | Seeds go up to 2⁶⁴−1, and 134 bounds in the real dump are integer literals beyond 2⁵³ (102 of them INT `max`). A parsed value has already lost them. **[verified]** in Bun 1.4.3 and Node 26. |
 | D11 | **oxfmt formats, oxlint lints** (`--type-aware` via tsgolint, built on TS 7) | One toolchain. oxlint's type-aware rules are as accurate as tsc and catch cross-package cases Biome's linter misses. oxfmt is 0.x, so it is pinned exactly. **[verified]** |
 | D12 | **No CI for now.** `bun run check` is the single local gate | Your request. Adding CI later means running the same script. |
 | D13 | **The generated runtime schema is a `.ts` module holding `JSON.parse("…")`**, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check. The `JSON.parse` module costs 20 MB and 0.02 s, needs no copy step and no `resolveJsonModule`. **[verified]** |
+| D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
+| D15 | **Schema identity.** `Schema.nodes` is sorted by class type (code-unit order). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
 
 ## 4. Architecture
 
@@ -73,10 +75,11 @@ differences in §7.4.
         │
 @tscomfy/core          pure, zero deps
   object-info/  raw /object_info → Schema   (the only module that knows the raw format)
-  schema/       Schema model, SocketType, accepts()
+  schema/       Schema model, SocketType, accepts(), hashSchema()
   graph/        IR, builder, OutputRef
   api/          export (flatten, defaults, __value__), import (schema-driven un-flatten)
-  validate/     diagnostics
+  validate/     workflow checks
+  diagnostic/   Diagnostic model and code registry (every module may import it)
   json/         lossless parse and serialize
 later: ui/ (UI-format import/export) and layout/ (auto-layout package)
 ```
@@ -90,9 +93,10 @@ later: ui/ (UI-format import/export) and layout/ (auto-layout package)
 ### 4.1 Data flow
 
 ```
-GET /object_info ─► normalizeObjectInfo() ─► { schema: Schema, diagnostics }
-                                               ├─► emitTypes()        → nodes.ts   (types only)
-                                               └─► emitSchemaModule() → index.ts   (runtime schema + typed export)
+GET /object_info (text) ─► normalizeObjectInfo(text, { comfyVersion? }) ─► { schema: Schema, diagnostics }
+                                                                          ├─► emitTypes()        → nodes.ts   (types only)
+                                                                          ├─► emitSchemaModule() → index.ts   (runtime schema + typed export)
+                                                                          └─► hashSchema()       → file headers, drift check
 
 workflow(local, ({ n, raw }) => …) ─► Workflow { schema, graph }
    ├─► toApi(wf, { validate })  → ApiPrompt   (plain object, may hold bigint)
@@ -112,8 +116,8 @@ and nothing is hidden in methods. `Workflow` is a frozen value.
 ```ts
 interface Schema {
   readonly formatVersion: 1;
-  readonly source: { readonly hash: string; readonly comfyVersion?: string };
-  readonly nodes: Readonly<Record<string, NodeDef>>;   // key = class_type, exactly as on the server
+  readonly comfyVersion?: string;                      // from /system_stats, passed by the caller; not hashed
+  readonly nodes: Readonly<Record<string, NodeDef>>;   // key = class_type, exactly as on the server; sorted (D15)
 }
 
 interface NodeDef {
@@ -192,6 +196,31 @@ type InputValue = string | number | bigint | boolean | null | OutputRef
 schema too. The exporter reports a diagnostic if a flattened dynamic key would collide with an
 ordinary input name.
 
+### 5.4 Diagnostics
+
+```ts
+interface Diagnostic {
+  readonly code: DiagnosticCode;                 // stable: "E_…" for errors, "W_…" for warnings
+  readonly severity: "error" | "warning";        // fixed per code, matches the prefix
+  readonly path: readonly (string | number)[];   // segments into the document the diagnostic is about
+  readonly message: string;                      // for humans; the wording may change, the code doesn't
+}
+```
+
+- **One model everywhere** (D14). The parser, normalizer, exporter, validator and codegen all
+  return this type. It lives in `core/src/diagnostic/`.
+- **Path roots.** Normalizer paths point into the raw `/object_info` document, e.g.
+  `["KSampler", "input", "required", "seed", 1, "max"]`. Export and validation paths point into the
+  structured workflow, e.g. `["5", "inputs", "format", "codec"]`. Parse errors have an empty path
+  and give the position in the message. Keys are strings and array indexes are numbers, so a
+  dotted name is always one segment.
+- **Severity.** `error`: the item was dropped, or the backend would reject the result. `warning`:
+  the item was kept but degraded (`UnknownInput`) or can't be verified (an upload combo). A check
+  that can end either way gets two codes.
+- **Registry.** `DiagnosticCode` is a literal union backed by one registry (code → severity). Each
+  code has one negative test and an entry in `docs/diagnostics.md`; a test keeps the registry and
+  that document in sync.
+
 ## 6. Generated types
 
 Everything in this section was prototyped against the real 1,758-node dump. **[verified]**
@@ -207,7 +236,7 @@ src/comfy/local/
   index.ts           # export const local: TypedSchema<Nodes> = defineSchema<Nodes>(JSON.parse("…"))
 ```
 
-Every file starts with a header: generator version, source hash, ComfyUI version, the command to regenerate.
+Every file starts with a header: generator version, schema hash (`hashSchema`, D15), ComfyUI version, the command to regenerate.
 
 ### 6.2 Encoding
 
@@ -369,6 +398,7 @@ Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
 | Rule | What we do |
 |---|---|
 | Every widget value is sent; unconnected socket-only inputs are left out | Same |
+| Key order: each node is `inputs`, `class_type`, `_meta`. Inside `inputs`, widget inputs come first in `input_order` (linked widgets included), then socket-only inputs | Same, so `stringify` reproduces an export byte for byte. Observed on every node of a corpus export (frontend 1.55.17); to be confirmed in `executionUtil.ts` in Phase 3 |
 | A list-valued widget is sent as `{"__value__": [...]}`, because the backend reads a bare list as a link | Same; the importer unwraps it |
 | `_meta.title` is always present (title, or display name) | Same (`toApi({ meta: false })` turns it off) |
 | control_after_generate is never sent (its widget has `serialize: false`) | Not modeled; seeds are plain values |
@@ -380,9 +410,13 @@ Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
 ### 7.5 Serialization
 
 - `toApi()` returns a plain `ApiPrompt` object, which may hold `bigint`.
-- `stringify()` is our own deterministic serializer: stable key order, bigint as a JSON number.
-- `parse()` keeps big integers through `JSON.parse` source-text access. On runtimes without it,
-  ints above 2⁵³ produce `W_PRECISION_LOSS`.
+- `stringify()` is our own deterministic serializer: insertion key order (every object we build
+  has a fixed construction order, which §7.4 needs), bigint as a JSON number.
+- `parse()` keeps big integers through `JSON.parse` source-text access: an integer literal beyond
+  2⁵³ becomes a bigint wherever it occurs, and each consumer decides per field (§9). On runtimes
+  without source-text access, such literals produce `W_PRECISION_LOSS`. Invalid JSON is a
+  diagnostic (`E_INVALID_JSON`), not a throw.
+- Both land in Phase 1: the normalizer needs `parse`, and `hashSchema` needs `stringify`.
 
 ## 8. Validation
 
@@ -406,6 +440,7 @@ which throws a single `ValidationError` carrying all diagnostics.
 - cycles
 
 Diagnostic codes are stable string constants (`E_UNKNOWN_INPUT`, …). Each code gets one negative test and a doc entry.
+The diagnostic model is §5.4.
 
 ## 9. Codegen
 
@@ -414,6 +449,16 @@ Diagnostic codes are stable string constants (`E_UNKNOWN_INPUT`, …). Each code
   - legacy and v2 combos
   - every V3 dynamic type (including `output_matchtypes` and `input_order`)
   - hidden inputs, whose specs can be strange (`"STRING,[object Object]"` occurs in the dump)
+
+  Further rules:
+  - The input is raw text (D10), parsed with `parse`.
+  - Bounds arrive as bigint when they are integer literals beyond 2⁵³. INT bounds keep the bigint.
+    FLOAT bounds (19 in the dump, e.g. `max: 18446744073709551615`) become numbers rounded
+    **inward** (max down, min up). The backend compares exactly, so a value we accept stays
+    within its bound.
+  - `TYPE:name` input types (`INT:seed`, 3 inputs in the dump): how the frontend and backend treat
+    them is researched at the start of Phase 1, before the normalizer handles them.
+  - Output nodes are sorted by class type (D15).
 - **emitTypes** (codegen): a small internal `CodeWriter`. Output is deterministic and already
   oxfmt-formatted; generated files are excluded from linting. Identifiers for interfaces and combo aliases:
   - derived from input names, sanitized
@@ -520,7 +565,8 @@ Configs per package:
 **Scripts**:
 - `build`: `tsc -b`
 - `clean`: remove the `dist` directories (tsc never deletes stale outputs)
-- `test`: `bun test --conditions=@tscomfy/source`
+- `test`: `bun test --conditions=@tscomfy/source`, skipping corpus tests
+- `test:corpus`: only the corpus tests (`*.corpus.test.ts`)
 - `lint`: `oxlint --type-aware`
 - `format`: `oxfmt` (format and sort imports); `format:check`: `oxfmt --check`
 - `bench:types`
@@ -536,8 +582,10 @@ path, and a second config with Bun types would let library code use Bun APIs und
 - **Codegen snapshots**: `toMatchSnapshot` against the mock fixtures.
 - **Parity tests**: §7.4 rules, one mock workflow per rule, with the expected API JSON written from the frontend source.
 - **Round-trip**: §10, on mock workflows.
-- **Corpus tests** (`bun run test:corpus`, local only): the same normalize, generate, compile and
-  round-trip checks on whatever is in `internal/fixtures/corpus/`. They are skipped when it's empty.
+- **Corpus tests** (`test/*.corpus.test.ts`, run by `bun run test:corpus`, local only): the same
+  normalize, generate, compile and round-trip checks on whatever is in `internal/fixtures/corpus/`.
+  `bun run test` and `check` skip them (`--path-ignore-patterns`), so the gate never depends on
+  local data. An empty section reports one skipped test. Every phase exit requires them to pass.
 - **`accepts` table**: shared by the runtime and type-level suites.
 
 **Lint rules** (oxlint):
@@ -571,7 +619,7 @@ path, and a second config with Bun types would let library code use Bun APIs und
 
 ## 14. Phases
 
-Each phase ends with `bun run check` passing and a short demo. A phase isn't done while it has known `TODO`s.
+Each phase ends with `bun run check` and `bun run test:corpus` passing and a short demo. A phase isn't done while it has known `TODO`s.
 
 **Phase 0: foundation**
 - `git init`; the workspace skeleton exactly as in §13; ADRs for §3.
@@ -581,13 +629,21 @@ Each phase ends with `bun run check` passing and a short demo. A phase isn't don
 Exit: empty packages build, lint, format-check and test; mock fixtures are committed; the corpus is gitignored.
 
 **Phase 1: schema and normalizer**
-- The `core` Schema model, `SocketType`, `accepts`, and `object-info/normalize` covering every kind in §5.1.
+- `json/`: lossless `parse` and deterministic `stringify` (§7.5, D10). They move up from Phases 3
+  and 6 because the normalizer reads big integers and `hashSchema` serializes the schema.
+- `diagnostic/`: the model, the code registry and `docs/diagnostics.md` (§5.4, D14).
+- Research `TYPE:name` input types (§9) first; record the result in §16.
+- The `core` Schema model, `SocketType`, `accepts`, and `object-info/normalize` covering every kind
+  in §5.1, with the rules in §9.
+- Corpus tests that normalize every dump in the corpus.
 
 Exit: every mock node, and every node in the local corpus, either normalizes or yields a precise
-diagnostic; snapshot tests; the `accepts` table suite.
+diagnostic; `parse` keeps every big integer of every mock and corpus dump, and `stringify(parse(x))`
+re-parses to the same value; snapshot tests; the `accepts` table suite.
 
 **Phase 2: type emitter**
 - `codegen.emitTypes` and `emitSchemaModule`, using the encoding in §6, which the spike already validated.
+- `hashSchema` (D15) for the file headers, tested against published SHA-256 vectors and `Bun.CryptoHasher`.
 - Combo alias naming; JSDoc.
 
 Exit: generated output for every mock and for the local corpus compiles; type tests cover every row of §6.2 and every
@@ -595,10 +651,11 @@ case in §6.3–6.4; `bench:types` is within budget.
 
 **Phase 3: builder and API export**
 - Graph IR, `workflow()`, `OutputRef`, node handles.
-- Default filling, schema-driven flattening, `__value__` wrapping, `_meta`, `stringify`.
+- Default filling, schema-driven flattening, `__value__` wrapping, `_meta`, frontend key order (§7.4).
 
-Exit: byte-stable API output; parity tests (§7.4) pass; corpus workflows exported from your UI
-re-export identically.
+Exit: byte-stable API output; parity tests (§7.4) pass, one committed mock workflow
+(`mocks/workflows/`) per rule, distilled from corpus exports. Re-exporting the corpus itself needs
+the importer, so it is Phase 6's exit.
 
 **Phase 4: CLI**
 - `generate` (`--url` or `--from`), `check` (drift), the report.
@@ -613,7 +670,9 @@ Exit: a negative test for every code; `toApi({ validate })`.
 **Phase 6: API import and transpiler**
 - `parse`, `importApi` (schema-driven un-flattening, `__value__` unwrap), `transpile`, CLI `transpile`.
 
-Exit: the round-trip corpus passes.
+Exit: every corpus API workflow re-exports byte for byte, key order included:
+`stringify(toApi(importApi(parse(x))))` equals `stringify(parse(x))`. The transpiler round-trip
+(§10) passes on the same corpus.
 
 **Phase 7: graph operations**
 - Everything in §12.
@@ -657,5 +716,9 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | oxfmt 0.73.0 as a drop-in for Biome 2.5.15 | Identical output on every TypeScript file, including import order with `newlinesBetween: false`. Respects `.gitignore` (`dist`, corpus). Differences: it sorts `package.json` keys and reflows one mock JSON line; it pads Markdown tables, so Markdown is excluded |
 | Type encoding on the real dump: covariant sockets, widget+link, combo errors (with "did you mean"), excess and missing inputs, Autogrow, nested DynamicCombo, DynamicGroup, MatchType with `NoInfer` | Pass, every negative test fires |
 | Type-checking cost at 1,758 / 3,516 / 7,032 nodes | 0.11 s / 0.13 s / 0.26 s |
-| Dump facts used in this plan | 851 dotted ordinary input names; 193 DynamicCombo inputs (189 nested dynamics; 111/608 options have no inputs; a `codec` vs `format.codec` collision); 57 Autogrow (19 names form); 17 MatchType; 102 INT with max > 2⁵³; 328 class names that aren't identifiers; 72 list outputs; 2 nodes with duplicate output names |
+| Dump facts used in this plan | 851 dotted ordinary input names; 193 DynamicCombo inputs (189 nested dynamics; 111/608 options have no inputs; a `codec` vs `format.codec` collision); 57 Autogrow (19 names form); 17 MatchType; 102 INT with max > 2⁵³; 19 FLOAT bounds and 3 `INT:seed` inputs with integer literals beyond 2⁵³; 328 class names that aren't identifiers; 72 list outputs; 2 nodes with duplicate output names |
+| Lossless parse of the 3.4 MB dump (reviver with source text, Bun 1.4.3) | 26 ms, vs 4 ms for plain `JSON.parse`. 134 integer literals beyond 2⁵³, all of them `min`/`max`: 102 INT max, 7 INT min, 10 FLOAT max, 9 FLOAT min, 3 `INT:seed` max, 3 inside DynamicCombo options. None in exponent notation |
+| Hand-written synchronous SHA-256 (D15) | 62 ms on the 3.4 MB dump in Bun 1.4.3; matches `Bun.CryptoHasher` on the dump and on empty input |
+| Frontend API key order (§7.4) | All 13 nodes of a corpus API export: `inputs`, `class_type`, `_meta`; widget inputs in `input_order` (linked ones included), then socket-only inputs |
+| Separating corpus tests (§13) | `bun test --path-ignore-patterns='**/*.corpus.test.ts'` skips them; a positional filter selects only them (Bun 1.4.3) |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

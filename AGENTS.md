@@ -12,8 +12,9 @@ time, and runtime validation catches the rest. Output is API-format JSON.
 **Out of scope:** executing workflows (queueing, websockets, progress), running nodes in-process,
 GUIs, MCP servers. Don't add these.
 
-**Status:** Phase 0 (foundation) is done. Next is Phase 1: the `core` schema model, `accepts()`,
-and the `/object_info` normalizer. Phases and exit criteria are in `docs/plan.md` §14.
+**Status:** Phase 0 (foundation) is done. Next is Phase 1: lossless `parse`/`stringify`, the
+diagnostic model, the `core` schema model, `accepts()` and the `/object_info` normalizer. Phases
+and exit criteria are in `docs/plan.md` §14.
 
 ## Where things are
 
@@ -36,7 +37,8 @@ These come from the project owner. Follow them unless told otherwise.
   ADR. When a decision changes, update the plan and the ADR in the same change.
 - **Modern tooling:** Bun 1.4 and TypeScript 7 (fall back to TS 6 only if TS 7 truly blocks
   something). oxfmt formats, oxlint lints. Prefer the newest stable tools, verified to work.
-- **No CI for now.** Don't add or propose CI pipelines. `bun run check` is the gate.
+- **No CI for now.** Don't add or propose CI pipelines. `bun run check` is the gate; a phase
+  also needs `bun run test:corpus` to pass before it closes.
 - **Publishing is not a priority.** Packages live under the owner's npm org `@tscomfy`.
 - **Never commit real ComfyUI data.** `/object_info` dumps and workflows from a real server go in
   `internal/fixtures/corpus/` (gitignored). Committed tests use hand-written mocks. When a corpus
@@ -60,8 +62,8 @@ Enforced by package boundaries, lint, or review:
   the normalized `Schema`.
 - Public API: free functions over immutable data, named exports only, explicit types (enforced by
   `isolatedDeclarations`), JSDoc on every public symbol.
-- Errors are data: diagnostics with a stable code, severity, path and message. Throw only for
-  programmer misuse.
+- Errors are data: one `Diagnostic` model (plan §5.4) with a stable code, a fixed severity, a
+  segment-array path and a message. Throw only for programmer misuse.
 - Pure and deterministic: the same input gives byte-identical output.
 - Soundness ordering: what compiles passes runtime validation; what passes validation is accepted
   by the ComfyUI backend. Types may be stricter than the backend, never looser.
@@ -71,7 +73,8 @@ Enforced by package boundaries, lint, or review:
 ```sh
 bun install
 bun run check     # tsc -b, lint, format check, tests: run before declaring work done
-bun run test      # tests against source, no build needed
+bun run test      # tests against source, no build needed (skips corpus tests)
+bun run test:corpus  # corpus tests against your local real data
 bun run format    # oxfmt: format and sort imports
 bun run clean     # tsc never deletes stale outputs; clean when files are removed or renamed
 ```
@@ -82,6 +85,8 @@ bun run clean     # tsc never deletes stale outputs; clean when files are remove
 - Package layout: `src/` (built), `test/` (not built, own `tsconfig.json`, Bun types).
 - Unit tests: `test/*.test.ts` with `bun:test`. Type tests: `test/*.test-d.ts` using
   `expect-type` and `@ts-expect-error -- reason`, checked by `tsc -b` (Bun ignores them).
+  Corpus tests: `test/*.corpus.test.ts`, run only by `test:corpus`; an empty section reports a
+  skipped test.
 - Tests load data only through `@tscomfy/fixtures` (`readMockObjectInfo`, `listCorpus`), never by
   relative path. Loaders return raw text because parsing is under test.
 - Adding a package: add it to the root `tsconfig.json` references (both the package and its
@@ -96,7 +101,10 @@ bun run clean     # tsc never deletes stale outputs; clean when files are remove
 - `tsBuildInfoFile` lives in `dist/`, so deleting `dist` forces a rebuild.
 - oxlint needs `.gitignore` present, or it walks `node_modules` symlinks.
 - `JSON.parse` rounds integers beyond 2^53. Seeds reach 2^64−1; use source-text access when
-  parsing and our own serializer when writing (plan D10).
+  parsing and our own serializer when writing (plan D10). APIs that read outside JSON take raw
+  text, never a parsed value.
+- Sort strings by code unit (`toSorted()` with no comparator), never with `localeCompare`: its
+  order depends on the process locale (Node under `LANG=sv_SE` puts `z` before `ä`; Bun doesn't).
 - 851 real inputs have dots in their names: never split input keys on `.` without the schema.
 - In API JSON a bare list is a link; list-valued widget values are sent as `{"__value__": [...]}`.
 

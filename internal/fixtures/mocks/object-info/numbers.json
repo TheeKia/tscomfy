@@ -22,7 +22,12 @@
         ],
         "no_default_float": ["FLOAT", {}],
         "list_default": ["FLOAT", { "default": [1.0], "forceInput": false }],
-        "int_list_default": ["INT", { "default": [1, 2, 3] }]
+        "int_list_default": ["INT", { "default": [1, 2, 3] }],
+        "huge_float": [
+          "FLOAT",
+          { "default": 0, "min": -18446744073709551615, "max": 18446744073709551615, "step": 0.01 }
+        ],
+        "typed_seed": ["INT:seed", { "default": 0, "min": 0, "max": 18446744073709551615 }]
       },
       "optional": {
         "text": ["STRING", { "multiline": true, "dynamicPrompts": true, "default": "" }],
@@ -42,7 +47,9 @@
         "rounded",
         "no_default_float",
         "list_default",
-        "int_list_default"
+        "int_list_default",
+        "huge_float",
+        "typed_seed"
       ],
       "optional": ["text", "single_line", "toggle", "no_default_bool", "no_default_string"]
     },
@@ -52,7 +59,7 @@
     "output_name": ["INT", "FLOAT"],
     "name": "MockNumbers",
     "display_name": "Mock Numbers",
-    "description": "Integer bounds beyond 2^53 (exact in this file), widgets without defaults, list-valued defaults, and every widget option variant.",
+    "description": "Integer bounds beyond 2^53 (exact in this file), including on FLOAT and on a TYPE:name widget type, widgets without defaults, list-valued defaults, and every widget option variant.",
     "python_module": "custom_nodes.mock-pack",
     "category": "mock/widgets",
     "output_node": false,

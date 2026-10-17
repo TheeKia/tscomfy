@@ -34,6 +34,7 @@ bun run check    # build, lint, format check, tests: the single gate
 |---|---|
 | `bun run build` | Type-check and emit all packages (`tsc -b`) |
 | `bun run test` | Run tests against source (no build needed) |
+| `bun run test:corpus` | Run the corpus tests against your local real data (`internal/fixtures/corpus/`) |
 | `bun run lint` | oxlint with type-aware rules |
 | `bun run format` | Format and sort imports (oxfmt) |
 | `bun run clean` | Remove build output |

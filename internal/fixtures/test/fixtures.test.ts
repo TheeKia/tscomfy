@@ -12,7 +12,7 @@ describe("mock object_info", () => {
     const onDisk = (await readdir(MOCK_OBJECT_INFO_DIR))
       .filter((name) => name.endsWith(".json"))
       .map((name) => name.slice(0, -".json".length))
-      .toSorted((a, b) => a.localeCompare(b));
+      .toSorted();
     expect(onDisk).toEqual([...MOCK_OBJECT_INFO_NAMES]);
   });
 
@@ -28,7 +28,7 @@ describe("corpus", () => {
 
   test.each(sections)("%s lists only JSON files, sorted", async (section) => {
     const names = (await listCorpus(section)).map((file) => file.name);
-    expect(names).toEqual(names.toSorted((a, b) => a.localeCompare(b)));
+    expect(names).toEqual(names.toSorted());
     expect(names.every((name) => name.endsWith(".json"))).toBeTrue();
   });
 

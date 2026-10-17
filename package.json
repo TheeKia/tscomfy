@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf packages/*/dist",
-    "test": "bun test --conditions=@tscomfy/source packages internal",
+    "test": "bun test --conditions=@tscomfy/source --path-ignore-patterns='**/*.corpus.test.ts' packages internal",
+    "test:corpus": "bun test --conditions=@tscomfy/source .corpus.test",
     "lint": "oxlint --type-aware",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

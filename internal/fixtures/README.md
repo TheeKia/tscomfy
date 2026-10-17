@@ -39,7 +39,7 @@ Node class names start with `Mock` unless the name itself is the thing being tes
 | `outputs.json` | No outputs, list outputs, node-level `is_input_list`, duplicate output names, names clashing with array/handle members, numeric-like and spaced names |
 | `names.json` | Class names with spaces, parentheses, dots, emoji; ordinary input names containing dots (must never be split); input names that are not identifiers |
 | `hidden.json` | Hidden inputs in every observed shape: server-filled names, tuple specs, `*`, empty string, plain widget type, object |
-| `numbers.json` | Integer bounds beyond 2⁵³ (exact in the file), widgets with no default, list-valued defaults, every widget option variant |
+| `numbers.json` | Integer bounds beyond 2⁵³ (exact in the file), also as FLOAT bounds and on an `INT:seed` type, widgets with no default, list-valued defaults, every widget option variant |
 | `malformed.json` | Inputs that must produce diagnostics instead of crashes: null, string, numeric type, empty tuple, bad options, V3 types missing their payload, unknown V3 type, non-record section, mismatched output arrays, dangling `input_order`, missing fields, `name` disagreeing with its key |
 | `legacy-and-flags.json` | Older servers: no `input_order`, `output_name` or `output_is_list`; empty `input`; `deprecated`, `experimental`, `dev_only`, `advanced`, `essentials_category` |
 
