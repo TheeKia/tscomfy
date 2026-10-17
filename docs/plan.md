@@ -60,7 +60,7 @@ differences in §7.4.
 | D10 | **Lossless integers.** INT accepts `number \| bigint`. Our own small deterministic serializer writes bigint as a JSON number. The parser reads big ints via `JSON.parse` source-text access. The normalizer and the importer take **raw text**, never an already-parsed value | Seeds go up to 2⁶⁴−1, and 134 bounds in the real dump are integer literals beyond 2⁵³ (102 of them INT `max`). A parsed value has already lost them. **[verified]** in Bun 1.4.3 and Node 26. |
 | D11 | **oxfmt formats, oxlint lints** (`--type-aware` via tsgolint, built on TS 7) | One toolchain. oxlint's type-aware rules are as accurate as tsc and catch cross-package cases Biome's linter misses. oxfmt is 0.x, so it is pinned exactly. **[verified]** |
 | D12 | **No CI for now.** `bun run check` is the single local gate | Your request. Adding CI later means running the same script. |
-| D13 | **The generated runtime schema is a `.ts` module holding the schema as one string literal**, loaded by `defineSchema`, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check; a string literal is nearly free, needs no copy step and no `resolveJsonModule`. `defineSchema` parses it with the lossless `parse`, because a plain `JSON.parse` would round the 134 big bounds. **[verified]** |
+| D13 | **The generated runtime schema is a `.ts` module holding the schema as one string literal**, loaded by `defineSchema`, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check; a string literal is nearly free, needs no copy step and no `resolveJsonModule`. `defineSchema` parses it with the lossless `parse`, because a plain `JSON.parse` would round the 134 big bounds; on a runtime without source-text access (such as Node 20) it throws a clear error rather than load imprecise bounds. **[verified]** |
 | D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
 | D15 | **Schema identity.** `Schema.nodes` is built in code-unit order of class type (JavaScript still lists integer-like keys first). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
 | D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its core widget registry. When `type` is primitive (INT/FLOAT/STRING/BOOLEAN/COMBO) the kind follows `type`, because the backend coerces and validates by it, and `widgetType` is recorded. Otherwise a primitive widget gives its kind, another core widget (COLOR, BOUNDING_BOX, CURVE, …) gives a `value` kind holding JSON, and anything else, `TYPE:name` types included, is a socket. The socket type is always `type` | This is the only rule that matches which inputs get values in exported prompts and stays sound. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
@@ -179,9 +179,18 @@ type OutputDef = {
 - An Autogrow answers for its slots (the template's type). DynamicGroup inputs and unknown specs
   answer `false`: stricter than the backend, never looser.
 
-The generated types are a **subset** of this rule: union outputs must fit inside the input's set.
-That is stricter, and the real dump has no union outputs at all. A table-driven suite runs the
-same cases against both the runtime rule and the type rule.
+The generated types are a **subset** of this rule, and that is tested pair by pair: codegen's
+fixture script evaluates `accepts()` on every input × output pair of the `accepts` mock (108 pairs,
+`test/generated/accepts-matrix.ts`), and `accepts-table.test-d.ts` checks that no pair compiles that
+`accepts()` rejects, and that the pairs where the types are stricter are exactly a documented list
+(27 today):
+- Union outputs must fit inside the input's set, not merely overlap it.
+- A `*` inside a comma list (`*,IMAGE`, or a padded `" *"`) is typed by the other members, on
+  inputs and outputs alike: the backend lets such types into string-typed inputs only, never into
+  a legacy combo, and never lets an option list in.
+- Option-list outputs are `Out<OptionList>`, a socket name of their own, which only inputs typed
+  exactly `COMBO` or `*` take. A legacy combo takes `*` only: an identical option list can't be
+  told apart by type.
 
 `isList` outputs do **not** affect compatibility: ComfyUI maps a list output over a non-list input.
 It is documented in JSDoc only.
@@ -262,9 +271,10 @@ type In<T extends string> = Out<T | "*">;     // what a socket of type T accepts
 | Schema | TypeScript |
 |---|---|
 | socket `MODEL` | `In<"MODEL">` (an any-typed `Out<"*">` fits) |
-| socket `IMAGE,MASK` | `In<ImageTypes>`, with a shared alias `ImageTypes = "IMAGE" \| "MASK"`; a union containing `*` is `Out<string>` |
+| socket `IMAGE,MASK` | `In<ImageTypes>`, with a shared alias `ImageTypes = "IMAGE" \| "MASK"`; a `*` member is left out (`*,IMAGE` is `In<"IMAGE">`, §5.2) |
+| socket exactly `COMBO` | `In<"COMBO"> \| Out<OptionList>` |
 | socket `*` | `Out<string>` |
-| INT | `number \| bigint \| In<"INT">` (a widget also takes a link) |
+| INT | `number \| bigint \| In<"INT">` (a widget also takes a link). Never a list: the backend's `int()` rejects one, and list defaults are dropped |
 | FLOAT / STRING / BOOLEAN | `number` / `string` / `boolean`, each `\| In<…>` |
 | `forceInput` widget | link only |
 | combo | literal union alias, plus a link: `\| In<type>` for the `COMBO` form, `\| Out<"*">` for a legacy `[[…]]` combo (its links must match its whole list, §5.2). Identical option lists are **deduplicated into named aliases** (`SamplerName`, `CkptName`) |
@@ -273,10 +283,11 @@ type In<T extends string> = Out<T | "*">;     // what a socket of type T accepts
 | empty combo (36–55 in the dump) | `string`, plus a codegen diagnostic |
 | value widget (COLOR, BOUNDING_BOX, CURVE, …; D16) | `JsonValue`, `\| In<type>` unless socketless |
 | input with an explicit schema default | optional (`?:`); the exporter fills it in |
-| Autogrow, prefix form | `readonly T[]`, or `readonly [T, …, ...T[]]` with the first `min` slots required |
+| Autogrow, prefix form | `readonly T[]`, or `readonly [T, …, ...T[]]` with the first `min` slots required (at most the slot count). The backend requires them even when the Autogrow is optional, so the minimum decides. MatchType slots: the first infers the template, the rest use `Match<NoInfer<T>>` |
 | Autogrow, names form | an interface `{ readonly a: T; readonly b?: T }` (first `min` names required) |
 | DynamicCombo | a union of option interfaces `{ option: "mp4"; inputs: {…} }`, plus the bare `"flac"` key for each option whose inputs may all be left out. Recursive (§6.4) |
-| DynamicGroup | a row interface, repeated like Autogrow slots (first `min` rows required) |
+| DynamicGroup | a row interface, repeated like Autogrow slots (first `min` rows required, even when the group is optional) |
+| output | `Out<"T">`; a union `Out<Alias>`; exactly `*` `Out<"*">`; an option list `Out<OptionList>`; a comma list with `*` its other members, a padded `*` `Out<string>` (§5.2) |
 | node without inputs | `{ readonly [key: string]: never }`, so any key is an error (`{}` would accept anything) |
 | MatchType | generic node function (§6.3) |
 | unknown spec | `unknown`, plus a codegen diagnostic |
@@ -321,6 +332,10 @@ Results **[verified]**:
 - **Mismatched branches fail at the call.**
 - An any-typed branch passes.
 - When `T` can't be inferred it is `"*"` and connects anywhere.
+
+Limits, both sound because the backend skips type checks for MatchType: if the inferring input is
+left out, the others fall back to the default and accept anything; and runtime validation (§8)
+checks template consistency in full.
 - An `IMAGE,MASK` template rejects `LATENT`, and the output keeps the narrowed type.
 
 ### 6.4 DynamicCombo shape (your question 4: decided with evidence)
@@ -405,7 +420,9 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
 ### 7.2 Defaults policy
 
 - **Fill explicit schema defaults** for every widget input, required or optional, recursively including
-  dynamic-combo branches. This matches the frontend, which sends every widget value.
+  dynamic-combo branches and DynamicGroup row fields (the backend injects none into rows, and the
+  types make row fields with a default optional). This matches the frontend, which sends every
+  widget value.
 - **Never invent implicit defaults.** The frontend falls back to `0`, `""`, `false` or the first combo
   option; we don't, so those inputs stay **required** in the types. Explicit beats a silently chosen first checkpoint.
 
@@ -499,7 +516,7 @@ The diagnostic model is §5.4.
   - `null` means unset: Python servers send `None` for `display_name` (223 V3 nodes),
     `output_is_list` entries, defaults and tooltips. No diagnostic.
   - A default the backend would reject (not one of the combo's options, outside `min`/`max`
-    after inward rounding, the wrong type) is dropped with `W_INVALID_INPUT_OPTION`, because the
+    after inward rounding, the wrong type, a list for INT or FLOAT) is dropped with `W_INVALID_INPUT_OPTION`, because the
     exporter fills defaults in (§7.2). A combo with no listed options (remote, upload, an empty
     folder) keeps its default: membership can't be checked offline.
   - A legacy combo option that isn't a string, number or boolean makes the input unknown, since
@@ -512,9 +529,15 @@ The diagnostic model is §5.4.
     inward by one double, which covers any rounding.
   - Nodes are sorted by class type (D15).
 - **emitTypes** (codegen): builds documents for a small Wadler-style printer (`codegen/src/doc.ts`)
-  with Prettier's group/indent/line/ifBreak semantics, at 100 columns. Output is deterministic and
-  exactly what oxfmt produces: the committed mock fixtures pass `format:check`, and the corpus test
-  feeds the real dump's output through oxfmt and expects no change. To keep the layout rules few,
+  with Prettier's group/indent/line/ifBreak/indentIfBreak semantics, at 100 columns measured as
+  display width (East Asian wide characters and emoji count two). It follows oxfmt's choices:
+  quotes that need fewer escapes, unquoted Unicode identifier keys, assignments that break after
+  `=` only when the right side's head doesn't fit, breakable type arguments and `extends` lists.
+  Output is deterministic and exactly what oxfmt produces: the committed mock fixtures pass
+  `format:check`, `format.test.ts` runs crafted hostile and long names through oxfmt and `tsc`, and
+  the corpus test feeds the real dump's output through oxfmt and expects no change.
+  Server text in comments is split at every line terminator and has `*/` escaped, and header
+  lines (ComfyUI version, command) are flattened to one line, so no name can inject code. To keep the layout rules few,
   every type expression is a union of short atoms; anything bigger gets a named declaration
   (§6.2). Generated files are excluded from linting. Identifiers:
   - derived from input names, sanitized
@@ -644,7 +667,8 @@ path, and a second config with Bun types would let library code use Bun APIs und
   normalize, generate, compile and round-trip checks on whatever is in `internal/fixtures/corpus/`.
   `bun run test` and `check` skip them (`--path-ignore-patterns`), so the gate never depends on
   local data. An empty section reports one skipped test. Every phase exit requires them to pass.
-- **`accepts` table**: shared by the runtime and type-level suites.
+- **`accepts` table**: the runtime rows in `core/test/accepts-cases.ts`, and the full input × output
+  matrix of the `accepts` mock checked against the generated types (§5.2).
 
 **Lint rules** (oxlint):
 - `no-explicit-any`, `no-non-null-assertion`, `import/no-default-export`, `consistent-type-imports`
@@ -794,6 +818,8 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Normalizing the corpus dump | 1,758 of 1,758 nodes, 55–66 ms in Bun 1.4.3. 13 warnings, all real server inconsistencies: 7 combo defaults that aren't options, 1 INT default below its `min`, 3 `output_*` arrays longer than `output`, 2 `name` mismatches. Also found and distilled into mocks: `null` for unset fields, boolean combo options (3), value widgets, `widgetType` |
 | Generated code (§6, §9) | The real dump: 3.0 MB `nodes.ts` and 4.1 MB `index.ts` generated in 0.19 s; type-checks in 0.11 s / 91 MB; oxfmt leaves both unchanged. The first printer version took 99 s (it trimmed the whole output at every newline) |
 | Tuple-extending result interfaces (§6.2) | `interface X$Out extends X$Outputs, NodeHandle` keeps destructuring types and `length`; neither it nor an intersection makes an out-of-range index an error under TS 7.0.2, and the interface lays out more simply |
+| Phase 2 review | An independent review found 10 issues, each proven with a failing snippet or input, among them: option-list and loose-`*` outputs fitting inputs `accepts()` rejects, optional Autogrow/DynamicGroup minimums the backend still enforces, INT/FLOAT list defaults, comment injection through names, and eight printer layouts that differed from oxfmt. All fixed, with mocks and tests; the type-level `accepts` matrix now proves soundness for all 108 pairs |
+| oxfmt layout rules (§9) | Probed on crafted code: `extends` breaks to its own line with one parent per line; type arguments break one per line without a trailing comma; assignments break after `=` when the head of the right side doesn't fit; strings use single quotes only when that needs fewer escapes; Unicode identifier keys are unquoted; CJK and fullwidth characters count as two columns |
 | Input order (§9) | Frontend 1.55.17 `getOrderedInputSpecs` (`nodeDefOrderingUtil.ts`): listed required, listed optional, then remaining inputs in definition order; no `input_order`, definition order |
 | `stringify`/`parse` round trip (§7.5) | `JSON.stringify(2 ** 64 - 2048)` is `"18446744073709550000"`, an integer literal that `parse` reads as a different bigint; `toExponential()` (`1.844674407370955e+19`) round-trips exactly. Found by `defineSchema` on the numbers mock |
 | Non-finite numbers (§7.5) | `/object_info` is served by aiohttp `web.json_response`, whose default `json.dumps` writes `Infinity`/`NaN` (checked with the server's Python). None in the corpus dump today |

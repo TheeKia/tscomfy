@@ -29,11 +29,13 @@ Node class names start with `Mock` unless the name itself is the thing being tes
 
 | File | Covers |
 |---|---|
+| `accepts.json` | One input per link rule and one output per output kind, for the `accepts` table run against both `accepts()` and the generated types |
+| `empty.json` | An empty response: no nodes |
 | `basic-pipeline.json` | A txt2img pipeline with realistic fields: legacy combos, widgets with defaults, seed max 2⁶⁴−1, multi-output loader, output node, hidden inputs |
 | `combos.json` | Legacy `[[…]]` and v2 `["COMBO",{options}]` forms, numeric, mixed and boolean options, a default that is not an option, empty lists, upload and remote combos, multiselect with a list default, option-list outputs, a custom widget-like type that is not a COMBO |
 | `dynamic-combo.json` | `COMFY_DYNAMICCOMBO_V3`: options without inputs, required and optional option inputs, three levels of nesting (`format.codec.encoding`), a top-level name colliding with a nested one, option keys with spaces and brackets, Autogrow and MatchType inside options, an optional dynamic combo |
-| `autogrow.json` | `COMFY_AUTOGROW_V3`: prefix form (min 1 and min 0), names form with a comma-union template, an optional Autogrow whose template sits in `optional` |
-| `dynamic-group.json` | `COMFY_DYNAMICGROUP_V3`: required group with mixed widget fields, optional group with required and optional fields |
+| `autogrow.json` | `COMFY_AUTOGROW_V3`: prefix form (min 1 and min 0), names form with a comma-union template, an optional Autogrow whose template sits in `optional`, an optional Autogrow with a required template, MatchType slots |
+| `dynamic-group.json` | `COMFY_DYNAMICGROUP_V3`: required group with mixed widget fields, optional group with required and optional fields, optional group with min 1 |
 | `match-type.json` | `COMFY_MATCHTYPE_V3`: any-typed lazy switch, a template restricted to `IMAGE,MASK`, two templates with `output_matchtypes` containing nulls |
 | `sockets.json` | Socket-only inputs: custom, `*`, comma union, `forceInput` widgets, `lazy`, `rawLink`, `socketless`, `defaultInput`; any-typed outputs |
 | `outputs.json` | No outputs, list outputs, node-level `is_input_list`, `output_name`/`output_tooltips` longer than `output`, duplicate output names, names clashing with array/handle members, numeric-like and spaced names |

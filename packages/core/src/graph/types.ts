@@ -29,6 +29,13 @@ export type In<T extends string> = Out<T | "*">;
  */
 export type Match<T extends string> = "*" extends T ? string : T | "*";
 
+/**
+ * The socket type tscomfy gives an output that is a list of combo options (§5.2). The backend
+ * connects one only into an input typed exactly `COMBO` or `*`, so it needs a name of its own:
+ * a plain `COMBO` output also fits comma unions that contain `COMBO`.
+ */
+export type OptionList = "COMBO (option list)";
+
 /** What a node without outputs returns. */
 export interface NodeHandle {
   readonly id: NodeId;

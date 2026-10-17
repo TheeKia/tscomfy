@@ -1,14 +1,20 @@
 // A small document printer in the style of Wadler's "prettier printer", with Prettier's
-// group/indent/line/ifBreak semantics. Generated code is built as documents so its line breaks
-// match what oxfmt would produce for the constructs codegen emits (tested by formatting the
-// generated fixtures).
+// group/indent/line/ifBreak/indentIfBreak semantics. Generated code is built as documents so its
+// line breaks match what oxfmt would produce for the constructs codegen emits (tested by
+// formatting the generated fixtures and the corpus output).
 
 /** A printable document. Arrays concatenate. */
-export type Doc = string | readonly Doc[] | Group | Indent | Line | IfBreak;
+export type Doc = string | readonly Doc[] | Group | Indent | Line | IfBreak | IndentIfBreak;
+
+/** Names a group so other documents can follow its decision. */
+export interface GroupId {
+  readonly description: string;
+}
 
 interface Group {
   readonly kind: "group";
   readonly contents: Doc;
+  readonly id: GroupId | undefined;
 }
 
 interface Indent {
@@ -28,14 +34,33 @@ interface IfBreak {
   readonly flat: Doc;
 }
 
-/** Prints on one line if the whole group fits, else breaks every line directly inside it. */
-export function group(contents: Doc): Doc {
-  return { kind: "group", contents };
+interface IndentIfBreak {
+  readonly kind: "indentIfBreak";
+  readonly contents: Doc;
+  readonly group: GroupId;
+}
+
+/**
+ * Prints on one line if the whole group fits, else breaks every line directly inside it. With
+ * an `id`, {@link indentIfBreak} can follow the decision.
+ */
+export function group(contents: Doc, id?: GroupId): Doc {
+  return { kind: "group", contents, id };
+}
+
+/** A fresh group id. */
+export function groupId(description: string): GroupId {
+  return { description };
 }
 
 /** Indents the lines inside by one level. */
 export function indent(contents: Doc): Doc {
   return { kind: "indent", contents };
+}
+
+/** Indents `contents` only if the group `id` broke (Prettier's assignment layout). */
+export function indentIfBreak(contents: Doc, id: GroupId): Doc {
+  return { kind: "indentIfBreak", contents, group: id };
 }
 
 /** A space, or a newline when its group breaks. */
@@ -55,6 +80,15 @@ export function join(separator: Doc, docs: readonly Doc[]): Doc {
   return docs.flatMap((doc, index) => (index === 0 ? [doc] : [separator, doc]));
 }
 
+/**
+ * `left = right` as Prettier lays out assignments: `right` stays on the line while its head
+ * fits, else it moves to the next line, indented.
+ */
+export function assignment(left: Doc, right: Doc): Doc {
+  const id = groupId("assignment");
+  return group([left, " =", group(indent(line), id), indentIfBreak(right, id)]);
+}
+
 type Mode = "flat" | "break";
 
 interface Command {
@@ -67,13 +101,14 @@ interface Command {
 export function print(doc: Doc, width: number): string {
   // Chunks, not one growing string: trimming trailing spaces must stay O(1) per line.
   const output: string[] = [];
+  const modes = new Map<GroupId, Mode>();
   let column = 0;
   const stack: Command[] = [{ indent: 0, mode: "break", doc }];
   for (let command = stack.pop(); command !== undefined; command = stack.pop()) {
     const { indent: level, mode, doc: current } = command;
     if (typeof current === "string") {
       output.push(current);
-      column += current.length;
+      column += textWidth(current);
     } else if (isDocArray(current)) {
       for (let index = current.length - 1; index >= 0; index--) {
         const part = current[index];
@@ -86,11 +121,20 @@ export function print(doc: Doc, width: number): string {
             mode === "flat" ||
             (!containsHardline(current) &&
               fits({ indent: level, mode: "flat", doc: current.contents }, stack, width - column));
-          stack.push({ indent: level, mode: flat ? "flat" : "break", doc: current.contents });
+          const chosen = flat ? "flat" : "break";
+          if (current.id !== undefined) modes.set(current.id, chosen);
+          stack.push({ indent: level, mode: chosen, doc: current.contents });
           break;
         }
         case "indent":
           stack.push({ indent: level + 1, mode, doc: current.contents });
+          break;
+        case "indentIfBreak":
+          stack.push({
+            indent: modes.get(current.group) === "break" ? level + 1 : level,
+            mode,
+            doc: current.contents,
+          });
           break;
         case "ifBreak":
           stack.push({
@@ -115,6 +159,94 @@ export function print(doc: Doc, width: number): string {
     }
   }
   return output.join("");
+}
+
+/**
+ * Columns a string takes in a terminal, as oxfmt measures them: East Asian wide and fullwidth
+ * characters and emoji take two, combining marks and format characters none.
+ */
+export function textWidth(text: string): number {
+  // Pure ASCII is the overwhelmingly common case.
+  if (/^[\x20-\x7e]*$/.test(text)) return text.length;
+  let width = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if (ZERO_WIDTH.test(char)) continue;
+    width += isWide(code) ? 2 : 1;
+  }
+  return width;
+}
+
+const ZERO_WIDTH = /^[\p{Mn}\p{Me}\p{Cf}]$/u;
+
+/** East Asian Wide and Fullwidth ranges (Unicode 15), and emoji presentation blocks. */
+const WIDE_RANGES: readonly (readonly [number, number])[] = [
+  [0x1100, 0x115f],
+  [0x231a, 0x231b],
+  [0x2329, 0x232a],
+  [0x23e9, 0x23ec],
+  [0x23f0, 0x23f0],
+  [0x23f3, 0x23f3],
+  [0x25fd, 0x25fe],
+  [0x2614, 0x2615],
+  [0x2648, 0x2653],
+  [0x267f, 0x267f],
+  [0x2693, 0x2693],
+  [0x26a1, 0x26a1],
+  [0x26aa, 0x26ab],
+  [0x26bd, 0x26be],
+  [0x26c4, 0x26c5],
+  [0x26ce, 0x26ce],
+  [0x26d4, 0x26d4],
+  [0x26ea, 0x26ea],
+  [0x26f2, 0x26f3],
+  [0x26f5, 0x26f5],
+  [0x26fa, 0x26fa],
+  [0x26fd, 0x26fd],
+  [0x2705, 0x2705],
+  [0x270a, 0x270b],
+  [0x2728, 0x2728],
+  [0x274c, 0x274c],
+  [0x274e, 0x274e],
+  [0x2753, 0x2755],
+  [0x2757, 0x2757],
+  [0x2795, 0x2797],
+  [0x27b0, 0x27b0],
+  [0x27bf, 0x27bf],
+  [0x2b1b, 0x2b1c],
+  [0x2b50, 0x2b50],
+  [0x2b55, 0x2b55],
+  [0x2e80, 0x303e],
+  [0x3041, 0x33ff],
+  [0x3400, 0x4dbf],
+  [0x4e00, 0x9fff],
+  [0xa000, 0xa4cf],
+  [0xa960, 0xa97f],
+  [0xac00, 0xd7a3],
+  [0xf900, 0xfaff],
+  [0xfe10, 0xfe19],
+  [0xfe30, 0xfe6f],
+  [0xff00, 0xff60],
+  [0xffe0, 0xffe6],
+  [0x16fe0, 0x16fe4],
+  [0x17000, 0x18aff],
+  [0x1b000, 0x1b2ff],
+  [0x1f004, 0x1f004],
+  [0x1f0cf, 0x1f0cf],
+  [0x1f18e, 0x1f18e],
+  [0x1f191, 0x1f19a],
+  [0x1f200, 0x1f251],
+  [0x1f300, 0x1f64f],
+  [0x1f680, 0x1f6ff],
+  [0x1f7e0, 0x1f7eb],
+  [0x1f90c, 0x1f9ff],
+  [0x1fa70, 0x1faff],
+  [0x20000, 0x2fffd],
+  [0x30000, 0x3fffd],
+];
+
+function isWide(code: number): boolean {
+  return WIDE_RANGES.some(([from, to]) => code >= from && code <= to);
 }
 
 /** Drops spaces at the end of the output; a newline before them is a blank line to keep. */
@@ -158,7 +290,7 @@ function fits(next: Command, rest: readonly Command[], width: number): boolean {
     }
     const { mode, doc } = command;
     if (typeof doc === "string") {
-      remaining -= doc.length;
+      remaining -= textWidth(doc);
     } else if (isDocArray(doc)) {
       for (let index = doc.length - 1; index >= 0; index--) {
         const part = doc[index];
@@ -168,6 +300,7 @@ function fits(next: Command, rest: readonly Command[], width: number): boolean {
       switch (doc.kind) {
         case "group":
         case "indent":
+        case "indentIfBreak":
           pending.push({ indent: command.indent, mode, doc: doc.contents });
           break;
         case "ifBreak":
@@ -197,6 +330,7 @@ function hasHardline(doc: Doc): boolean {
       return hasHardline(doc.broken) || hasHardline(doc.flat);
     case "group":
     case "indent":
+    case "indentIfBreak":
       return hasHardline(doc.contents);
   }
 }

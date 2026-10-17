@@ -228,7 +228,7 @@ describe("widgets", () => {
     expect(input.min).toBe(-18446744073709549568);
   });
 
-  test("drops defaults outside the bounds, also after rounding", async () => {
+  test("drops defaults of the wrong type or outside the bounds, also after rounding", async () => {
     const { schema, diagnostics } = await normalizeMock("numbers");
     const node = schema.nodes["MockNumbers"]!;
     expect(inputOf(node, "below_min_default")).not.toHaveProperty("default");
@@ -236,6 +236,8 @@ describe("widgets", () => {
     expect(
       diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path.slice(3).join("/")]),
     ).toEqual([
+      ["W_INVALID_INPUT_OPTION", "list_default/1/default"],
+      ["W_INVALID_INPUT_OPTION", "int_list_default/1/default"],
       ["W_INVALID_INPUT_OPTION", "below_min_default/1/default"],
       ["W_INVALID_INPUT_OPTION", "rounded_up_default/1/default"],
     ]);
@@ -246,10 +248,10 @@ describe("widgets", () => {
     expect(input).toMatchObject({ min: -Number.MAX_VALUE, max: Number.MAX_VALUE, default: 0 });
   });
 
-  test("keeps list-valued defaults", async () => {
+  test("drops list defaults of INT and FLOAT, which the backend's int()/float() reject", async () => {
     const node = await nodeOf("numbers", "MockNumbers");
-    expect(inputOf(node, "list_default")).toMatchObject({ kind: "float", default: [1] });
-    expect(inputOf(node, "int_list_default")).toMatchObject({ kind: "int", default: [1, 2, 3] });
+    expect(inputOf(node, "list_default")).not.toHaveProperty("default");
+    expect(inputOf(node, "int_list_default")).not.toHaveProperty("default");
   });
 
   test("reads string and boolean widgets", async () => {

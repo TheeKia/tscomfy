@@ -2,7 +2,7 @@
 // Schema sha256:35f89826c6eaa82856140042d8bbe153861499f67c73cfc1fe1d3f8b9a567d0e, ComfyUI 0.41.0.
 // Regenerate with: bun run generate:fixtures
 
-import type { In, NodeHandle, NodeOptions, Out } from "@tscomfy/core";
+import type { In, NodeHandle, NodeOptions, OptionList, Out } from "@tscomfy/core";
 
 /** Every node of the schema, by class type. Use through a typed schema's builder. */
 export interface Nodes {
@@ -155,13 +155,13 @@ export interface MockDynamicComboNested$In {
   readonly video: In<"VIDEO">;
   readonly format: MockDynamicComboNested$Format;
   /** Default: `"auto"`. */
-  readonly codec?: Codec | In<"COMBO">;
+  readonly codec?: Codec | In<"COMBO"> | Out<OptionList>;
 }
 
 /** Inputs of `MockDynamicComboOptional › format › mp3`. */
 export interface MockDynamicComboOptional$Format$Mp3$Inputs {
   /** Default: `"V0"`. */
-  readonly quality?: Quality | In<"COMBO">;
+  readonly quality?: Quality | In<"COMBO"> | Out<OptionList>;
 }
 
 /** Option "mp3" of `MockDynamicComboOptional › format`. */
@@ -186,7 +186,7 @@ export interface MockDynamicComboSimple$Mode$ScaleDimensions$Inputs {
   /** Default: `512`. Range: `0` to `16384`. */
   readonly height?: number | bigint | In<"INT">;
   /** Default: `"center"`. */
-  readonly crop?: Crop | In<"COMBO">;
+  readonly crop?: Crop | In<"COMBO"> | Out<OptionList>;
 }
 
 /** Option "scale dimensions" of `MockDynamicComboSimple › mode`. */

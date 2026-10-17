@@ -71,16 +71,13 @@ export function toFloat(value: JsonValue): number | undefined {
   return typeof number === "number" && Number.isFinite(number) ? number : undefined;
 }
 
-/** Whether a default (or every element of a list default) lies within the bounds. */
+/** Whether a default lies within the bounds. */
 export function withinBounds(
-  value: IntValue | number | readonly (IntValue | number)[],
+  value: IntValue,
   min: IntValue | undefined,
   max: IntValue | undefined,
 ): boolean {
-  const values = typeof value === "object" ? value : [value];
-  return values.every(
-    (item) => (min === undefined || item >= min) && (max === undefined || item <= max),
-  );
+  return (min === undefined || value >= min) && (max === undefined || value <= max);
 }
 
 function finite(value: number): number | undefined {

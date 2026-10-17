@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { defineSchema, normalizeObjectInfo, stringify } from "@tscomfy/core";
+import { defineSchema, normalizeObjectInfo, type Schema, stringify } from "@tscomfy/core";
 import { MOCK_OBJECT_INFO_NAMES, readMockObjectInfo } from "@tscomfy/fixtures";
+import { parseWith } from "../src/json/parse.ts";
+import { schemaFromParse } from "../src/schema/typed.ts";
 
 describe("defineSchema", () => {
   test.each(MOCK_OBJECT_INFO_NAMES)("restores the %s schema exactly", async (name) => {
@@ -9,7 +11,7 @@ describe("defineSchema", () => {
     });
     const loaded = defineSchema(stringify(schema));
     expect(stringify(loaded)).toBe(stringify(schema));
-    expect(loaded).toEqual(schema);
+    expect<Schema>(loaded).toEqual(schema);
   });
 
   test("keeps big integers, a null-prototype record and deep immutability", async () => {
@@ -30,5 +32,10 @@ describe("defineSchema", () => {
     '{"formatVersion":1,"nodes":[]}',
   ])("throws for text codegen didn't write: %s", (text) => {
     expect(() => defineSchema(text)).toThrow(TypeError);
+  });
+
+  test("explains a runtime without JSON.parse source-text access", async () => {
+    const text = stringify(normalizeObjectInfo(await readMockObjectInfo("numbers")).schema);
+    expect(() => schemaFromParse(parseWith(text, false))).toThrow(/source-text access/);
   });
 });

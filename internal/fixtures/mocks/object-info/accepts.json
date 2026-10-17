@@ -1,0 +1,102 @@
+{
+  "MockAcceptsInputs": {
+    "input": {
+      "required": {
+        "model": ["MODEL"],
+        "any": ["*"],
+        "padded_any": [" *"],
+        "image_or_mask": ["IMAGE,MASK"],
+        "star_union": ["*,IMAGE"],
+        "combo_union": ["COMBO,STRING"],
+        "combo_socket": [
+          "COMBO",
+          {
+            "forceInput": true
+          }
+        ],
+        "int_widget": ["INT", {}],
+        "legacy": [["a", "b"]],
+        "combo_form": [
+          "COMBO",
+          {
+            "options": ["a", "b"]
+          }
+        ],
+        "combo_on_pack_type": [
+          "MOCK_SIZE",
+          {
+            "widgetType": "COMBO",
+            "options": ["s", "m"]
+          }
+        ],
+        "match": [
+          "COMFY_MATCHTYPE_V3",
+          {
+            "template": {
+              "template_id": "t",
+              "allowed_types": "*"
+            }
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "any",
+        "padded_any",
+        "image_or_mask",
+        "star_union",
+        "combo_union",
+        "combo_socket",
+        "int_widget",
+        "legacy",
+        "combo_form",
+        "combo_on_pack_type",
+        "match"
+      ]
+    },
+    "is_input_list": false,
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "MockAcceptsInputs",
+    "display_name": "Mock Accepts Inputs",
+    "description": "One input per link rule of the accepts table.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/accepts",
+    "output_node": true,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockAcceptsOutputs": {
+    "input": {
+      "required": {}
+    },
+    "input_order": {
+      "required": []
+    },
+    "is_input_list": false,
+    "output": ["MODEL", "CLIP", "*", "IMAGE,MASK", "INT", "COMBO", ["a", "b"], " *", "IMAGE,*"],
+    "output_is_list": [false, false, false, false, false, false, false, false, false],
+    "output_name": [
+      "model",
+      "clip",
+      "any",
+      "image_or_mask",
+      "int",
+      "combo_type",
+      "options",
+      "padded_any",
+      "image_or_any"
+    ],
+    "name": "MockAcceptsOutputs",
+    "display_name": "Mock Accepts Outputs",
+    "description": "One output per output kind of the accepts table: named, any, union, COMBO, an option list, a padded star, a union with a star.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/accepts",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  }
+}

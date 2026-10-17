@@ -15,11 +15,13 @@ const root = join(import.meta.dir, "..");
 
 /** Names of the committed mock `/object_info` responses in `mocks/object-info/`. */
 export const MOCK_OBJECT_INFO_NAMES = [
+  "accepts",
   "autogrow",
   "basic-pipeline",
   "combos",
   "dynamic-combo",
   "dynamic-group",
+  "empty",
   "hidden",
   "legacy-and-flags",
   "malformed",

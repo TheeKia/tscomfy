@@ -65,8 +65,7 @@ export type SocketInput = InputBase & {
 /** An INT widget. */
 export type IntInput = WidgetBase & {
   readonly kind: "int";
-  /** A list default is sent as `{"__value__": [...]}`. */
-  readonly default?: IntValue | readonly IntValue[];
+  readonly default?: IntValue;
   readonly min?: IntValue;
   readonly max?: IntValue;
   readonly step?: number;
@@ -75,7 +74,7 @@ export type IntInput = WidgetBase & {
 /** A FLOAT widget. Bounds the server wrote beyond 2^53 are rounded inward (docs/plan.md §9). */
 export type FloatInput = WidgetBase & {
   readonly kind: "float";
-  readonly default?: number | readonly number[];
+  readonly default?: number;
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;

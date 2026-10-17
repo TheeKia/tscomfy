@@ -3,7 +3,12 @@ import { join } from "node:path";
 import { CODEGEN_VERSION, emitSchemaModule, generate } from "@tscomfy/codegen";
 import { normalizeObjectInfo } from "@tscomfy/core";
 import { MOCK_OBJECT_INFO_NAMES, readMockObjectInfo } from "@tscomfy/fixtures";
-import { GENERATED_DIR, generateMock } from "./generated-fixtures.ts";
+import {
+  ACCEPTS_MATRIX_PATH,
+  acceptsMatrix,
+  GENERATED_DIR,
+  generateMock,
+} from "./generated-fixtures.ts";
 
 describe("committed fixtures", () => {
   test.each(MOCK_OBJECT_INFO_NAMES)(
@@ -30,6 +35,12 @@ describe("committed fixtures", () => {
       expect(module.mock).toEqual(schema);
     },
   );
+});
+
+describe("accepts matrix", () => {
+  test("is up to date (bun run generate:fixtures)", async () => {
+    expect(await Bun.file(ACCEPTS_MATRIX_PATH).text()).toBe(await acceptsMatrix());
+  });
 });
 
 describe("generate", () => {

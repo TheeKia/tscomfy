@@ -49,6 +49,32 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MockDynamicGroupOptionalMin": {
+    "input": {
+      "required": {},
+      "optional": {
+        "rows": [
+          "COMFY_DYNAMICGROUP_V3",
+          { "template": { "required": { "value": ["INT", { "default": 0 }] } }, "min": 1, "max": 3 }
+        ]
+      }
+    },
+    "input_order": { "required": [], "optional": ["rows"] },
+    "is_input_list": false,
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["INT"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "MockDynamicGroupOptionalMin",
+    "display_name": "Mock Dynamic Group Optional Min",
+    "description": "An optional group with min 1: the backend enforces min even when the group is optional.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/dynamic",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "MockDynamicGroupOptional": {
     "input": {
       "required": { "text": ["STRING", { "default": "" }] },

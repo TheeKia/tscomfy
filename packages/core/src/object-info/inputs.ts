@@ -368,9 +368,8 @@ class SpecReader {
         const inexact = this.#context.inexact;
         const min = this.#read("min", "an integer", (raw) => toIntBound(raw, "min", inexact));
         const max = this.#read("max", "an integer", (raw) => toIntBound(raw, "max", inexact));
-        const value = this.#default("an integer or a list of integers", min, max, (raw) =>
-          isArray(raw) ? listOf(raw, toIntValue) : toIntValue(raw),
-        );
+        // The backend coerces INT values with int(), so a list default can't pass.
+        const value = this.#default("an integer", min, max, toIntValue);
         const step = this.#number("step");
         return {
           kind: "int",
@@ -386,9 +385,8 @@ class SpecReader {
         const inexact = this.#context.inexact;
         const min = this.#read("min", "a number", (raw) => toFloatBound(raw, "min", inexact));
         const max = this.#read("max", "a number", (raw) => toFloatBound(raw, "max", inexact));
-        const value = this.#default("a number or a list of numbers", min, max, (raw) =>
-          isArray(raw) ? listOf(raw, toFloat) : toFloat(raw),
-        );
+        // The backend coerces FLOAT values with float(), so a list default can't pass.
+        const value = this.#default("a number", min, max, toFloat);
         const step = this.#number("step");
         const round = this.#read("round", "a number or false", (raw) =>
           raw === false || (typeof raw === "number" && Number.isFinite(raw)) ? raw : undefined,
@@ -708,7 +706,7 @@ class SpecReader {
    * A numeric default. One outside the bounds is dropped: the backend would reject it, and the
    * exporter fills defaults in (§7.2).
    */
-  #default<T extends number | bigint | readonly (number | bigint)[]>(
+  #default<T extends number | bigint>(
     expected: string,
     min: number | bigint | undefined,
     max: number | bigint | undefined,
@@ -806,25 +804,11 @@ function count(
  * Renders numbers for messages without the shortest-round-trip form JavaScript uses, which shows
  * 2^64 − 2048 as 18446744073709550000.
  */
-function exact(value: number | bigint | readonly (number | bigint)[] | undefined): string {
+function exact(value: number | bigint | undefined): string {
   if (value === undefined) return "";
-  if (typeof value === "object") return `[${value.map(exact).join(", ")}]`;
   return typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value)
     ? BigInt(value).toString()
     : String(value);
-}
-
-function listOf<T>(
-  values: readonly JsonValue[],
-  convert: (raw: JsonValue) => T | undefined,
-): T[] | undefined {
-  const result: T[] = [];
-  for (const raw of values) {
-    const value = convert(raw);
-    if (value === undefined) return undefined;
-    result.push(value);
-  }
-  return result;
 }
 
 function isComboOption(value: JsonValue): value is ComboOption {

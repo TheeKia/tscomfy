@@ -2,7 +2,7 @@
 // Schema sha256:f5aadf9683dc0cc30674691064c80b232d6fd92762dda1461e7667d6e4be2bb1, ComfyUI 0.41.0.
 // Regenerate with: bun run generate:fixtures
 
-import type { In, NodeHandle, NodeOptions, Out } from "@tscomfy/core";
+import type { In, NodeHandle, NodeOptions, OptionList, Out } from "@tscomfy/core";
 
 /** Every node of the schema, by class type. Use through a typed schema's builder. */
 export interface Nodes {
@@ -80,7 +80,7 @@ export interface MockComboBoolean$In {
 /** Inputs of `MockComboEmpty`. */
 export interface MockComboEmpty$In {
   readonly legacy_empty: string | Out<"*">;
-  readonly v2_empty: string | In<"COMBO">;
+  readonly v2_empty: string | In<"COMBO"> | Out<OptionList>;
 }
 
 /** Inputs of `MockComboForms`. */
@@ -93,15 +93,15 @@ export interface MockComboForms$In {
    */
   readonly legacy_with_options?: LegacyWithOptions | Out<"*">;
   /** Default: `"two"`. */
-  readonly v2?: V2 | In<"COMBO">;
-  readonly v2_no_default: V2NoDefault | In<"COMBO">;
+  readonly v2?: V2 | In<"COMBO"> | Out<OptionList>;
+  readonly v2_no_default: V2NoDefault | In<"COMBO"> | Out<OptionList>;
   readonly legacy_control: LegacyControl | Out<"*">;
 }
 
 /** Inputs of `MockComboMultiselect`. */
 export interface MockComboMultiselect$In {
   /** Default: `["red"]`. */
-  readonly tags?: readonly Tags[] | In<"COMBO">;
+  readonly tags?: readonly Tags[] | In<"COMBO"> | Out<OptionList>;
 }
 
 /** Inputs of `MockComboNumeric`. */
@@ -109,8 +109,8 @@ export interface MockComboNumeric$In {
   /** Default: `10`. */
   readonly legacy_numeric?: LegacyNumeric | Out<"*">;
   /** Default: `5`. */
-  readonly v2_numeric?: V2Numeric | In<"COMBO">;
-  readonly v2_mixed: V2Mixed | In<"COMBO">;
+  readonly v2_numeric?: V2Numeric | In<"COMBO"> | Out<OptionList>;
+  readonly v2_mixed: V2Mixed | In<"COMBO"> | Out<OptionList>;
 }
 
 /** Inputs of `MockComboOutput`. */
@@ -119,19 +119,19 @@ export interface MockComboOutput$In {
 }
 
 /** The outputs of `MockComboOutput`, by slot. */
-export type MockComboOutput$Outputs = readonly [Out<"COMBO">, Out<"COMBO">, Out<"INT">];
+export type MockComboOutput$Outputs = readonly [Out<OptionList>, Out<OptionList>, Out<"INT">];
 
 /** What `MockComboOutput` returns: its outputs by slot, and by name where unique. */
 export interface MockComboOutput$Out extends MockComboOutput$Outputs, NodeHandle {
-  readonly sampler_name: Out<"COMBO">;
-  readonly scheduler: Out<"COMBO">;
+  readonly sampler_name: Out<OptionList>;
+  readonly scheduler: Out<OptionList>;
   readonly steps: Out<"INT">;
 }
 
 /** Inputs of `MockComboUploadRemote`. */
 export interface MockComboUploadRemote$In {
   readonly upload: Upload | (string & {}) | Out<"*">;
-  readonly remote: string | In<"COMBO">;
+  readonly remote: string | In<"COMBO"> | Out<OptionList>;
 }
 
 /** The outputs of `MockComboUploadRemote`, by slot. */

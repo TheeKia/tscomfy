@@ -1,7 +1,12 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { MOCK_OBJECT_INFO_NAMES } from "@tscomfy/fixtures";
-import { GENERATED_DIR, generateMock } from "./generated-fixtures.ts";
+import {
+  ACCEPTS_MATRIX_PATH,
+  acceptsMatrix,
+  GENERATED_DIR,
+  generateMock,
+} from "./generated-fixtures.ts";
 
 await rm(GENERATED_DIR, { recursive: true, force: true });
 await Promise.all(
@@ -12,4 +17,5 @@ await Promise.all(
     );
   }),
 );
+await Bun.write(ACCEPTS_MATRIX_PATH, await acceptsMatrix());
 console.log(`Wrote ${String(MOCK_OBJECT_INFO_NAMES.length)} fixtures to ${GENERATED_DIR}`);

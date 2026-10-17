@@ -1,7 +1,7 @@
 // Type tests for the generated encoding (docs/plan.md §6.2–6.4), against the committed fixtures
 // in ./generated. Each `@ts-expect-error` is a negative test: tsc fails if the error goes away.
 
-import type { JsonValue, NodeHandle, Out, TypedSchema } from "@tscomfy/core";
+import type { In, JsonValue, NodeHandle, OptionList, Out, TypedSchema } from "@tscomfy/core";
 import { expectTypeOf } from "expect-type";
 import type { Nodes as Autogrow } from "./generated/autogrow/nodes.ts";
 import type { mock as basicSchema } from "./generated/basic-pipeline/index.ts";
@@ -115,6 +115,18 @@ widgetTypes.MockValueWidgets({ compare: null, color: string });
 
 // --- Combos ------------------------------------------------------------------------------------
 
+// Option-list outputs have their own socket name; only exactly-COMBO and `*` inputs take them.
+declare const optionList: Out<OptionList>;
+combos.MockComboForms({ legacy_bare: "alpha", v2_no_default: optionList, legacy_control: "first" });
+sockets.MockSockets({ ...socketInputs, any: optionList });
+// @ts-expect-error -- an option list into a comma union, even one containing STRING
+sockets.MockSockets({ ...socketInputs, union: optionList });
+// INT and FLOAT never take lists: the backend's int() and float() reject them.
+expectTypeOf(numbers.MockNumbers)
+  .parameter(0)
+  .toHaveProperty("int_list_default")
+  .toEqualTypeOf<number | bigint | In<"INT">>();
+
 basic.KSampler({ ...sampler, sampler_name: "dpmpp_2m", scheduler: "karras" });
 // @ts-expect-error -- not one of the options
 basic.KSampler({ ...sampler, sampler_name: "eulr" });
@@ -142,8 +154,9 @@ combos.MockComboEmpty({ legacy_empty: "anything", v2_empty: "anything" });
 
 // An explicit default makes an input optional; no default keeps it required.
 basic.EmptyLatentImage();
+const { latent_image: _latent, ...withoutLatent } = sampler;
 // @ts-expect-error -- latent_image is required
-basic.KSampler({ ...sampler, latent_image: undefined });
+basic.KSampler(withoutLatent);
 // @ts-expect-error -- sampler_name has no default
 basic.KSampler({
   model,
@@ -188,6 +201,17 @@ expectTypeOf(named.length).toEqualTypeOf<7>();
 expectTypeOf(named[3]).toEqualTypeOf<Out<"INT">>();
 
 // --- Autogrow ----------------------------------------------------------------------------------
+
+// The backend requires the first `min` slots even when the Autogrow itself is optional.
+autogrow.MockAutogrowOptionalRequired({ images: [image] });
+// @ts-expect-error -- images.image0 is required by min 1
+autogrow.MockAutogrowOptionalRequired({});
+// MatchType slots: the first infers the template, the others must agree.
+expectTypeOf(autogrow.MockAutogrowMatchType({ values: [image, image] })).toEqualTypeOf<
+  Out<"IMAGE">
+>();
+// @ts-expect-error -- mixed slot types don't infer a union
+autogrow.MockAutogrowMatchType({ values: [image, latent] });
 
 autogrow.MockAutogrowPrefix({ images: [image] });
 autogrow.MockAutogrowPrefix({ images: [image, any, image] });
@@ -242,6 +266,11 @@ expectTypeOf(
 ).toEqualTypeOf<Out<"IMAGE">>();
 
 // --- DynamicGroup ------------------------------------------------------------------------------
+
+// The backend enforces min rows even when the group is optional.
+dynamicGroup.MockDynamicGroupOptionalMin({ rows: [{}] });
+// @ts-expect-error -- min 1 row, although the group is optional
+dynamicGroup.MockDynamicGroupOptionalMin({});
 
 dynamicGroup.MockDynamicGroup({ model, loras: [{ lora_name: "lora-a.safetensors" }] });
 dynamicGroup.MockDynamicGroup({

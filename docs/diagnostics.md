@@ -30,7 +30,7 @@ Paths of parser and normalizer diagnostics point into the raw document, e.g.
 | `W_INPUT_ORDER_MISMATCH` | `input_order` names an input the node doesn't declare, or leaves one out. | The frontend's order: listed required inputs, then listed optional ones, then every unlisted input. |
 | `W_INVALID_INPUT_SPEC` | An input spec can't be interpreted: not a `[type, options?]` list, a type that isn't a string or option list, an empty type, a dynamic input missing its payload or with counts outside the backend's limits, or a legacy combo with an option that isn't a string, number or boolean (its links match the full list). | The input is kept as `unknown`. |
 | `W_UNSUPPORTED_INPUT_TYPE` | The input uses a `COMFY_…_V3` dynamic type this version doesn't know. | The input is kept as `unknown`. |
-| `W_INVALID_INPUT_OPTION` | One option of a readable spec is invalid: wrong type; a combo option that isn't a string, number or boolean; a default the backend would reject (not one of the combo's options, outside `min`/`max`); a malformed or duplicate dynamic-combo option. | That option is ignored. A combo with no listed options keeps its default, since membership can't be checked. |
+| `W_INVALID_INPUT_OPTION` | One option of a readable spec is invalid: wrong type; a combo option that isn't a string, number or boolean; a default the backend would reject (not one of the combo's options, outside `min`/`max`, a list for INT or FLOAT); a malformed or duplicate dynamic-combo option. | That option is ignored. A combo with no listed options keeps its default, since membership can't be checked. |
 
 ## Generating types
 

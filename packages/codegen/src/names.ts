@@ -2,11 +2,41 @@
 // are arbitrary strings: 328 class names in a real dump are not identifiers. They stay exact as
 // property keys and are sanitized only where TypeScript needs an identifier.
 
-const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+// ECMAScript IdentifierName, which oxfmt leaves unquoted as a key (`café`, `日本`).
+const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
 
 /** A property key: the name itself when it is an identifier, else a string literal. */
 export function propertyKey(name: string): string {
-  return IDENTIFIER.test(name) ? name : JSON.stringify(name);
+  return IDENTIFIER.test(name) ? name : quote(name);
+}
+
+/**
+ * A string literal as oxfmt writes it: double quotes, unless the text holds more double quotes
+ * than single ones, then single quotes. Other escapes are `JSON.stringify`'s.
+ */
+export function quote(text: string): string {
+  const doubled = JSON.stringify(text);
+  const doubles = text.split('"').length - 1;
+  const singles = text.split("'").length - 1;
+  if (doubles <= singles) return doubled;
+  const inner = doubled.slice(1, -1).replaceAll('\\"', '"').replaceAll("'", "\\'");
+  return `'${inner}'`;
+}
+
+const LINE_TERMINATOR = /\r\n|[\r\n\u2028\u2029]/;
+
+/**
+ * Lines of server text for a comment: split at every line terminator (which a comment can't
+ * hold raw without oxfmt rewriting it) and with `*\/` escaped, so no name or tooltip can close
+ * the comment and inject code.
+ */
+export function commentLines(text: string): string[] {
+  return text.split(LINE_TERMINATOR).map((each) => each.replaceAll("*/", "*\\/").trimEnd());
+}
+
+/** Server text for a one-line comment. */
+export function commentText(text: string): string {
+  return commentLines(text).join(" ");
 }
 
 /**

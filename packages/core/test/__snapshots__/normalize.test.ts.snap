@@ -1,11 +1,357 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
+exports[`snapshots accepts 1`] = `
+{
+  "diagnostics": [],
+  "schema": {
+    "formatVersion": 1,
+    "nodes": {
+      "MockAcceptsInputs": {
+        "category": "mock/accepts",
+        "classType": "MockAcceptsInputs",
+        "deprecated": false,
+        "description": "One input per link rule of the accepts table.",
+        "displayName": "Mock Accepts Inputs",
+        "experimental": false,
+        "inputs": [
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "model",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "named",
+              "name": "MODEL",
+            },
+          },
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "any",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "any",
+            },
+          },
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "padded_any",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "named",
+              "name": "*",
+            },
+          },
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "image_or_mask",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "union",
+              "names": [
+                "IMAGE",
+                "MASK",
+              ],
+            },
+          },
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "star_union",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "union",
+              "names": [
+                "*",
+                "IMAGE",
+              ],
+            },
+          },
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "combo_union",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "union",
+              "names": [
+                "COMBO",
+                "STRING",
+              ],
+            },
+          },
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "combo_socket",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+          },
+          {
+            "kind": "int",
+            "lazy": false,
+            "name": "int_widget",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "legacy",
+            "options": [
+              "a",
+              "b",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
+          {
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "combo_form",
+            "options": [
+              "a",
+              "b",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
+          {
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "combo_on_pack_type",
+            "options": [
+              "s",
+              "m",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "MOCK_SIZE",
+            },
+            "upload": false,
+          },
+          {
+            "allowed": {
+              "kind": "any",
+            },
+            "kind": "matchType",
+            "lazy": false,
+            "name": "match",
+            "rawLink": false,
+            "required": true,
+            "templateId": "t",
+          },
+        ],
+        "isInputList": false,
+        "outputNode": true,
+        "outputs": [],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockAcceptsOutputs": {
+        "category": "mock/accepts",
+        "classType": "MockAcceptsOutputs",
+        "deprecated": false,
+        "description": "One output per output kind of the accepts table: named, any, union, COMBO, an option list, a padded star, a union with a star.",
+        "displayName": "Mock Accepts Outputs",
+        "experimental": false,
+        "inputs": [],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "model",
+            "type": {
+              "kind": "named",
+              "name": "MODEL",
+            },
+          },
+          {
+            "index": 1,
+            "isList": false,
+            "name": "clip",
+            "type": {
+              "kind": "named",
+              "name": "CLIP",
+            },
+          },
+          {
+            "index": 2,
+            "isList": false,
+            "name": "any",
+            "type": {
+              "kind": "any",
+            },
+          },
+          {
+            "index": 3,
+            "isList": false,
+            "name": "image_or_mask",
+            "type": {
+              "kind": "union",
+              "names": [
+                "IMAGE",
+                "MASK",
+              ],
+            },
+          },
+          {
+            "index": 4,
+            "isList": false,
+            "name": "int",
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "index": 5,
+            "isList": false,
+            "name": "combo_type",
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+          },
+          {
+            "index": 6,
+            "isList": false,
+            "name": "options",
+            "type": {
+              "kind": "combo",
+              "options": [
+                "a",
+                "b",
+              ],
+            },
+          },
+          {
+            "index": 7,
+            "isList": false,
+            "name": "padded_any",
+            "type": {
+              "kind": "named",
+              "name": "*",
+            },
+          },
+          {
+            "index": 8,
+            "isList": false,
+            "name": "image_or_any",
+            "type": {
+              "kind": "union",
+              "names": [
+                "IMAGE",
+                "*",
+              ],
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+    },
+  },
+}
+`;
+
 exports[`snapshots autogrow 1`] = `
 {
   "diagnostics": [],
   "schema": {
     "formatVersion": 1,
     "nodes": {
+      "MockAutogrowMatchType": {
+        "category": "mock/autogrow",
+        "classType": "MockAutogrowMatchType",
+        "deprecated": false,
+        "description": "Autogrow slots that share one MatchType template: every slot must agree with the first.",
+        "displayName": "Mock Autogrow MatchType",
+        "experimental": false,
+        "inputs": [
+          {
+            "form": "prefix",
+            "kind": "autogrow",
+            "lazy": false,
+            "min": 1,
+            "name": "values",
+            "rawLink": false,
+            "required": true,
+            "slots": [
+              "value0",
+              "value1",
+              "value2",
+              "value3",
+            ],
+            "template": {
+              "allowed": {
+                "kind": "any",
+              },
+              "kind": "matchType",
+              "lazy": false,
+              "name": "value",
+              "rawLink": false,
+              "required": true,
+              "templateId": "value",
+            },
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "matchTemplate": "value",
+            "name": "value",
+            "type": {
+              "kind": "any",
+            },
+          },
+        ],
+        "pythonModule": "comfy_extras.nodes_mock",
+      },
       "MockAutogrowNames": {
         "category": "mock/autogrow",
         "classType": "MockAutogrowNames",
@@ -78,6 +424,56 @@ exports[`snapshots autogrow 1`] = `
             "type": {
               "kind": "named",
               "name": "INT",
+            },
+          },
+        ],
+        "pythonModule": "comfy_extras.nodes_mock",
+      },
+      "MockAutogrowOptionalRequired": {
+        "category": "mock/autogrow",
+        "classType": "MockAutogrowOptionalRequired",
+        "deprecated": false,
+        "description": "An optional Autogrow whose template is required: the backend still requires the first min slots.",
+        "displayName": "Mock Autogrow Optional Required",
+        "experimental": false,
+        "inputs": [
+          {
+            "form": "prefix",
+            "kind": "autogrow",
+            "lazy": false,
+            "min": 1,
+            "name": "images",
+            "rawLink": false,
+            "required": false,
+            "slots": [
+              "image0",
+              "image1",
+              "image2",
+              "image3",
+            ],
+            "template": {
+              "kind": "socket",
+              "lazy": false,
+              "name": "image",
+              "rawLink": false,
+              "required": true,
+              "type": {
+                "kind": "named",
+                "name": "IMAGE",
+              },
+            },
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "IMAGE",
+            "type": {
+              "kind": "named",
+              "name": "IMAGE",
             },
           },
         ],
@@ -1987,7 +2383,65 @@ exports[`snapshots dynamic-group 1`] = `
         ],
         "pythonModule": "comfy_extras.nodes_mock",
       },
+      "MockDynamicGroupOptionalMin": {
+        "category": "mock/dynamic",
+        "classType": "MockDynamicGroupOptionalMin",
+        "deprecated": false,
+        "description": "An optional group with min 1: the backend enforces min even when the group is optional.",
+        "displayName": "Mock Dynamic Group Optional Min",
+        "experimental": false,
+        "inputs": [
+          {
+            "fields": [
+              {
+                "default": 0,
+                "kind": "int",
+                "lazy": false,
+                "name": "value",
+                "rawLink": false,
+                "required": true,
+                "socketless": false,
+                "type": {
+                  "kind": "named",
+                  "name": "INT",
+                },
+              },
+            ],
+            "kind": "dynamicGroup",
+            "lazy": false,
+            "max": 3,
+            "min": 1,
+            "name": "rows",
+            "rawLink": false,
+            "required": false,
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "INT",
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+        ],
+        "pythonModule": "comfy_extras.nodes_mock",
+      },
     },
+  },
+}
+`;
+
+exports[`snapshots empty 1`] = `
+{
+  "diagnostics": [],
+  "schema": {
+    "formatVersion": 1,
+    "nodes": {},
   },
 }
 `;
@@ -3496,6 +3950,32 @@ exports[`snapshots numbers 1`] = `
   "diagnostics": [
     {
       "code": "W_INVALID_INPUT_OPTION",
+      "message": "Expected default to be a number, got [1]; ignoring it.",
+      "path": [
+        "MockNumbers",
+        "input",
+        "required",
+        "list_default",
+        1,
+        "default",
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_OPTION",
+      "message": "Expected default to be an integer, got [1,2,3]; ignoring it.",
+      "path": [
+        "MockNumbers",
+        "input",
+        "required",
+        "int_list_default",
+        1,
+        "default",
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_OPTION",
       "message": "The default 0 is outside [1, 8]; ignoring it.",
       "path": [
         "MockNumbers",
@@ -3639,9 +4119,6 @@ exports[`snapshots numbers 1`] = `
             },
           },
           {
-            "default": [
-              1,
-            ],
             "kind": "float",
             "lazy": false,
             "name": "list_default",
@@ -3654,11 +4131,6 @@ exports[`snapshots numbers 1`] = `
             },
           },
           {
-            "default": [
-              1,
-              2,
-              3,
-            ],
             "kind": "int",
             "lazy": false,
             "name": "int_list_default",

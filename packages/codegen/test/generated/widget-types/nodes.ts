@@ -2,7 +2,7 @@
 // Schema sha256:dd33075d5eb58cea7b9751be77d529dc279b1efbb925207d7b923befdd6a5202, ComfyUI 0.41.0.
 // Regenerate with: bun run generate:fixtures
 
-import type { In, JsonValue, NodeOptions, Out } from "@tscomfy/core";
+import type { In, JsonValue, NodeOptions, OptionList, Out } from "@tscomfy/core";
 
 /** Every node of the schema, by class type. Use through a typed schema's builder. */
 export interface Nodes {
@@ -53,7 +53,7 @@ export interface MockWidgetTypeOverrides$In {
   readonly timestamp?: string | In<"STRING">;
   readonly custom: In<"MOCK_PACK_STATE">;
   /** Default: `"a"`. */
-  readonly picker?: Picker | In<"COMBO">;
+  readonly picker?: Picker | In<"COMBO"> | Out<OptionList>;
   /** Default: `"s"`. */
   readonly size?: Size | In<"MOCK_SIZE">;
   /** Default: `1`. */

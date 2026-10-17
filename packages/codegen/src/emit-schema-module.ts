@@ -1,6 +1,6 @@
 import { type Schema, stringify } from "@tscomfy/core";
-import { group, ifBreak, indent, print, softline } from "./doc.ts";
-import { PRINT_WIDTH } from "./emit-types.ts";
+import { assignment, group, ifBreak, indent, print, softline } from "./doc.ts";
+import { headerLines, PRINT_WIDTH } from "./emit-types.ts";
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
@@ -21,19 +21,22 @@ export function emitSchemaModule(
     throw new TypeError(`emitSchemaModule: ${JSON.stringify(exportName)} is not an identifier`);
   }
   const lines = [
-    ...header.map((text) => `// ${text}`),
+    ...headerLines(header),
     ...(header.length > 0 ? [""] : []),
     'import { defineSchema, type TypedSchema } from "@tscomfy/core";',
     `import type { Nodes } from ${JSON.stringify(nodesModule)};`,
     "",
     "/** The node definitions this module was generated from, typed by `Nodes`. */",
     print(
-      group([
-        `export const ${exportName}: TypedSchema<Nodes> = defineSchema<Nodes>(`,
-        indent([softline, stringLiteral(stringify(schema))]),
-        ifBreak(","),
-        softline,
-        ");",
+      assignment(`export const ${exportName}: TypedSchema<Nodes>`, [
+        group([
+          "defineSchema<Nodes>(",
+          indent([softline, stringLiteral(stringify(schema))]),
+          ifBreak(","),
+          softline,
+          ")",
+        ]),
+        ";",
       ]),
       PRINT_WIDTH,
     ),

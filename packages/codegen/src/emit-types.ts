@@ -3,6 +3,10 @@
 // Layout rules keep every type expression a union of short atoms, so the printed code matches
 // oxfmt: combo option lists, socket-type unions, dynamic-combo options, Autogrow name sets,
 // DynamicGroup rows and multi-output results all get named declarations.
+//
+// Soundness (plan §1): every link type is a subset of what `accepts()` allows, and every value
+// type a subset of what the backend's validation accepts. Where the two can't be matched
+// exactly, the types are the stricter side.
 
 import {
   type ComboInput,
@@ -16,8 +20,19 @@ import {
   type SocketType,
   stringify,
 } from "@tscomfy/core";
-import { type Doc, group, hardline, ifBreak, indent, join, line, print, softline } from "./doc.ts";
-import { NameRegistry, pascal, propertyKey } from "./names.ts";
+import {
+  assignment,
+  type Doc,
+  group,
+  hardline,
+  ifBreak,
+  indent,
+  join,
+  line,
+  print,
+  softline,
+} from "./doc.ts";
+import { commentLines, commentText, NameRegistry, pascal, propertyKey, quote } from "./names.ts";
 
 /** Columns the generated code is laid out for: oxfmt's default, and this repo's setting. */
 export const PRINT_WIDTH = 100;
@@ -39,8 +54,21 @@ export function emitTypes(schema: Schema, header: readonly string[] = []): EmitT
   return new TypesEmitter(schema).emit(header);
 }
 
-/** Names the generated file imports from @tscomfy/core, or declares itself. */
-const CORE_TYPES = ["In", "JsonValue", "Match", "NodeHandle", "NodeOptions", "Out"] as const;
+/** `//` comment lines; line terminators in the text can't end the comment early. */
+export function headerLines(header: readonly string[]): string[] {
+  return header.map((text) => `// ${commentText(text)}`);
+}
+
+/** Names the generated file imports from @tscomfy/core. */
+const CORE_TYPES = [
+  "In",
+  "JsonValue",
+  "Match",
+  "NodeHandle",
+  "NodeOptions",
+  "OptionList",
+  "Out",
+] as const;
 type CoreType = (typeof CORE_TYPES)[number];
 
 /** Names generated declarations must not take: imports, globals the output uses, `Nodes`. */
@@ -129,6 +157,8 @@ interface NodeScope {
   readonly names: NameRegistry;
 }
 
+const NO_TEMPLATES: ReadonlySet<string> = new Set();
+
 class TypesEmitter {
   readonly #schema: Schema;
   /** Shared aliases and type parameters. Node-derived names contain `$`, so never clash. */
@@ -139,7 +169,7 @@ class TypesEmitter {
   readonly #comboAliases = new Map<string, string>();
   readonly #socketAliases = new Map<string, string>();
   readonly #shared: { readonly name: string; readonly doc: Doc }[] = [];
-  readonly #imports = new Set<CoreType>(["NodeOptions"]);
+  readonly #imports = new Set<CoreType>();
   readonly #diagnostics: Diagnostic[] = [];
 
   constructor(schema: Schema) {
@@ -163,21 +193,26 @@ class TypesEmitter {
       .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
       .map((declaration) => declaration.doc);
     const imports = CORE_TYPES.filter((name) => this.#imports.has(name));
+    const body = [
+      ...(imports.length === 0
+        ? []
+        : [
+            group([
+              "import type {",
+              indent([line, join([",", line], imports)]),
+              ifBreak(","),
+              line,
+              '} from "@tscomfy/core";',
+            ]),
+          ]),
+      nodes,
+      ...declarations,
+      ...shared,
+    ];
     const doc: Doc[] = [
-      ...header.flatMap((text) => [`// ${text}`, hardline]),
+      ...headerLines(header).flatMap((text) => [text, hardline]),
       header.length > 0 ? hardline : "",
-      group([
-        "import type {",
-        indent([line, join([",", line], imports)]),
-        ifBreak(","),
-        line,
-        '} from "@tscomfy/core";',
-      ]),
-      ...[nodes, ...declarations, ...shared].flatMap((declaration) => [
-        hardline,
-        hardline,
-        declaration,
-      ]),
+      join([hardline, hardline], body),
       hardline,
     ];
     return { contents: print(doc, PRINT_WIDTH), diagnostics: this.#diagnostics };
@@ -238,6 +273,7 @@ class TypesEmitter {
   /** The node's member of `Nodes`, after emitting its declarations into the scope. */
   #nodeMember(scope: NodeScope): Doc {
     const { node, base } = scope;
+    this.#imports.add("NodeOptions");
     const inputs = this.#inputsInterface(scope, `${base}$In`, base, node.inputs, [node.classType]);
     const result = this.#result(scope);
     const all = new Set([...inputs.templates, ...result.templates]);
@@ -288,14 +324,12 @@ class TypesEmitter {
     const parameters = this.#parameters(scope, templates);
     const tupleName = `${scope.base}$Outputs`;
     scope.declarations.push([
-      `/** The outputs of \`${scope.node.classType}\`, by slot. */`,
+      inlineComment(`The outputs of \`${scope.node.classType}\`, by slot.`),
       hardline,
-      "export type ",
-      tupleName,
-      typeParameters(parameters),
-      " = ",
-      tuple(built.map((output) => output.atom)),
-      ";",
+      assignment(
+        ["export type ", tupleName, typeParameters(parameters)],
+        [tuple(built.map((output) => output.atom)), ";"],
+      ),
     ]);
     const counts = new Map<string, number>();
     for (const output of outputs) counts.set(output.name, (counts.get(output.name) ?? 0) + 1);
@@ -308,13 +342,20 @@ class TypesEmitter {
     );
     const name = `${scope.base}$Out`;
     scope.declarations.push([
-      `/** What \`${scope.node.classType}\` returns: its outputs by slot, and by name where unique. */`,
+      inlineComment(
+        `What \`${scope.node.classType}\` returns: its outputs by slot, and by name where unique.`,
+      ),
       hardline,
-      interfaceDoc(name, parameters, [`${tupleName}${args}`, "NodeHandle"], named),
+      interfaceDoc(name, parameters, [reference(tupleName, args), "NodeHandle"], named),
     ]);
-    return { reference: `${name}${args}`, templates };
+    return { reference: reference(name, args), templates };
   }
 
+  /**
+   * What an output is typed as (§6.2). Whatever isn't a plain named type gets an atom that only
+   * connects where `accepts()` agrees for every input: option lists their own name, and outputs
+   * whose comma list contains `*` without being exactly `*` the stricter types.
+   */
   #outputAtom(
     scope: NodeScope,
     output: OutputDef,
@@ -325,23 +366,26 @@ class TypesEmitter {
       if (template !== undefined) {
         return { atom: `Out<${template.parameter}>`, templates: new Set([template.id]) };
       }
-      return { atom: 'Out<"*">', templates: new Set() };
+      return { atom: 'Out<"*">', templates: NO_TEMPLATES };
     }
     const type = output.type;
     switch (type.kind) {
       case "combo":
-        return { atom: 'Out<"COMBO">', templates: new Set() };
+        this.#imports.add("OptionList");
+        return { atom: "Out<OptionList>", templates: NO_TEMPLATES };
       case "any":
-        return { atom: 'Out<"*">', templates: new Set() };
+        return { atom: 'Out<"*">', templates: NO_TEMPLATES };
       case "named":
-        return { atom: `Out<${JSON.stringify(type.name)}>`, templates: new Set() };
-      case "union":
+        // A padded `*` passes into string-typed inputs only, so it fits only `*` inputs here.
         return {
-          atom: type.names.includes("*")
-            ? 'Out<"*">'
-            : `Out<${this.#socketAlias(type.names, output.name)}>`,
-          templates: new Set(),
+          atom: type.name === "*" ? "Out<string>" : `Out<${quote(type.name)}>`,
+          templates: NO_TEMPLATES,
         };
+      case "union": {
+        // `*` in a list passes into string-typed inputs only; typed as the other members.
+        const names = type.names.filter((name) => name !== "*");
+        return { atom: `Out<${this.#socketNames(names, output.name)}>`, templates: NO_TEMPLATES };
+      }
     }
   }
 
@@ -357,7 +401,7 @@ class TypesEmitter {
     inputs: readonly InputDef[],
     path: readonly string[],
   ): {
-    readonly reference: string;
+    readonly reference: Doc;
     readonly optional: boolean;
     readonly templates: ReadonlySet<string>;
   } {
@@ -387,11 +431,15 @@ class TypesEmitter {
     }
     const parameters = this.#parameters(scope, templates);
     scope.declarations.push([
-      `/** Inputs of \`${path.join(" › ")}\`. */`,
+      inlineComment(`Inputs of \`${path.join(" › ")}\`.`),
       hardline,
       interfaceDoc(name, parameters, [], members),
     ]);
-    return { reference: `${name}${this.#arguments(scope, templates)}`, optional, templates };
+    return {
+      reference: reference(name, this.#arguments(scope, templates)),
+      optional,
+      templates,
+    };
   }
 
   /**
@@ -399,46 +447,40 @@ class TypesEmitter {
    * claimed only when one is emitted.
    */
   #inputType(scope: NodeScope, input: InputDef, name: string, path: readonly string[]): Built {
-    const none = new Set<string>();
     switch (input.kind) {
       case "socket":
-        return { atoms: [this.#link(input.type, input.name)], templates: none };
+        return { atoms: this.#link(input.type, input.name), templates: NO_TEMPLATES };
       case "int":
         return {
           atoms: [
             "number",
             "bigint",
-            ...(Array.isArray(input.default) ? ["readonly (number | bigint)[]"] : []),
             ...this.#widgetLink(input.type, input.socketless, input.name),
           ],
-          templates: none,
+          templates: NO_TEMPLATES,
         };
       case "float":
         return {
-          atoms: [
-            "number",
-            ...(Array.isArray(input.default) ? ["readonly number[]"] : []),
-            ...this.#widgetLink(input.type, input.socketless, input.name),
-          ],
-          templates: none,
+          atoms: ["number", ...this.#widgetLink(input.type, input.socketless, input.name)],
+          templates: NO_TEMPLATES,
         };
       case "string":
         return {
           atoms: ["string", ...this.#widgetLink(input.type, input.socketless, input.name)],
-          templates: none,
+          templates: NO_TEMPLATES,
         };
       case "boolean":
         return {
           atoms: ["boolean", ...this.#widgetLink(input.type, input.socketless, input.name)],
-          templates: none,
+          templates: NO_TEMPLATES,
         };
       case "combo":
-        return { atoms: this.#combo(input, path), templates: none };
+        return { atoms: this.#combo(input, path), templates: NO_TEMPLATES };
       case "value":
         this.#imports.add("JsonValue");
         return {
           atoms: ["JsonValue", ...this.#widgetLink(input.type, input.socketless, input.name)],
-          templates: none,
+          templates: NO_TEMPLATES,
         };
       case "autogrow":
         return this.#autogrow(scope, input, name, path);
@@ -453,22 +495,16 @@ class TypesEmitter {
           input.fields,
           path,
         );
-        return { atoms: [repeated(row.reference, input.min)], templates: row.templates };
+        return {
+          atoms: [repeated(row.reference, row.reference, input.min)],
+          templates: row.templates,
+        };
       }
       case "matchType": {
         const template = scope.templates.get(input.templateId);
         this.#imports.add("Out");
-        if (template === undefined) return { atoms: ["Out<string>"], templates: none };
-        // The first input of a template infers it; the others must agree (§6.3).
-        if (!scope.inferred.has(template.id)) {
-          scope.inferred.add(template.id);
-          return { atoms: [`Out<${template.parameter} | "*">`], templates: new Set([template.id]) };
-        }
-        this.#imports.add("Match");
-        return {
-          atoms: [`Out<Match<NoInfer<${template.parameter}>>>`],
-          templates: new Set([template.id]),
-        };
+        if (template === undefined) return { atoms: ["Out<string>"], templates: NO_TEMPLATES };
+        return { atoms: [this.#matchAtom(scope, template)], templates: new Set([template.id]) };
       }
       case "unknown":
         this.#diagnostics.push(
@@ -478,8 +514,21 @@ class TypesEmitter {
             `The normalizer couldn't read input ${input.name}; its value is typed as unknown.`,
           ),
         );
-        return { atoms: ["unknown"], templates: none };
+        return { atoms: ["unknown"], templates: NO_TEMPLATES };
     }
+  }
+
+  /**
+   * A MatchType position: the first one of a template infers it (`Out<T | "*">`), the others
+   * must agree with it (§6.3).
+   */
+  #matchAtom(scope: NodeScope, template: Template): string {
+    if (!scope.inferred.has(template.id)) {
+      scope.inferred.add(template.id);
+      return `Out<${template.parameter} | "*">`;
+    }
+    this.#imports.add("Match");
+    return `Out<Match<NoInfer<${template.parameter}>>>`;
   }
 
   #combo(input: ComboInput, path: readonly string[]): Atoms {
@@ -511,7 +560,7 @@ class TypesEmitter {
       this.#imports.add("Out");
       return [...values, 'Out<"*">'];
     }
-    return [...values, this.#link(input.type, input.name)];
+    return [...values, ...this.#link(input.type, input.name)];
   }
 
   #autogrow(
@@ -520,31 +569,47 @@ class TypesEmitter {
     name: string,
     path: readonly string[],
   ): Built {
-    const slot = this.#inputType(scope, input.template, `${name}$Slot`, path);
-    const atom =
-      slot.atoms.length === 1 ? (slot.atoms[0] ?? "never") : ["(", join(" | ", slot.atoms), ")"];
-    const required = input.template.required ? input.min : 0;
+    const { template } = input;
+    // A MatchType template: the first slot infers it and the others must agree, so a list of
+    // mixed types can't infer a union (§6.3).
+    let first: Doc;
+    let rest: Doc;
+    let templates: ReadonlySet<string>;
+    const matched =
+      template.kind === "matchType" ? scope.templates.get(template.templateId) : undefined;
+    if (matched !== undefined) {
+      this.#imports.add("Out");
+      first = this.#matchAtom(scope, matched);
+      rest = this.#matchAtom(scope, matched);
+      templates = new Set([matched.id]);
+    } else {
+      const slot = this.#inputType(scope, template, `${name}$Slot`, path);
+      first =
+        slot.atoms.length === 1 ? (slot.atoms[0] ?? "never") : ["(", join(" | ", slot.atoms), ")"];
+      rest = first;
+      templates = slot.templates;
+    }
+    // The backend has exactly `slots.length` slots; those before `min` are required when the
+    // template is, whatever section the Autogrow itself is in.
+    const required = template.required ? Math.min(input.min, input.slots.length) : 0;
     if (input.form === "prefix") {
-      return { atoms: [repeated(atom, required)], templates: slot.templates };
+      return { atoms: [repeated(first, rest, required)], templates };
     }
     const members = input.slots.map((slotName, index) => [
       "readonly ",
       propertyKey(slotName),
       index < required ? ": " : "?: ",
-      atom,
+      index === 0 ? first : rest,
       ";",
     ]);
     const slots = scope.names.claim(name);
-    const parameters = this.#parameters(scope, slot.templates);
+    const parameters = this.#parameters(scope, templates);
     scope.declarations.push([
-      `/** Slots of \`${path.join(" › ")}\`. */`,
+      inlineComment(`Slots of \`${path.join(" › ")}\`.`),
       hardline,
       interfaceDoc(slots, parameters, [], members),
     ]);
-    return {
-      atoms: [`${slots}${this.#arguments(scope, slot.templates)}`],
-      templates: slot.templates,
-    };
+    return { atoms: [reference(slots, this.#arguments(scope, templates))], templates };
   }
 
   #dynamicCombo(
@@ -558,7 +623,7 @@ class TypesEmitter {
     const templates = new Set<string>();
     for (const option of input.options) {
       if (option.inputs.length === 0) {
-        members.push(JSON.stringify(option.key));
+        members.push(quote(option.key));
         continue;
       }
       const optionName = scope.names.claim(`${choices}$${pascal(option.key, "Option")}`);
@@ -572,21 +637,21 @@ class TypesEmitter {
       for (const template of inputs.templates) templates.add(template);
       const parameters = this.#parameters(scope, inputs.templates);
       scope.declarations.push([
-        `/** Option ${JSON.stringify(option.key)} of \`${path.join(" › ")}\`. */`,
+        inlineComment(`Option ${quote(option.key)} of \`${path.join(" › ")}\`.`),
         hardline,
         interfaceDoc(
           optionName,
           parameters,
           [],
           [
-            ["readonly option: ", JSON.stringify(option.key), ";"],
+            ["readonly option: ", quote(option.key), ";"],
             [inputs.optional ? "readonly inputs?: " : "readonly inputs: ", inputs.reference, ";"],
           ],
         ),
       ]);
-      const reference = `${optionName}${this.#arguments(scope, inputs.templates)}`;
+      const optionReference = reference(optionName, this.#arguments(scope, inputs.templates));
       // An option whose inputs may all be left out can also be given by its key alone.
-      members.push(...(inputs.optional ? [JSON.stringify(option.key), reference] : [reference]));
+      members.push(...(inputs.optional ? [quote(option.key), optionReference] : [optionReference]));
     }
     const parameters = this.#parameters(scope, templates);
     scope.declarations.push(
@@ -597,31 +662,36 @@ class TypesEmitter {
         `The choices of \`${path.join(" › ")}\`.`,
       ),
     );
-    return { atoms: [`${choices}${this.#arguments(scope, templates)}`], templates };
+    return { atoms: [reference(choices, this.#arguments(scope, templates))], templates };
   }
 
   /** The link part of a widget, unless it has no socket. */
   #widgetLink(type: SocketType, socketless: boolean, context: string): Atoms {
-    return socketless ? [] : [this.#link(type, context)];
+    return socketless ? [] : this.#link(type, context);
   }
 
-  /** What a socket of `type` accepts (§6.2). */
-  #link(type: SocketType, context: string): string {
+  /**
+   * What a socket of `type` accepts (§6.2, §5.2): outputs of the type or `*`. Exactly `COMBO`
+   * also takes option lists, and exactly `*` takes everything. A `*` inside a comma list passes
+   * strings only, so such a union is typed by its other members: stricter, and never letting an
+   * option list in.
+   */
+  #link(type: SocketType, context: string): Atoms {
     switch (type.kind) {
       case "any":
         this.#imports.add("Out");
-        return "Out<string>";
+        return ["Out<string>"];
       case "named":
         this.#imports.add("In");
-        return `In<${JSON.stringify(type.name)}>`;
-      case "union":
-        // A `*` member lets any output in, as a bare `*` does (§5.2).
-        if (type.names.includes("*")) {
-          this.#imports.add("Out");
-          return "Out<string>";
-        }
+        if (type.name !== "COMBO") return [`In<${quote(type.name)}>`];
+        this.#imports.add("Out");
+        this.#imports.add("OptionList");
+        return ['In<"COMBO">', "Out<OptionList>"];
+      case "union": {
         this.#imports.add("In");
-        return `In<${this.#socketAlias(type.names, context)}>`;
+        const names = type.names.filter((name) => name !== "*");
+        return [`In<${this.#socketNames(names, context)}>`];
+      }
     }
   }
 
@@ -631,28 +701,23 @@ class TypesEmitter {
       case "any":
         return "string";
       case "named":
-        return type.name === "*" ? "string" : JSON.stringify(type.name);
+        return type.name === "*" ? "string" : quote(type.name);
       case "union":
-        return type.names.includes("*") ? "string" : this.#socketAlias(type.names, templateId);
+        return type.names.includes("*") ? "string" : this.#socketNames(type.names, templateId);
     }
   }
 
-  /** A shared alias for a union of socket type names. */
-  #socketAlias(names: readonly string[], context: string): string {
+  /** Socket type names as a type argument: one literal, or a shared alias for a union. */
+  #socketNames(names: readonly string[], context: string): string {
+    const [first] = names;
+    if (first === undefined) return "never";
+    if (names.length === 1) return quote(first);
     const key = names.join(",");
     const existing = this.#socketAliases.get(key);
     if (existing !== undefined) return existing;
     const name = this.#claimShared(`${pascal(context, "Socket")}Types`);
     this.#socketAliases.set(key, name);
-    this.#shared.push({
-      name,
-      doc: aliasDoc(
-        name,
-        [],
-        names.map((each) => JSON.stringify(each)),
-        "Socket types.",
-      ),
-    });
+    this.#shared.push({ name, doc: aliasDoc(name, [], names.map(quote), "Socket types.") });
     return name;
   }
 
@@ -675,53 +740,71 @@ class TypesEmitter {
     return name;
   }
 
-  /** `<TA extends …, TB extends …>` for the templates a declaration uses, in node order. */
+  /** `TA extends …` for the templates a declaration uses, in node order. */
   #parameters(scope: NodeScope, used: ReadonlySet<string>): readonly string[] {
     return [...scope.templates.values()]
       .filter((template) => used.has(template.id))
       .map((template) => `${template.parameter} extends ${template.constraint}`);
   }
 
-  /** `<TA, TB>` to reference a declaration that uses those templates. */
-  #arguments(scope: NodeScope, used: ReadonlySet<string>): string {
-    const names = [...scope.templates.values()]
+  /** The type arguments that reference a declaration using those templates. */
+  #arguments(scope: NodeScope, used: ReadonlySet<string>): readonly string[] {
+    return [...scope.templates.values()]
       .filter((template) => used.has(template.id))
       .map((template) => template.parameter);
-    return names.length === 0 ? "" : `<${names.join(", ")}>`;
   }
 }
 
-/** Whether an input must be given: the backend requires it and no default fills it in. */
+/**
+ * Whether an input must be given: the backend requires it and no default fills it in.
+ * Autogrow and DynamicGroup are required by their minimum alone: the backend enforces it even
+ * when the input itself is optional.
+ */
 function isRequired(input: InputDef): boolean {
-  if (!input.required) return false;
   switch (input.kind) {
+    case "autogrow":
+      return input.template.required && input.min > 0 && input.slots.length > 0;
+    case "dynamicGroup":
+      return input.min > 0;
     case "int":
     case "float":
     case "string":
     case "boolean":
     case "combo":
     case "value":
-      return input.default === undefined;
-    case "autogrow":
-      return input.template.required && input.min > 0;
-    case "dynamicGroup":
-      return input.min > 0;
+      return input.required && input.default === undefined;
     case "socket":
     case "dynamicCombo":
     case "matchType":
     case "unknown":
-      return true;
+      return input.required;
   }
 }
 
 function literal(option: ComboOption): string {
-  return typeof option === "string" ? JSON.stringify(option) : String(option);
+  return typeof option === "string" ? quote(option) : String(option);
 }
 
-/** `readonly T[]`, with the first `minimum` elements required. */
-function repeated(element: Doc, minimum: number): Doc {
-  if (minimum === 0) return ["readonly ", element, "[]"];
-  return tuple([...Array.from({ length: minimum }, () => element), ["...", element, "[]"]]);
+/** `Name` or `Name<A, B>`, breaking the arguments the way oxfmt does when they don't fit. */
+function reference(name: string, args: readonly string[]): Doc {
+  if (args.length === 0) return name;
+  return group([name, "<", indent([softline, join([",", line], args)]), softline, ">"]);
+}
+
+/**
+ * `readonly T[]`, with the first `minimum` elements required. `first` types the first element
+ * and `rest` the others, so a MatchType slot list infers from its first element only.
+ */
+function repeated(first: Doc, rest: Doc, minimum: number): Doc {
+  if (minimum === 0) {
+    return first === rest
+      ? ["readonly ", rest, "[]"]
+      : tuple([
+          [first, "?"],
+          ["...", rest, "[]"],
+        ]);
+  }
+  return tuple([first, ...Array.from({ length: minimum - 1 }, () => rest), ["...", rest, "[]"]]);
 }
 
 function tuple(elements: readonly Doc[]): Doc {
@@ -734,7 +817,7 @@ function tuple(elements: readonly Doc[]): Doc {
   ]);
 }
 
-/** A union after a `:` or `=`: flat, or one `| atom` per line. */
+/** A union after a `:`: flat, or one `| atom` per line. */
 function unionDoc(atoms: Atoms): Doc {
   if (atoms.length === 1) return [" ", atoms[0] ?? "never"];
   return group(indent([line, ifBreak("| "), join([line, "| "], atoms)]));
@@ -752,35 +835,42 @@ function typeParameters(parameters: readonly string[]): Doc {
 }
 
 function aliasDoc(name: string, parameters: readonly string[], atoms: Atoms, comment: string): Doc {
-  // One member breaks after `=` when it doesn't fit; a union breaks into `| member` lines.
-  const value = atoms.length === 1 ? group(indent([line, atoms[0] ?? "never"])) : unionDoc(atoms);
-  return [
-    `/** ${comment} */`,
-    hardline,
-    group(["export type ", name, typeParameters(parameters), " =", value, ";"]),
-  ];
+  const left = ["export type ", name, typeParameters(parameters)];
+  // One member is an assignment; a union breaks into `| member` lines.
+  const declaration =
+    atoms.length === 1
+      ? assignment(left, [atoms[0] ?? "never", ";"])
+      : group([left, " =", unionDoc(atoms), ";"]);
+  return [inlineComment(comment), hardline, declaration];
 }
 
 function interfaceDoc(
   name: string,
   parameters: readonly string[],
-  parents: readonly string[],
+  parents: readonly Doc[],
   members: readonly Doc[],
 ): Doc {
   const heading = group([
     "export interface ",
     name,
     typeParameters(parameters),
-    parents.length > 0 ? group(indent([line, "extends ", join(", ", parents)])) : "",
+    parents.length > 0
+      ? group(indent([line, "extends", group(indent([line, join([",", line], parents)]))]))
+      : "",
     " {",
   ]);
   if (members.length === 0) return [heading, "}"];
   return [heading, indent([hardline, join(hardline, members)]), hardline, "}"];
 }
 
+/** A one-line doc comment holding server text. */
+function inlineComment(text: string): string {
+  return `/** ${commentText(text)} */`;
+}
+
 /** A JSDoc comment from text lines; nothing when there are none. */
 function docComment(lines: readonly string[]): Doc {
-  const text = lines.map((each) => each.replaceAll("*/", "*\\/").trimEnd());
+  const text = lines.flatMap(commentLines);
   if (text.length === 0) return "";
   if (text.length === 1) return [`/** ${text[0] ?? ""} */`, hardline];
   return [
@@ -796,7 +886,7 @@ function nodeDocLines(node: NodeDef): string[] {
   const lines = [
     node.category === "" ? node.displayName : `${node.displayName} · ${node.category}`,
   ];
-  if (node.description !== undefined) lines.push("", ...node.description.split(/\r?\n/));
+  if (node.description !== undefined) lines.push("", node.description);
   const lists = node.outputs.filter((output) => output.isList).map((output) => output.name);
   if (lists.length > 0) {
     lines.push("", `List outputs (run what they feed once per item): ${lists.join(", ")}.`);
@@ -807,7 +897,7 @@ function nodeDocLines(node: NodeDef): string[] {
 }
 
 function inputDocLines(input: InputDef): string[] {
-  const lines = input.tooltip === undefined ? [] : input.tooltip.split(/\r?\n/);
+  const lines = input.tooltip === undefined ? [] : [input.tooltip];
   const facts: string[] = [];
   if ("default" in input) {
     facts.push(`Default: \`${stringify(input.default)}\`.`);
@@ -821,6 +911,10 @@ function inputDocLines(input: InputDef): string[] {
       facts.push(`Maximum: \`${numberText(input.max)}\`.`);
     }
     if (input.step !== undefined) facts.push(`Step: \`${String(input.step)}\`.`);
+  }
+  if (input.name === "__proto__") {
+    // An object literal's `__proto__: x` sets the prototype instead of a property.
+    facts.push('Pass it as `["__proto__"]: value`; a plain `__proto__:` key sets the prototype.');
   }
   if (facts.length > 0) {
     if (lines.length > 0) lines.push("");

@@ -14,7 +14,7 @@ export {
   type DiagnosticPath,
   type Severity,
 } from "./diagnostic/diagnostic.ts";
-export type { In, Match, NodeHandle, NodeId, NodeOptions, Out } from "./graph/types.ts";
+export type { In, Match, NodeHandle, NodeId, NodeOptions, OptionList, Out } from "./graph/types.ts";
 export { parse, type ParseResult } from "./json/parse.ts";
 export { stringify } from "./json/stringify.ts";
 export type { JsonObject, JsonValue } from "./json/value.ts";

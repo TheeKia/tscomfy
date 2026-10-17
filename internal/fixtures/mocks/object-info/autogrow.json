@@ -116,6 +116,78 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MockAutogrowOptionalRequired": {
+    "input": {
+      "required": {},
+      "optional": {
+        "images": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": { "required": { "image": ["IMAGE", {}] } },
+              "prefix": "image",
+              "min": 1,
+              "max": 4
+            }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": [], "optional": ["images"] },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "MockAutogrowOptionalRequired",
+    "display_name": "Mock Autogrow Optional Required",
+    "description": "An optional Autogrow whose template is required: the backend still requires the first min slots.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/autogrow",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockAutogrowMatchType": {
+    "input": {
+      "required": {
+        "values": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": {
+                "required": {
+                  "value": [
+                    "COMFY_MATCHTYPE_V3",
+                    { "template": { "template_id": "value", "allowed_types": "*" } }
+                  ]
+                }
+              },
+              "prefix": "value",
+              "min": 1,
+              "max": 4
+            }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["values"] },
+    "is_input_list": false,
+    "output": ["COMFY_MATCHTYPE_V3"],
+    "output_is_list": [false],
+    "output_name": ["value"],
+    "output_tooltips": [null],
+    "output_matchtypes": ["value"],
+    "name": "MockAutogrowMatchType",
+    "display_name": "Mock Autogrow MatchType",
+    "description": "Autogrow slots that share one MatchType template: every slot must agree with the first.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/autogrow",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "MockAutogrowOptionalTemplate": {
     "input": {
       "required": {},
