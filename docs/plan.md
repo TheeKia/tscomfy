@@ -1,7 +1,7 @@
 # tscomfy: implementation plan
 
 > Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`). MIT.
-> Publishing is not a priority. Status: revision 5, 2026-10-17: the generated encoding as built in Phase 2 (§6). **Phases 0–2 complete.**
+> Publishing is not a priority. Status: revision 6, 2026-10-17: the builder and exporter as built in Phase 3 (§5.3, §7). **Phases 0–3 complete.**
 > Every claim marked **[verified]** was checked hands-on; the evidence is in [§16](#16-verification-log).
 
 ## 1. Goal
@@ -198,17 +198,22 @@ It is documented in JSDoc only.
 ### 5.3 Graph IR
 
 ```ts
-interface Graph { readonly nodes: ReadonlyMap<NodeId, GraphNode> }          // insertion-ordered
+interface Workflow<N> { readonly schema: TypedSchema<N>; readonly graph: Graph }   // frozen
+interface Graph { readonly nodes: ReadonlyMap<NodeId, GraphNode> }   // creation order; a read-only view, not a Map
 interface GraphNode {
   readonly id: NodeId;                      // string; sequential "1","2",… unless set explicitly
   readonly classType: string;
-  readonly inputs: Readonly<Record<string, InputValue>>;   // STRUCTURED (dynamic inputs nested)
+  readonly inputs: { readonly [name: string]: InputValue };   // STRUCTURED (dynamic inputs nested)
   readonly title?: string;
-  readonly mode?: "bypass" | "mute";
+  readonly raw: boolean;                    // added with raw(): inputs are wire keys, exported as given
 }
-type InputValue = string | number | bigint | boolean | null | OutputRef
+type InputValue = string | number | bigint | boolean | null | Out<string>
   | readonly InputValue[] | { readonly [k: string]: InputValue };
 ```
+
+Structured values per input kind: a dynamic combo is its option key or `{ option, inputs }`; an
+Autogrow a slot list (prefix form) or a record by slot name; a DynamicGroup a list of row records.
+`mode` (bypass, mute) comes with the graph operations in Phase 7.
 
 **Flattening is the API exporter's job; un-flattening is the importer's.** It is **schema-driven**:
 851 ordinary inputs in the real dump already have dots in their names (e.g. ModelMergeSD1
@@ -415,7 +420,14 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
   re-running the builder is cheap, and plain parameters give the best types.
 - **Composition is plain functions** taking `n` and refs. Mapping them to UI subgraphs comes with the UI format.
 - **Escape hatch**: `raw(classType, inputs, options?)` from the context. It is untyped and kept separate
-  from `n`, so no `class_type` can collide with it. Validation warns when it is used.
+  from `n`, so no `class_type` can collide with it. Its inputs are wire keys and are exported as
+  given, without defaults or flattening; `raw(…).output(slot)` is an `Out<"*">`, which fits any
+  socket. Validation warns when it is used.
+- **Results** follow the generated types exactly: the rule for which outputs are also reachable by
+  name (`namedOutputs`) lives in core and serves both codegen and the builder. Results and output
+  references are frozen; references are instances only the builder creates.
+- **Misuse throws** a `TypeError`: an empty or taken explicit id, a node added after the build
+  function returned, an input value that is neither JSON nor an output reference.
 
 ### 7.2 Defaults policy
 
@@ -425,6 +437,11 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
   widget value.
 - **Never invent implicit defaults.** The frontend falls back to `0`, `""`, `false` or the first combo
   option; we don't, so those inputs stay **required** in the types. Explicit beats a silently chosen first checkpoint.
+- **Except where the frontend overrides the schema** (`useComboWidget.ts`, 1.55.17), we do what it
+  does: a multi-select starts as `[]` whatever its default (so it is optional in the types), and a
+  combo whose default is falsy (`0`, `""`, `false`) starts at its first option.
+- **Display-only widgets** (RESOLUTION_PREVIEW, IMAGEUPLOAD: `options.serialize === false`) are
+  never sent, and codegen leaves them out of the input types.
 
 ### 7.3 Node ids
 
@@ -439,7 +456,8 @@ Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
 | Rule | What we do |
 |---|---|
 | Every widget value is sent; unconnected socket-only inputs are left out | Same |
-| Key order: each node is `inputs`, `class_type`, `_meta`. Inside `inputs`, widget inputs come first in `input_order` (linked widgets included), then socket-only inputs | Same, so `stringify` reproduces an export byte for byte. Observed on every node of a corpus export (frontend 1.55.17); to be confirmed in `executionUtil.ts` in Phase 3 |
+| Key order: each node is `inputs`, `class_type`, `_meta`. Inside `inputs`: every widget in widget order (a linked widget keeps its widget's position), a dynamic combo's option widgets right after it, depth-first; then connected socket-only inputs in input order (Autogrow slots in slot order); then a dynamic combo's option sockets | Same, so `stringify` reproduces an export byte for byte. Confirmed in `executionUtil.ts`, `litegraphService.ts` and `dynamicWidgets.ts` (1.55.17), and on every node of a corpus export |
+| A CURVE value is sent as `{"__type__": "CURVE", "__value__": …}` | Same |
 | A list-valued widget is sent as `{"__value__": [...]}`, because the backend reads a bare list as a link | Same; the importer unwraps it |
 | `_meta.title` is always present (title, or display name) | Same (`toApi({ meta: false })` turns it off) |
 | control_after_generate is never sent (its widget has `serialize: false`) | Not modeled; seeds are plain values |
@@ -450,7 +468,10 @@ Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
 
 ### 7.5 Serialization
 
-- `toApi()` returns a plain `ApiPrompt` object, which may hold `bigint`.
+- `toApi()` returns a plain `ApiPrompt` object, which may hold `bigint`. It throws a
+  `ValidationError` carrying every diagnostic when the prompt can't be built faithfully: so far a
+  flattened key that collides with another input (`E_INPUT_KEY_COLLISION`). `exportApi()` returns
+  the prompt and the diagnostics without throwing. Phase 5 adds `validate`.
 - `stringify()` is our own deterministic serializer: keys in JavaScript's enumeration order, as
   `JSON.stringify` and the frontend use (integer-like keys such as node ids `"1"`, `"10"` first in
   numeric order, then insertion order; every object we build has a fixed construction order,
@@ -737,7 +758,7 @@ re-parses to the same value; snapshot tests; the `accepts` table suite.
 Exit: generated output for every mock and for the local corpus compiles; type tests cover every row of §6.2 and every
 case in §6.3–6.4; `bench:types` is within budget.
 
-**Phase 3: builder and API export**
+**Phase 3: builder and API export** (done)
 - Graph IR, `workflow()`, `OutputRef`, node handles.
 - Default filling, schema-driven flattening, `__value__` wrapping, `_meta`, frontend key order (§7.4).
 - Research first, against the frontend version the corpus came from: how each value widget
@@ -767,7 +788,7 @@ Exit: every corpus API workflow re-exports byte for byte, key order included:
 (§10) passes on the same corpus.
 
 **Phase 7: graph operations**
-- Everything in §12.
+- Everything in §12, and `NodeOptions.mode` (`bypass`, `mute`) to use them.
 
 Exit: tests mirror the frontend algorithms case by case.
 
@@ -820,6 +841,8 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Tuple-extending result interfaces (§6.2) | `interface X$Out extends X$Outputs, NodeHandle` keeps destructuring types and `length`; neither it nor an intersection makes an out-of-range index an error under TS 7.0.2, and the interface lays out more simply |
 | Phase 2 review | An independent review found 10 issues, each proven with a failing snippet or input, among them: option-list and loose-`*` outputs fitting inputs `accepts()` rejects, optional Autogrow/DynamicGroup minimums the backend still enforces, INT/FLOAT list defaults, comment injection through names, and eight printer layouts that differed from oxfmt. All fixed, with mocks and tests; the type-level `accepts` matrix now proves soundness for all 108 pairs |
 | oxfmt layout rules (§9) | Probed on crafted code: `extends` breaks to its own line with one parent per line; type arguments break one per line without a trailing comma; assignments break after `=` when the head of the right side doesn't fit; strings use single quotes only when that needs fewer escapes; Unicode identifier keys are unquoted; CJK and fullwidth characters count as two columns |
+| Exported key order (§7.4) | `graphToPrompt` writes widgets first (`node.widgets` order), then links (`node.inputs` order); assigning an existing key keeps its position. `dynamicWidgets.ts` inserts option widgets after their combo and option sockets after its socket; Autogrow slots after the previous slot. Six hand-written parity prompts (`mocks/workflows/api/`) export byte for byte |
+| Combo defaults (§7.2) | `useComboWidget.ts`: a multi-select starts at `ref([])`; `getDefaultValue` returns `default` if truthy, else `options[0]` |
 | Input order (§9) | Frontend 1.55.17 `getOrderedInputSpecs` (`nodeDefOrderingUtil.ts`): listed required, listed optional, then remaining inputs in definition order; no `input_order`, definition order |
 | `stringify`/`parse` round trip (§7.5) | `JSON.stringify(2 ** 64 - 2048)` is `"18446744073709550000"`, an integer literal that `parse` reads as a different bigint; `toExponential()` (`1.844674407370955e+19`) round-trips exactly. Found by `defineSchema` on the numbers mock |
 | Non-finite numbers (§7.5) | `/object_info` is served by aiohttp `web.json_response`, whose default `json.dumps` writes `Infinity`/`NaN` (checked with the server's Python). None in the corpus dump today |

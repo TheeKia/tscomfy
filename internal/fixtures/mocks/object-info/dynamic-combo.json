@@ -212,6 +212,37 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MockDynamicComboCollision": {
+    "input": {
+      "required": {
+        "format": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              {
+                "key": "mp4",
+                "inputs": { "required": { "codec": ["STRING", { "default": "h264" }] } }
+              }
+            ]
+          }
+        ],
+        "format.codec": ["STRING", { "default": "vp9" }]
+      }
+    },
+    "input_order": { "required": ["format", "format.codec"] },
+    "is_input_list": false,
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "MockDynamicComboCollision",
+    "display_name": "Mock Dynamic Combo Collision",
+    "description": "An ordinary input named like the flattened key of a dynamic combo's option input.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/dynamic",
+    "output_node": true,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "MockDynamicComboOptional": {
     "input": {
       "required": { "audio": ["AUDIO"] },

@@ -1,0 +1,56 @@
+{
+  "1": {
+    "inputs": { "file": "clip.mp4" },
+    "class_type": "MockVideoSource",
+    "_meta": { "title": "MockVideoSource" }
+  },
+  "2": { "inputs": {}, "class_type": "MockImageSource", "_meta": { "title": "MockImageSource" } },
+  "3": { "inputs": {}, "class_type": "MockAudioSource", "_meta": { "title": "MockAudioSource" } },
+  "4": {
+    "inputs": {
+      "format": "mp4",
+      "format.codec": "h264",
+      "format.codec.encoding": "custom",
+      "format.codec.encoding.crf": 23,
+      "codec": "auto",
+      "video": ["1", 0]
+    },
+    "class_type": "MockDynamicComboNested",
+    "_meta": { "title": "Mock Dynamic Combo Nested" }
+  },
+  "5": {
+    "inputs": { "mode": "keep", "image": ["2", 0] },
+    "class_type": "MockDynamicComboSimple",
+    "_meta": { "title": "Mock Dynamic Combo" }
+  },
+  "6": {
+    "inputs": {
+      "mode": "scale dimensions",
+      "mode.width": 768,
+      "mode.height": 512,
+      "mode.crop": "center",
+      "image": ["2", 0]
+    },
+    "class_type": "MockDynamicComboSimple",
+    "_meta": { "title": "Mock Dynamic Combo" }
+  },
+  "7": {
+    "inputs": {
+      "model": "Model [pro]",
+      "model.prompt": "a cat",
+      "model.images.image_1": ["2", 0]
+    },
+    "class_type": "MockDynamicComboMixed",
+    "_meta": { "title": "Mock Dynamic Combo Mixed" }
+  },
+  "8": {
+    "inputs": { "audio": ["3", 0] },
+    "class_type": "MockDynamicComboOptional",
+    "_meta": { "title": "Mock Dynamic Combo Optional" }
+  },
+  "9": {
+    "inputs": { "format": "flac", "audio": ["3", 0] },
+    "class_type": "MockDynamicComboOptional",
+    "_meta": { "title": "Mock Dynamic Combo Optional" }
+  }
+}

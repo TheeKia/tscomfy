@@ -44,6 +44,30 @@ export function readMockObjectInfo(name: MockObjectInfoName): Promise<string> {
   return Bun.file(join(MOCK_OBJECT_INFO_DIR, `${name}.json`)).text();
 }
 
+/**
+ * Names of the committed mock API-format workflows in `mocks/workflows/api/`. Each is the prompt
+ * the frontend would send for a graph built over one mock schema: the expected output of the
+ * exporter's parity tests (docs/plan.md §7.4).
+ */
+export const MOCK_API_WORKFLOW_NAMES = [
+  "autogrow",
+  "dynamic-combo",
+  "dynamic-group",
+  "lists",
+  "txt2img",
+  "value-widgets",
+] as const;
+
+export type MockApiWorkflowName = (typeof MOCK_API_WORKFLOW_NAMES)[number];
+
+/** Absolute path of the directory holding the mock API-format workflows. */
+export const MOCK_API_WORKFLOW_DIR: string = join(root, "mocks", "workflows", "api");
+
+/** Raw JSON text of one mock API-format workflow. */
+export function readMockApiWorkflow(name: MockApiWorkflowName): Promise<string> {
+  return Bun.file(join(MOCK_API_WORKFLOW_DIR, `${name}.json`)).text();
+}
+
 /** Sections of the local corpus. */
 export type CorpusSection = "object-info" | "workflows/api" | "workflows/ui";
 

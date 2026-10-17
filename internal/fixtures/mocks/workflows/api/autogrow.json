@@ -1,0 +1,28 @@
+{
+  "1": { "inputs": {}, "class_type": "MockSources", "_meta": { "title": "MockSources" } },
+  "2": {
+    "inputs": { "images.image0": ["1", 0], "images.image1": ["1", 0] },
+    "class_type": "MockAutogrowPrefix",
+    "_meta": { "title": "Mock Autogrow Prefix" }
+  },
+  "3": {
+    "inputs": { "prompt": "a cat", "ref_images.ref_image_0": ["2", 0] },
+    "class_type": "MockAutogrowPrefixOptional",
+    "_meta": { "title": "Mock Autogrow Prefix (min 0)" }
+  },
+  "4": {
+    "inputs": { "expression": "a + b", "values.a": ["1", 1], "values.b": ["1", 2] },
+    "class_type": "MockAutogrowNames",
+    "_meta": { "title": "Mock Autogrow Names" }
+  },
+  "5": {
+    "inputs": { "values.value0": ["2", 0], "values.value1": ["1", 0] },
+    "class_type": "MockAutogrowMatchType",
+    "_meta": { "title": "Mock Autogrow MatchType" }
+  },
+  "6": {
+    "inputs": {},
+    "class_type": "MockAutogrowOptionalTemplate",
+    "_meta": { "title": "Mock Autogrow Optional Template" }
+  }
+}

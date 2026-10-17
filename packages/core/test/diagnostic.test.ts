@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {
   DIAGNOSTIC_CODES,
+  exportApi,
+  workflow,
   type Diagnostic,
   type DiagnosticCode,
   normalizeObjectInfo,
@@ -9,6 +11,7 @@ import {
 } from "@tscomfy/core";
 import { readMockObjectInfo } from "@tscomfy/fixtures";
 import { parseWith } from "../src/json/parse.ts";
+import { looseSchema } from "./loose.ts";
 
 const isCode = (key: string): key is DiagnosticCode => Object.hasOwn(DIAGNOSTIC_CODES, key);
 const codes = Object.keys(DIAGNOSTIC_CODES).filter(isCode);
@@ -28,6 +31,15 @@ describe("registry", () => {
     expect(documented.toSorted(byCodeUnit)).toEqual(codes.toSorted(byCodeUnit));
   });
 });
+
+/** Exports a workflow with a dynamic combo whose flattened key collides with another input. */
+async function collision(): Promise<readonly Diagnostic[]> {
+  const schema = looseSchema(await readMockObjectInfo("dynamic-combo"));
+  const built = workflow(schema, ({ n }) => {
+    n["MockDynamicComboCollision"]?.({ format: "mp4" }, { id: "5" });
+  });
+  return exportApi(built).diagnostics;
+}
 
 const malformed = async (): Promise<readonly Diagnostic[]> =>
   normalizeObjectInfo(await readMockObjectInfo("malformed")).diagnostics;
@@ -73,6 +85,7 @@ const PRODUCERS: Record<CoreCode, Producer> = {
     produce: malformed,
     path: ["MockBadInputSpecs", "input", "required", "unknown_v3_type", 0],
   },
+  E_INPUT_KEY_COLLISION: { produce: collision, path: ["5", "inputs", "format.codec"] },
   W_INVALID_INPUT_OPTION: {
     produce: malformed,
     path: ["MockBadInputSpecs", "input", "required", "options_not_object", 1],

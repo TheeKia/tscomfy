@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import {
   listCorpus,
+  MOCK_API_WORKFLOW_DIR,
+  MOCK_API_WORKFLOW_NAMES,
   MOCK_OBJECT_INFO_DIR,
   MOCK_OBJECT_INFO_NAMES,
+  readMockApiWorkflow,
   readMockObjectInfo,
 } from "@tscomfy/fixtures";
 
@@ -20,6 +23,21 @@ describe("mock object_info", () => {
     const parsed: unknown = JSON.parse(await readMockObjectInfo(name));
     expect(parsed).toBeObject();
     expect(Array.isArray(parsed)).toBeFalse();
+  });
+});
+
+describe("mock API workflows", () => {
+  test("the name list matches the files on disk", async () => {
+    const onDisk = (await readdir(MOCK_API_WORKFLOW_DIR))
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => name.slice(0, -".json".length))
+      .toSorted();
+    expect(onDisk).toEqual([...MOCK_API_WORKFLOW_NAMES]);
+  });
+
+  test.each(MOCK_API_WORKFLOW_NAMES)("%s is a JSON object", async (name) => {
+    const parsed: unknown = JSON.parse(await readMockApiWorkflow(name));
+    expect(parsed).toBeObject();
   });
 });
 

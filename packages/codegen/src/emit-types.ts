@@ -14,9 +14,11 @@ import {
   createDiagnostic,
   type Diagnostic,
   type InputDef,
+  namedOutputs,
   type NodeDef,
   type OutputDef,
   type Schema,
+  sendsValue,
   type SocketType,
   stringify,
 } from "@tscomfy/core";
@@ -73,57 +75,6 @@ type CoreType = (typeof CORE_TYPES)[number];
 
 /** Names generated declarations must not take: imports, globals the output uses, `Nodes`. */
 const RESERVED = [...CORE_TYPES, "NoInfer", "Nodes"];
-
-/**
- * Output names that can't become named members of a multi-output result: members of
- * `NodeHandle` and `Out`, of arrays (the result is a tuple) and of `Object.prototype`. A fixed
- * list, so the output doesn't depend on the runtime's built-ins.
- */
-const RESERVED_OUTPUT_NAMES: ReadonlySet<string> = new Set([
-  "id",
-  "node",
-  "slot",
-  "length",
-  "at",
-  "concat",
-  "entries",
-  "every",
-  "filter",
-  "find",
-  "findIndex",
-  "findLast",
-  "findLastIndex",
-  "flat",
-  "flatMap",
-  "forEach",
-  "includes",
-  "indexOf",
-  "join",
-  "keys",
-  "lastIndexOf",
-  "map",
-  "reduce",
-  "reduceRight",
-  "slice",
-  "some",
-  "toLocaleString",
-  "toReversed",
-  "toSorted",
-  "toSpliced",
-  "toString",
-  "values",
-  "with",
-  "constructor",
-  "hasOwnProperty",
-  "isPrototypeOf",
-  "propertyIsEnumerable",
-  "valueOf",
-  "__proto__",
-  "__defineGetter__",
-  "__defineSetter__",
-  "__lookupGetter__",
-  "__lookupSetter__",
-]);
 
 /** A type expression: a union of atoms. */
 type Atoms = readonly Doc[];
@@ -331,15 +282,13 @@ class TypesEmitter {
         [tuple(built.map((output) => output.atom)), ";"],
       ),
     ]);
-    const counts = new Map<string, number>();
-    for (const output of outputs) counts.set(output.name, (counts.get(output.name) ?? 0) + 1);
-    const named = outputs.flatMap((output, index) =>
-      counts.get(output.name) === 1 &&
-      !RESERVED_OUTPUT_NAMES.has(output.name) &&
-      !/^\d+$/.test(output.name)
-        ? [["readonly ", propertyKey(output.name), ": ", built[index]?.atom ?? "never", ";"]]
-        : [],
-    );
+    const named = [...namedOutputs(outputs)].map(([outputName, slot]) => [
+      "readonly ",
+      propertyKey(outputName),
+      ": ",
+      built[slot]?.atom ?? "never",
+      ";",
+    ]);
     const name = `${scope.base}$Out`;
     scope.declarations.push([
       inlineComment(
@@ -409,6 +358,8 @@ class TypesEmitter {
     const templates = new Set<string>();
     let optional = true;
     for (const input of inputs) {
+      // The frontend never sends display-only widgets, so they take no value (§7.4).
+      if (input.kind === "value" && !sendsValue(input.widget)) continue;
       const built = this.#inputType(scope, input, `${prefix}$${pascal(input.name, "Input")}`, [
         ...path,
         input.name,
@@ -766,11 +717,13 @@ function isRequired(input: InputDef): boolean {
       return input.template.required && input.min > 0 && input.slots.length > 0;
     case "dynamicGroup":
       return input.min > 0;
+    case "combo":
+      // Left out, a multi-select is sent as [] (the frontend's value), which the backend accepts.
+      return input.required && !input.multiselect && input.default === undefined;
     case "int":
     case "float":
     case "string":
     case "boolean":
-    case "combo":
     case "value":
       return input.required && input.default === undefined;
     case "socket":
@@ -899,7 +852,9 @@ function nodeDocLines(node: NodeDef): string[] {
 function inputDocLines(input: InputDef): string[] {
   const lines = input.tooltip === undefined ? [] : [input.tooltip];
   const facts: string[] = [];
-  if ("default" in input) {
+  if (input.kind === "combo" && input.multiselect) {
+    facts.push("Default: `[]` (the frontend ignores the server's default for multi-selects).");
+  } else if ("default" in input) {
     facts.push(`Default: \`${stringify(input.default)}\`.`);
   }
   if (input.kind === "int" || input.kind === "float") {

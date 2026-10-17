@@ -1,0 +1,36 @@
+{
+  "1": { "inputs": {}, "class_type": "MockStateSource", "_meta": { "title": "MockStateSource" } },
+  "2": {
+    "inputs": {
+      "color": "#336699",
+      "region": { "x": 0, "y": 0, "width": 64, "height": 64 },
+      "palette": { "__value__": [] },
+      "compare": { "__value__": ["before.png", "after.png"] },
+      "curve_value": {
+        "__type__": "CURVE",
+        "__value__": {
+          "points": [
+            [0, 0],
+            [1, 1]
+          ]
+        }
+      }
+    },
+    "class_type": "MockValueWidgets",
+    "_meta": { "title": "Mock Value Widgets" }
+  },
+  "3": {
+    "inputs": {
+      "rate": 24,
+      "file": "",
+      "sketch": "",
+      "timestamp": "00:00",
+      "picker": "a",
+      "size": "s",
+      "count": 1,
+      "custom": ["1", 0]
+    },
+    "class_type": "MockWidgetTypeOverrides",
+    "_meta": { "title": "Mock Widget Type Overrides" }
+  }
+}

@@ -32,6 +32,14 @@ Paths of parser and normalizer diagnostics point into the raw document, e.g.
 | `W_UNSUPPORTED_INPUT_TYPE` | The input uses a `COMFY_…_V3` dynamic type this version doesn't know. | The input is kept as `unknown`. |
 | `W_INVALID_INPUT_OPTION` | One option of a readable spec is invalid: wrong type; a combo option that isn't a string, number or boolean; a default the backend would reject (not one of the combo's options, outside `min`/`max`, a list for INT or FLOAT); a malformed or duplicate dynamic-combo option. | That option is ignored. A combo with no listed options keeps its default, since membership can't be checked. |
 
+## Exporting prompts
+
+Paths of export diagnostics point into the prompt: a node id, `inputs`, and the wire key.
+
+| Code | Meaning | What happens |
+|---|---|---|
+| `E_INPUT_KEY_COLLISION` | Two inputs of one node send the same wire key: a flattened dynamic key such as `format.codec` equals another input's name. | The first is kept; `toApi` throws a `ValidationError`. |
+
 ## Generating types
 
 Paths of codegen diagnostics are a class type followed by the input names leading to the input,

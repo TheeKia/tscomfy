@@ -47,6 +47,4 @@ export interface NodeOptions {
   readonly id?: NodeId;
   /** Sent as `_meta.title`. */
   readonly title?: string;
-  /** Excludes the node from the prompt like the frontend's bypass or mute (§12). */
-  readonly mode?: "bypass" | "mute";
 }

@@ -1,0 +1,22 @@
+{
+  "1": {
+    "inputs": { "tags": { "__value__": ["red", "blue"] } },
+    "class_type": "MockComboMultiselect",
+    "_meta": { "title": "Mock Combo Multiselect" }
+  },
+  "2": {
+    "inputs": { "tags": { "__value__": [] } },
+    "class_type": "MockComboMultiselect",
+    "_meta": { "title": "Mock Combo Multiselect" }
+  },
+  "3": {
+    "inputs": { "flag": true, "mode": "auto" },
+    "class_type": "MockComboBoolean",
+    "_meta": { "title": "Mock Combo Boolean" }
+  },
+  "4": {
+    "inputs": { "values": { "__value__": [1, 2, 3] }, "label": "raw" },
+    "class_type": "MockRawLists",
+    "_meta": { "title": "MockRawLists" }
+  }
+}

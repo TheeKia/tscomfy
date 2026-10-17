@@ -1074,6 +1074,45 @@ exports[`snapshots basic-pipeline 1`] = `
         ],
         "pythonModule": "nodes",
       },
+      "MockSeed": {
+        "category": "utils",
+        "classType": "MockSeed",
+        "deprecated": false,
+        "description": "Outputs a seed, so one seed can drive several samplers.",
+        "displayName": "Seed",
+        "experimental": false,
+        "inputs": [
+          {
+            "default": 0,
+            "kind": "int",
+            "lazy": false,
+            "max": 18446744073709551615n,
+            "min": 0,
+            "name": "seed",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "seed",
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
       "SaveImage": {
         "category": "image",
         "classType": "SaveImage",
@@ -1603,6 +1642,28 @@ exports[`snapshots combos 1`] = `
             },
             "upload": false,
           },
+          {
+            "default": 0,
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "falsy_default",
+            "options": [
+              "auto",
+              0,
+              1,
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
         ],
         "isInputList": false,
         "outputNode": false,
@@ -1782,6 +1843,64 @@ exports[`snapshots dynamic-combo 1`] = `
   "schema": {
     "formatVersion": 1,
     "nodes": {
+      "MockDynamicComboCollision": {
+        "category": "mock/dynamic",
+        "classType": "MockDynamicComboCollision",
+        "deprecated": false,
+        "description": "An ordinary input named like the flattened key of a dynamic combo's option input.",
+        "displayName": "Mock Dynamic Combo Collision",
+        "experimental": false,
+        "inputs": [
+          {
+            "kind": "dynamicCombo",
+            "lazy": false,
+            "name": "format",
+            "options": [
+              {
+                "inputs": [
+                  {
+                    "default": "h264",
+                    "dynamicPrompts": false,
+                    "kind": "string",
+                    "lazy": false,
+                    "multiline": false,
+                    "name": "codec",
+                    "rawLink": false,
+                    "required": true,
+                    "socketless": false,
+                    "type": {
+                      "kind": "named",
+                      "name": "STRING",
+                    },
+                  },
+                ],
+                "key": "mp4",
+              },
+            ],
+            "rawLink": false,
+            "required": true,
+          },
+          {
+            "default": "vp9",
+            "dynamicPrompts": false,
+            "kind": "string",
+            "lazy": false,
+            "multiline": false,
+            "name": "format.codec",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "STRING",
+            },
+          },
+        ],
+        "isInputList": false,
+        "outputNode": true,
+        "outputs": [],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
       "MockDynamicComboMixed": {
         "category": "mock/dynamic",
         "classType": "MockDynamicComboMixed",
@@ -4875,6 +4994,31 @@ exports[`snapshots widget-types 1`] = `
               "name": "RESOLUTION_PREVIEW",
             },
             "widget": "RESOLUTION_PREVIEW",
+          },
+          {
+            "default": {
+              "points": [
+                [
+                  0,
+                  0,
+                ],
+                [
+                  1,
+                  1,
+                ],
+              ],
+            },
+            "kind": "value",
+            "lazy": false,
+            "name": "curve_value",
+            "rawLink": false,
+            "required": false,
+            "socketless": true,
+            "type": {
+              "kind": "named",
+              "name": "CURVE",
+            },
+            "widget": "CURVE",
           },
         ],
         "isInputList": false,

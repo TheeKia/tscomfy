@@ -1,0 +1,26 @@
+{
+  "1": { "inputs": {}, "class_type": "MockModelSource", "_meta": { "title": "MockModelSource" } },
+  "2": {
+    "inputs": {
+      "loras.0.lora_name": "lora-a.safetensors",
+      "loras.0.strength": 1,
+      "loras.0.enabled": true,
+      "loras.1.lora_name": "lora-b.safetensors",
+      "loras.1.strength": 0.5,
+      "loras.1.enabled": false,
+      "model": ["1", 0]
+    },
+    "class_type": "MockDynamicGroup",
+    "_meta": { "title": "Mock Dynamic Group" }
+  },
+  "3": {
+    "inputs": { "text": "hello", "replacements.0.find": "l", "replacements.0.replace": "" },
+    "class_type": "MockDynamicGroupOptional",
+    "_meta": { "title": "Mock Dynamic Group Optional" }
+  },
+  "4": {
+    "inputs": { "rows.0.value": 0 },
+    "class_type": "MockDynamicGroupOptionalMin",
+    "_meta": { "title": "Mock Dynamic Group Optional Min" }
+  }
+}

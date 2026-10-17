@@ -36,10 +36,11 @@
       "required": {
         "legacy_numeric": [[8, 10, 12], { "default": 10 }],
         "v2_numeric": ["COMBO", { "options": [5, 10, 15], "default": 5 }],
-        "v2_mixed": ["COMBO", { "options": ["auto", 2, 4] }]
+        "v2_mixed": ["COMBO", { "options": ["auto", 2, 4] }],
+        "falsy_default": ["COMBO", { "options": ["auto", 0, 1], "default": 0 }]
       }
     },
-    "input_order": { "required": ["legacy_numeric", "v2_numeric", "v2_mixed"] },
+    "input_order": { "required": ["legacy_numeric", "v2_numeric", "v2_mixed", "falsy_default"] },
     "is_input_list": false,
     "output": ["INT"],
     "output_is_list": [false],

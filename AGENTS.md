@@ -13,8 +13,8 @@ time, and runtime validation catches the rest. Output is API-format JSON.
 GUIs, MCP servers. Don't add these.
 
 **Status:** Phases 0 (foundation), 1 (lossless JSON, diagnostics, the schema model, `accepts()`,
-the `/object_info` normalizer) and 2 (the type emitter in `codegen`) are done. Next is Phase 3: the
-builder and API export. Phases and exit criteria are in `docs/plan.md` §14.
+the `/object_info` normalizer), 2 (the type emitter in `codegen`) and 3 (`workflow()` and `toApi`)
+are done. Next is Phase 4: the CLI. Phases and exit criteria are in `docs/plan.md` §14.
 
 ## Where things are
 

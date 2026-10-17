@@ -154,6 +154,29 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "MockSeed": {
+    "input": {
+      "required": {
+        "seed": [
+          "INT",
+          { "default": 0, "min": 0, "max": 18446744073709551615, "control_after_generate": true }
+        ]
+      }
+    },
+    "input_order": { "required": ["seed"] },
+    "is_input_list": false,
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["seed"],
+    "name": "MockSeed",
+    "display_name": "Seed",
+    "description": "Outputs a seed, so one seed can drive several samplers.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "utils",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "SaveImage": {
     "input": {
       "required": {

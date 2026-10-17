@@ -24,12 +24,24 @@
             "forceInput": true
           }
         ],
-        "preview": ["RESOLUTION_PREVIEW", { "socketless": true, "tooltip": "Display only." }]
+        "preview": ["RESOLUTION_PREVIEW", { "socketless": true, "tooltip": "Display only." }],
+        "curve_value": [
+          "CURVE",
+          {
+            "default": {
+              "points": [
+                [0, 0],
+                [1, 1]
+              ]
+            },
+            "socketless": true
+          }
+        ]
       }
     },
     "input_order": {
       "required": ["color", "region", "palette", "compare"],
-      "optional": ["curve", "preview"]
+      "optional": ["curve", "preview", "curve_value"]
     },
     "is_input_list": false,
     "output": ["IMAGE"],
