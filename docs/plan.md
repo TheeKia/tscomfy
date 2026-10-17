@@ -1,7 +1,7 @@
 # tscomfy: implementation plan
 
 > Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`). MIT.
-> Publishing is not a priority. Status: revision 4, 2026-10-17: widget classification (D16) and the final schema model from Phase 1. **Phases 0 and 1 complete.**
+> Publishing is not a priority. Status: revision 5, 2026-10-17: the generated encoding as built in Phase 2 (§6). **Phases 0–2 complete.**
 > Every claim marked **[verified]** was checked hands-on; the evidence is in [§16](#16-verification-log).
 
 ## 1. Goal
@@ -60,7 +60,7 @@ differences in §7.4.
 | D10 | **Lossless integers.** INT accepts `number \| bigint`. Our own small deterministic serializer writes bigint as a JSON number. The parser reads big ints via `JSON.parse` source-text access. The normalizer and the importer take **raw text**, never an already-parsed value | Seeds go up to 2⁶⁴−1, and 134 bounds in the real dump are integer literals beyond 2⁵³ (102 of them INT `max`). A parsed value has already lost them. **[verified]** in Bun 1.4.3 and Node 26. |
 | D11 | **oxfmt formats, oxlint lints** (`--type-aware` via tsgolint, built on TS 7) | One toolchain. oxlint's type-aware rules are as accurate as tsc and catch cross-package cases Biome's linter misses. oxfmt is 0.x, so it is pinned exactly. **[verified]** |
 | D12 | **No CI for now.** `bun run check` is the single local gate | Your request. Adding CI later means running the same script. |
-| D13 | **The generated runtime schema is a `.ts` module holding `JSON.parse("…")`**, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check. The `JSON.parse` module costs 20 MB and 0.02 s, needs no copy step and no `resolveJsonModule`. **[verified]** |
+| D13 | **The generated runtime schema is a `.ts` module holding the schema as one string literal**, loaded by `defineSchema`, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check; a string literal is nearly free, needs no copy step and no `resolveJsonModule`. `defineSchema` parses it with the lossless `parse`, because a plain `JSON.parse` would round the 134 big bounds. **[verified]** |
 | D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
 | D15 | **Schema identity.** `Schema.nodes` is built in code-unit order of class type (JavaScript still lists integer-like keys first). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
 | D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its core widget registry. When `type` is primitive (INT/FLOAT/STRING/BOOLEAN/COMBO) the kind follows `type`, because the backend coerces and validates by it, and `widgetType` is recorded. Otherwise a primitive widget gives its kind, another core widget (COLOR, BOUNDING_BOX, CURVE, …) gives a `value` kind holding JSON, and anything else, `TYPE:name` types included, is a socket. The socket type is always `type` | This is the only rule that matches which inputs get values in exported prompts and stays sound. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
@@ -244,10 +244,12 @@ Everything in this section was prototyped against the real 1,758-node dump. **[v
 src/comfy/local/
   object_info.json   # raw snapshot: offline regeneration (--from), drift diffs. Never imported.
   nodes.ts           # types only: interface Nodes + input interfaces + combo aliases
-  index.ts           # export const local: TypedSchema<Nodes> = defineSchema<Nodes>(JSON.parse("…"))
+  index.ts           # export const local: TypedSchema<Nodes> = defineSchema<Nodes>('…')
 ```
 
 Every file starts with a header: generator version, schema hash (`hashSchema`, D15), ComfyUI version, the command to regenerate.
+`codegen.generate(schema, { exportName, importExtension?, command? })` returns both files as data;
+`index.ts` imports `./nodes.js` by default, which resolves under `nodenext` and `bundler` without extra flags.
 
 ### 6.2 Encoding
 
@@ -260,21 +262,22 @@ type In<T extends string> = Out<T | "*">;     // what a socket of type T accepts
 | Schema | TypeScript |
 |---|---|
 | socket `MODEL` | `In<"MODEL">` (an any-typed `Out<"*">` fits) |
-| socket `IMAGE,MASK` | `Out<"IMAGE" \| "MASK" \| "*">` |
+| socket `IMAGE,MASK` | `In<ImageTypes>`, with a shared alias `ImageTypes = "IMAGE" \| "MASK"`; a union containing `*` is `Out<string>` |
 | socket `*` | `Out<string>` |
 | INT | `number \| bigint \| In<"INT">` (a widget also takes a link) |
 | FLOAT / STRING / BOOLEAN | `number` / `string` / `boolean`, each `\| In<…>` |
 | `forceInput` widget | link only |
-| combo | literal union alias `\| In<"COMBO">`. Identical option lists are **deduplicated into named aliases** (`SamplerName`, `CkptName`; 363 aliases cover 1,413 combo inputs in the dump) |
+| combo | literal union alias, plus a link: `\| In<type>` for the `COMBO` form, `\| Out<"*">` for a legacy `[[…]]` combo (its links must match its whole list, §5.2). Identical option lists are **deduplicated into named aliases** (`SamplerName`, `CkptName`) |
 | multiselect combo | `readonly (Alias)[]` |
 | upload or remote combo | `Alias \| (string & {})`: the options are runtime state (input folder contents), so this keeps autocomplete without false errors |
 | empty combo (36–55 in the dump) | `string`, plus a codegen diagnostic |
 | value widget (COLOR, BOUNDING_BOX, CURVE, …; D16) | `JsonValue`, `\| In<type>` unless socketless |
 | input with an explicit schema default | optional (`?:`); the exporter fills it in |
-| Autogrow, prefix form | `readonly T[]` |
-| Autogrow, names form | `{ readonly a: T; readonly b?: T }` (first `min` names required) |
-| DynamicCombo | discriminated union: `{ option: "mp4"; inputs: {…} }`, or a bare `"flac"` string when that option needs no inputs. Recursive (§6.4) |
-| DynamicGroup | `readonly { field: … }[]` |
+| Autogrow, prefix form | `readonly T[]`, or `readonly [T, …, ...T[]]` with the first `min` slots required |
+| Autogrow, names form | an interface `{ readonly a: T; readonly b?: T }` (first `min` names required) |
+| DynamicCombo | a union of option interfaces `{ option: "mp4"; inputs: {…} }`, plus the bare `"flac"` key for each option whose inputs may all be left out. Recursive (§6.4) |
+| DynamicGroup | a row interface, repeated like Autogrow slots (first `min` rows required) |
+| node without inputs | `{ readonly [key: string]: never }`, so any key is an error (`{}` would accept anything) |
 | MatchType | generic node function (§6.3) |
 | unknown spec | `unknown`, plus a codegen diagnostic |
 
@@ -292,12 +295,18 @@ export interface Nodes {
 Return shapes:
 - **0 outputs**: `NodeHandle` (`{ id }`).
 - **1 output**: the `Out<T>` itself, so `vae: n.VAELoader({…})` works.
-- **More**: a readonly tuple, plus named aliases, plus `NodeHandle`, so both `const [model, clip, vae] = …`
-  and `ckpt.CLIP` work.
+- **More**: `X$Out`, an interface extending the tuple `X$Outputs` and `NodeHandle` with one member
+  per unique output name, so both `const [model, clip, vae] = …` and `ckpt.CLIP` work.
 - Output names are left out of the aliases (reachable by index only) when they are duplicated, reserved
   (`id`, `node`, `slot`, Array members like `length` and `map`) or numeric-like.
 
 **JSDoc** comes from tooltip, default, min/max/step, display name, category and description.
+
+**Naming.** Node declarations are `<Class>$In`, `<Class>$Out`, `<Class>$Outputs`, and
+`<Class>$<Input>…` for nested ones (dynamic-combo options, Autogrow slot sets, DynamicGroup rows),
+unique per node. Shared aliases have no `$` (`SamplerName`, `ImageTypes`), so they can't clash
+with node declarations; type parameters are `T<Template>` and avoid every alias name. Generic
+helper declarations take only the type parameters they actually use.
 Deprecated nodes get `@deprecated`, which editors show as strikethrough.
 
 ### 6.3 MatchType
@@ -346,16 +355,19 @@ encoding table, rather than a global loosening:
 
 ### 6.6 Type-checking speed
 
-TS 7.0.2 with the full strict config, a 20-node workflow plus type tests **[verified]**:
+TS 7.0.2 with the full strict config, a 20-node workflow over the generated types **[verified]**:
 
-| Nodes in schema | Check time | Total | Memory |
-|---|---|---|---|
-| 1,758 (real) | 0.09 s | 0.11 s | 103 MB |
-| 3,516 | 0.09 s | 0.13 s | 137 MB |
-| 7,032 | 0.18 s | 0.26 s | 207 MB |
+| Nodes in schema | Total | Memory |
+|---|---|---|
+| 1,758 (the real dump, no workflow) | 0.11 s | 91 MB |
+| 1,758 (synthetic) | 0.11 s | 62 MB |
+| 3,516 (synthetic) | 0.20 s | 109 MB |
+| 7,032 (synthetic) | 0.40 s | 203 MB |
 
-This retires the biggest risk from revision 1. A `bench:types` script keeps a regression budget:
-**≤ 0.5 s total and ≤ 300 MB at 7k nodes**.
+`bun run bench:types` (internal/bench) builds the synthetic schemas from the mocks, with distinct
+combo options per copy so aliases don't all deduplicate away, and fails over the budget:
+**≤ 0.5 s total and ≤ 300 MB at 7k nodes**. The Phase 0 spike measured 0.26 s at 7k on a lighter
+encoding; the margin is smaller now and the budget is what guards it.
 
 ## 7. Builder API
 
@@ -499,11 +511,16 @@ The diagnostic model is §5.4.
   - Without source-text access (`W_PRECISION_LOSS`), integer-valued bounds beyond 2⁵³ move
     inward by one double, which covers any rounding.
   - Nodes are sorted by class type (D15).
-- **emitTypes** (codegen): a small internal `CodeWriter`. Output is deterministic and already
-  oxfmt-formatted; generated files are excluded from linting. Identifiers for interfaces and combo aliases:
+- **emitTypes** (codegen): builds documents for a small Wadler-style printer (`codegen/src/doc.ts`)
+  with Prettier's group/indent/line/ifBreak semantics, at 100 columns. Output is deterministic and
+  exactly what oxfmt produces: the committed mock fixtures pass `format:check`, and the corpus test
+  feeds the real dump's output through oxfmt and expects no change. To keep the layout rules few,
+  every type expression is a union of short atoms; anything bigger gets a named declaration
+  (§6.2). Generated files are excluded from linting. Identifiers:
   - derived from input names, sanitized
   - de-duplicated with stable suffixes
   - **328 class names in the dump are not valid identifiers**; they stay as quoted keys
+  - diagnostics: `W_EMPTY_COMBO`, `W_UNTYPED_INPUT` (docs/diagnostics.md)
 - **check**: diffs the live server against the snapshot (nodes added, removed or changed, combo option
   changes). It exits non-zero on drift.
 - **Report**: counts plus diagnostics grouped by node pack (`python_module`; the dump has 203 packs).
@@ -575,7 +592,7 @@ tscomfy/
       mocks/object-info/   #   committed hand-written mocks, one theme per file
       mocks/workflows/     #   committed mock API and UI workflows (Phase 3)
       corpus/              #   local real data; only its README is committed
-    bench/                 # type-check speed harness, synthetic schemas (Phase 2)
+    bench/                 # @tscomfy/bench: bench:types, synthetic schemas from the mocks
   docs/
     plan.md                # this plan
     decisions/             # one short ADR per decision in §3
@@ -609,7 +626,8 @@ Configs per package:
 - `test:corpus`: only the corpus tests (`*.corpus.test.ts`)
 - `lint`: `oxlint --type-aware`
 - `format`: `oxfmt` (format and sort imports); `format:check`: `oxfmt --check`
-- `bench:types`
+- `bench:types`: the type-check budget (§6.6)
+- `generate:fixtures`: regenerates `packages/codegen/test/generated/` from the mocks
 - **`check`**: `tsc -b`, then lint, `format:check` and test
 
 There is no separate fast check config: under TS 7, `tsc -b` is fast enough to be the one type-checking
@@ -681,8 +699,12 @@ Exit: every mock node, and every node in the local corpus, either normalizes or 
 diagnostic; `parse` keeps every big integer of every mock and corpus dump, and `stringify(parse(x))`
 re-parses to the same value; snapshot tests; the `accepts` table suite.
 
-**Phase 2: type emitter**
+**Phase 2: type emitter** (done)
 - `codegen.emitTypes` and `emitSchemaModule`, using the encoding in §6, which the spike already validated.
+- The type surface in core the generated code uses: `Out`, `In`, `Match`, `NodeHandle`,
+  `NodeOptions`, `TypedSchema`, `defineSchema`.
+- Committed generated fixtures for every mock (`bun run generate:fixtures`), type-checked, format-checked
+  and covered by type tests.
 - `hashSchema` (D15) for the file headers, tested against published SHA-256 vectors and `Bun.CryptoHasher`.
 - The schema module must keep bigints (134 bounds in the dump): a plain `JSON.parse("…")` would
   round them, so the module parses with `parse` or encodes them.
@@ -770,6 +792,8 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Widget classification (D16) | Frontend 1.55.17 `addInputSocket`/`addInputWidget` (`litegraphService.ts`) look up `widgetType ?? type` in `ComfyWidgets` (`widgets.ts`): INT, FLOAT, BOOLEAN, STRING, MARKDOWN, COMBO, IMAGEUPLOAD, COLOR, IMAGECOMPARE, BOUNDING_BOX, CHART, GALLERIA, PAINTER, COMPOSITOR, TEXTAREA, CURVE, RANGE, VIDEO_EDIT, RESOLUTION_PREVIEW, BOUNDING_BOXES, COLORS, plus `COMFY_DYNAMICCOMBO_V3`; Autogrow and MatchType are handled as dynamic inputs; no DynamicGroup handler. The dump has 25 inputs on non-primitive core widgets and 12 with `widgetType` (FLOAT on `FLOAT,INT`, STRING on a file union, PAINTER, three pack widgets) |
 | `TYPE:name` types | `INT:seed` is not a frontend widget (not in the registry, not in the bundle). Backend `validate_inputs` coerces only exact `INT`/`FLOAT`/`STRING`/`BOOLEAN` but still checks min/max; `validate_node_input("INT", "INT:seed")` is false |
 | Normalizing the corpus dump | 1,758 of 1,758 nodes, 55–66 ms in Bun 1.4.3. 13 warnings, all real server inconsistencies: 7 combo defaults that aren't options, 1 INT default below its `min`, 3 `output_*` arrays longer than `output`, 2 `name` mismatches. Also found and distilled into mocks: `null` for unset fields, boolean combo options (3), value widgets, `widgetType` |
+| Generated code (§6, §9) | The real dump: 3.0 MB `nodes.ts` and 4.1 MB `index.ts` generated in 0.19 s; type-checks in 0.11 s / 91 MB; oxfmt leaves both unchanged. The first printer version took 99 s (it trimmed the whole output at every newline) |
+| Tuple-extending result interfaces (§6.2) | `interface X$Out extends X$Outputs, NodeHandle` keeps destructuring types and `length`; neither it nor an intersection makes an out-of-range index an error under TS 7.0.2, and the interface lays out more simply |
 | Input order (§9) | Frontend 1.55.17 `getOrderedInputSpecs` (`nodeDefOrderingUtil.ts`): listed required, listed optional, then remaining inputs in definition order; no `input_order`, definition order |
 | `stringify`/`parse` round trip (§7.5) | `JSON.stringify(2 ** 64 - 2048)` is `"18446744073709550000"`, an integer literal that `parse` reads as a different bigint; `toExponential()` (`1.844674407370955e+19`) round-trips exactly. Found by `defineSchema` on the numbers mock |
 | Non-finite numbers (§7.5) | `/object_info` is served by aiohttp `web.json_response`, whose default `json.dumps` writes `Infinity`/`NaN` (checked with the server's Python). None in the corpus dump today |

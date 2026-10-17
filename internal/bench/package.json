@@ -1,0 +1,13 @@
+{
+  "name": "@tscomfy/bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Type-check speed harness for generated tscomfy types (docs/plan.md §6.6).",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@tscomfy/codegen": "workspace:*",
+    "@tscomfy/core": "workspace:*",
+    "@tscomfy/fixtures": "workspace:*"
+  }
+}

@@ -12,9 +12,9 @@ time, and runtime validation catches the rest. Output is API-format JSON.
 **Out of scope:** executing workflows (queueing, websockets, progress), running nodes in-process,
 GUIs, MCP servers. Don't add these.
 
-**Status:** Phases 0 (foundation) and 1 (lossless JSON, diagnostics, the schema model,
-`accepts()`, the `/object_info` normalizer) are done. Next is Phase 2: the type emitter in
-`codegen`. Phases and exit criteria are in `docs/plan.md` §14.
+**Status:** Phases 0 (foundation), 1 (lossless JSON, diagnostics, the schema model, `accepts()`,
+the `/object_info` normalizer) and 2 (the type emitter in `codegen`) are done. Next is Phase 3: the
+builder and API export. Phases and exit criteria are in `docs/plan.md` §14.
 
 ## Where things are
 
@@ -26,6 +26,7 @@ GUIs, MCP servers. Don't add these.
 | `docs/research/` | Ground-truth notes on ComfyUI's serialization and the prior-art review, with source citations |
 | `packages/{core,codegen,cli}` | The publishable packages, `@tscomfy/<folder>` |
 | `internal/fixtures` | `@tscomfy/fixtures` (private): mocks and the local corpus |
+| `internal/bench` | `@tscomfy/bench` (private): `bench:types`, synthetic schemas built from the mocks |
 
 ## Working agreements
 
@@ -76,6 +77,8 @@ bun install
 bun run check     # tsc -b, lint, format check, tests: run before declaring work done
 bun run test      # tests against source, no build needed (skips corpus tests)
 bun run test:corpus  # corpus tests against your local real data
+bun run generate:fixtures  # after changing codegen: regenerate packages/codegen/test/generated
+bun run bench:types  # type-check budget of generated types (plan §6.6)
 bun run format    # oxfmt: format and sort imports
 bun run clean     # tsc never deletes stale outputs; clean when files are removed or renamed
 ```
@@ -92,7 +95,9 @@ bun run clean     # tsc never deletes stale outputs; clean when files are remove
   relative path. Loaders return raw text because parsing is under test.
 - Adding a package: add it to the root `tsconfig.json` references (both the package and its
   `test/` config) and declare workspace dependencies with `workspace:*`.
-- Generated files are excluded from lint.
+- Generated files are excluded from lint but not from `format:check`: codegen's output must already
+  be oxfmt-formatted. The committed fixtures in `packages/codegen/test/generated/` come from the
+  mocks only; a test fails while they are stale.
 
 ## Gotchas (all verified)
 

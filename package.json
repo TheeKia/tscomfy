@@ -12,6 +12,7 @@
     "test": "bun test --conditions=@tscomfy/source --path-ignore-patterns='**/*.corpus.test.ts' packages internal",
     "test:corpus": "bun test --conditions=@tscomfy/source .corpus.test",
     "generate:fixtures": "bun --conditions=@tscomfy/source packages/codegen/test/update-generated.ts",
+    "bench:types": "bun --conditions=@tscomfy/source internal/bench/src/bench-types.ts",
     "lint": "oxlint --type-aware",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

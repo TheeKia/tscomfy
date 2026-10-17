@@ -13,6 +13,15 @@
         "typescript": "7.0.2",
       },
     },
+    "internal/bench": {
+      "name": "@tscomfy/bench",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tscomfy/codegen": "workspace:*",
+        "@tscomfy/core": "workspace:*",
+        "@tscomfy/fixtures": "workspace:*",
+      },
+    },
     "internal/fixtures": {
       "name": "@tscomfy/fixtures",
       "version": "0.0.0",
@@ -131,6 +140,8 @@
     "@oxlint/binding-win32-ia32-msvc": ["@oxlint/binding-win32-ia32-msvc@1.88.0", "", { "os": "win32", "cpu": "ia32" }, "sha512-MA6iOw//amleaz2mVMsZrA7NHlEexjTrhIxSMFCXQi6IUuQO+3Od00GZhr2iCYw6RFzMW36jkKK/WHBXMsoQAw=="],
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.88.0", "", { "os": "win32", "cpu": "x64" }, "sha512-3Sz6rVWe8Dy+ufsXurFN1GX2dX43F/lQMSLelK9gFjiba7nHvLlqlhR5cHlWVnCpSqUY1hN9pyCX9XToe6ve6g=="],
+
+    "@tscomfy/bench": ["@tscomfy/bench@workspace:internal/bench"],
 
     "@tscomfy/cli": ["@tscomfy/cli@workspace:packages/cli"],
 

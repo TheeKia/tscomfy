@@ -16,7 +16,7 @@ One short record per decision in docs/plan.md §3. All accepted 2026-10-17.
 | [0010](0010-lossless-integers.md) | Lossless integers |
 | [0011](0011-oxfmt-format-oxlint-lint.md) | oxfmt formats, oxlint lints |
 | [0012](0012-no-ci.md) | No CI for now |
-| [0013](0013-generated-schema-module.md) | Generated runtime schema is a JSON.parse module |
+| [0013](0013-generated-schema-module.md) | Generated runtime schema is a string-literal module |
 | [0014](0014-diagnostic-model.md) | One diagnostic model, from Phase 1 |
 | [0015](0015-schema-identity.md) | Schema identity: sorted nodes and an on-demand SHA-256 |
 | [0016](0016-widget-classification.md) | An input is a widget exactly when the frontend makes it one |
