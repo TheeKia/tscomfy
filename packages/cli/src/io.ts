@@ -1,4 +1,4 @@
-import { rename, rm } from "node:fs/promises";
+import { realpath, rename, rm } from "node:fs/promises";
 
 /** Everything the CLI does to the outside world, so commands can be tested without it. */
 export interface Io {
@@ -61,11 +61,14 @@ export function systemIo(): Io {
       }
     },
     writeText: async (path, text) => {
-      // Through a temporary file, so an interrupted run never leaves a file half written.
-      const temporary = `${path}.${String(process.pid)}.tmp`;
+      // Through a temporary file, so an interrupted run never leaves a file half written. One
+      // name per file, so a run that was killed leaves nothing a later run doesn't replace; and
+      // a symlink is followed, so the file it points to is the one replaced.
+      const target = await realpath(path).catch(() => path);
+      const temporary = `${target}.tmp`;
       try {
         await Bun.write(temporary, text);
-        await rename(temporary, path);
+        await rename(temporary, target);
       } catch (error) {
         // Best effort: when the directory can't be made, there is nothing to remove.
         await rm(temporary, { force: true }).catch(() => undefined);

@@ -59,6 +59,7 @@ export async function generateCommand(io: Io, args: readonly string[]): Promise<
   if (flags.has("comfy-version") && !flags.has("from")) {
     throw new CliError("--comfy-version goes with --from; with --url it comes from the server.", 2);
   }
+  if (flags.has("comfy-version")) path(flags, "comfy-version");
   if (flags.has("verbose") && flags.has("quiet")) {
     throw new CliError("--verbose and --quiet don't go together.", 2);
   }
@@ -83,6 +84,9 @@ export async function generateCommand(io: Io, args: readonly string[]): Promise<
     schema: hashSchema(schema.schema),
     exportName,
     importExtension,
+    ...(flags.has("from") && source.comfyVersion !== undefined
+      ? { comfyVersion: source.comfyVersion }
+      : {}),
     files: Object.fromEntries(files.map((file) => [file.path, contentHash(file.contents)])),
   };
   await io.writeText(join(out, MANIFEST), formatManifest(manifest));
@@ -151,7 +155,10 @@ export function regenerateCommand(options: Regenerate): string {
   ].join(" ");
 }
 
-/** A path flag's value, required; refused when it has control characters a header can't keep. */
+/**
+ * A flag's value that the regenerate command records (a path, a version), required; refused
+ * when it has control characters a header can't keep.
+ */
 export function path(flags: Flags, name: string): string {
   const given = value(flags, name);
   if (given === undefined) throw new CliError(`--${name} is required.`, 2);

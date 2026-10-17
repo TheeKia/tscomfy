@@ -593,8 +593,9 @@ The diagnostic model is §5.4.
     (`diffSchemas` in core; empty exactly when `hashSchema` is equal, D15), so differences in
     fields the schema doesn't keep don't count. Option changes of upload and remote combos are
     runtime state (§6.2), not drift: they are mentioned and ignored. It also checks every file
-    against the manifest's content hashes and codegen version, which catches edited,
-    truncated, missing or half-written files and output of another version. It exits 1 on
+    against the manifest (exactly its three files, by content hash; its codegen version; its
+    schema hash, which another core would compute differently), which catches edited, truncated,
+    missing or half-written files and output of another version. It exits 1 on
     any of these and suggests `generate` with the checked source and the recorded options.
   - Exit codes: 0 on success, 1 on a failure or drift, 2 on a usage error (with the usage).
 - **Report**: counts plus diagnostics grouped by node pack (`python_module`; the dump has 203

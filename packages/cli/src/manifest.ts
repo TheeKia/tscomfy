@@ -15,9 +15,14 @@ export interface Manifest {
   readonly schema: string;
   readonly exportName: string;
   readonly importExtension: ".js" | ".ts";
-  /** `sha256:<hex>` of each file, by its name in the output directory. */
+  /** The `--comfy-version` given with `--from`, to suggest again. */
+  readonly comfyVersion?: string;
+  /** `sha256:<hex>` of each file, by its name in the output directory: exactly {@link FILES}. */
   readonly files: { readonly [file: string]: string };
 }
+
+/** The files a manifest covers, in the order `check` reports them. */
+export const FILES: readonly string[] = ["nodes.ts", "index.ts", "object_info.json"];
 
 /** `sha256:<hex>` of a text's UTF-8 bytes. */
 export function contentHash(text: string): string {
@@ -51,13 +56,17 @@ function isManifest(value: unknown): value is Manifest {
   const field = (name: string): unknown => Reflect.get(value, name);
   const files = field("files");
   const extension = field("importExtension");
+  const comfyVersion = field("comfyVersion");
   return (
     typeof field("codegen") === "string" &&
     typeof field("schema") === "string" &&
     typeof field("exportName") === "string" &&
     (extension === ".js" || extension === ".ts") &&
+    (comfyVersion === undefined || typeof comfyVersion === "string") &&
     typeof files === "object" &&
     files !== null &&
+    // Exactly our files: a hand-edited list must not hide one, or name a path outside `out`.
+    Object.keys(files).toSorted().join("\n") === FILES.toSorted().join("\n") &&
     Object.values(files).every((hash) => typeof hash === "string")
   );
 }
