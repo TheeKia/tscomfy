@@ -17,6 +17,7 @@ import {
   readMockObjectInfo,
 } from "@tscomfy/fixtures";
 import { TRANSPILED_DIR, transpileMock } from "./generated-fixtures.ts";
+import { mock as autogrow } from "./generated/autogrow/index.ts";
 import { mock as basic } from "./generated/basic-pipeline/index.ts";
 import { mock as combos } from "./generated/combos/index.ts";
 
@@ -133,19 +134,13 @@ describe("transpile", () => {
     expect(result.code).toContain('raw("MockUnknownPack", {}, { id: "c" });');
   });
 
-  test("breaks a header that doesn't fit, as oxfmt does", () => {
-    const built = workflow(basic, () => {});
-    const name = "aVeryLongWorkflowNameThatKeepsGoing";
-    const result = transpiled(built, { name, schemaName: "anEvenLongerSchemaNameForThisServer" });
-    expect(result.code).toContain(
-      `export const ${name}: Workflow<NodesOf<typeof anEvenLongerSchemaNameForThisServer>> = workflow(\n  anEvenLongerSchemaNameForThisServer,\n  () => {},\n);\n`,
-    );
-  });
-
   test.each([
     [{ name: "default" }, "options.name"],
     [{ schemaName: "my-schema" }, "options.schemaName"],
     [{ name: "mock" }, "must differ"],
+    [{ name: "workflow" }, "a name the module itself uses"],
+    [{ schemaName: "NodesOf" }, "a name the module itself uses"],
+    [{ name: "x".repeat(60) }, "too long for one line"],
   ])("refuses options %p", (options, message) => {
     expect(() =>
       transpiled(
@@ -159,4 +154,99 @@ describe("transpile", () => {
     const first = await transpileMock("dynamic-group");
     expect(await transpileMock("dynamic-group")).toEqual(first);
   });
+});
+
+describe("sources written as raw", () => {
+  test("type as `*` downstream, as raw(…).output() does", async () => {
+    // A known class kept raw (an input the class doesn't have) feeds a constrained MatchType node:
+    // its parameter falls back to the allowed types, which an IMAGE-only input can't take.
+    const text = (await readMockObjectInfo("basic-pipeline")).trimEnd().slice(0, -1);
+    const match = (await readMockObjectInfo("match-type")).trimStart().slice(1);
+    const schema = defineSchema(stringify(normalizeObjectInfo(`${text},${match}`).schema));
+    const prompt = {
+      "1": { class_type: "EmptyLatentImage", inputs: { width: 512, height: 512, batch_size: 1 } },
+      "2": { class_type: "VAELoader", inputs: { vae_name: "pixel_space" } },
+      "3": { class_type: "VAEDecode", inputs: { samples: ["1", 0], vae: ["2", 0], extra: 5 } },
+      "4": { class_type: "MockMatchConstrained", inputs: { input: ["3", 0], scale: 1 } },
+      "5": { class_type: "SaveImage", inputs: { images: ["4", 0], filename_prefix: "x" } },
+    };
+    const result = transpiled(importApi(JSON.stringify(prompt), schema).workflow);
+    expect(result.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toEqual([
+      ["W_TRANSPILED_AS_RAW", ["3"]],
+      ["W_TRANSPILED_AS_RAW", ["5"]],
+    ]);
+  });
+});
+
+describe("what the exporter can't send", () => {
+  test("is reported, and a node only the dropped part used is still written", () => {
+    // Five slots where the Autogrow has four: the types refuse it, so build it untyped.
+    const built = workflow(autogrow, ({ n, raw }) => {
+      const image = raw("MockImages").output(0);
+      const only = raw("MockOnlyHere", {}, { id: "only-here" }).output(0);
+      Reflect.apply(n.MockAutogrowOptionalRequired, undefined, [
+        { images: [image, image, image, image, only] },
+      ]);
+    });
+    const result = transpiled(built);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "E_TOO_MANY_DYNAMIC_INPUTS",
+      "W_TRANSPILED_AS_RAW",
+    ]);
+    expect(result.code).toContain('raw("MockOnlyHere", {}, { id: "only-here" });');
+  });
+});
+
+describe("cycles", () => {
+  test("tell nodes on a cycle from nodes that depend on one", async () => {
+    const schema = defineSchema(
+      stringify(normalizeObjectInfo(await readMockObjectInfo("sockets")).schema),
+    );
+    const { workflow: cyclic } = importApi(
+      JSON.stringify({
+        a: { class_type: "MockAnyPassthrough", inputs: { value: ["b", 0] } },
+        b: { class_type: "MockAnyPassthrough", inputs: { value: ["a", 0] } },
+        c: { class_type: "MockAnyPassthrough", inputs: { value: ["b", 0] } },
+      }),
+      schema,
+    );
+    const messages = transpiled(cyclic).diagnostics.map((diagnostic) => diagnostic.message);
+    expect(messages).toEqual([
+      "Node a (MockAnyPassthrough) depends on itself through its links; leaving it out.",
+      "Node b (MockAnyPassthrough) depends on itself through its links; leaving it out.",
+      "Node c (MockAnyPassthrough) depends on nodes in a cycle; leaving it out.",
+    ]);
+  });
+});
+
+describe("large workflows", () => {
+  test("transpile long chains and wide fans in linear time, without deep recursion", async () => {
+    const schema = defineSchema(
+      stringify(
+        normalizeObjectInfo(
+          `${(await readMockObjectInfo("sockets")).trimEnd().slice(0, -1)},${(await readMockObjectInfo("match-type")).trimStart().slice(1)}`,
+        ).schema,
+      ),
+    );
+    const nodes: Record<string, unknown> = {
+      s: { class_type: "MockSource", inputs: {} },
+    };
+    // A MatchType chain listed in reverse, and a fan of consumers of one node.
+    for (let index = 0; index < 20_000; index++) {
+      nodes[`m${String(index)}`] = {
+        class_type: "MockSwitch",
+        inputs: { switch: true, on_false: [index === 19_999 ? "s" : `m${String(index + 1)}`, 0] },
+      };
+      nodes[`f${String(index)}`] = {
+        class_type: "MockAnyPassthrough",
+        inputs: { value: ["s", 0] },
+      };
+    }
+    const started = performance.now();
+    const result = transpiled(importApi(JSON.stringify(nodes), schema).workflow);
+    expect(performance.now() - started).toBeLessThan(10_000);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.code).toContain('{ id: "f19999" }');
+    expect(result.code).toContain('{ id: "m0" }');
+  }, 30_000);
 });

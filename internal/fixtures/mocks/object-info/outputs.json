@@ -80,5 +80,43 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "MockManyOutputs": {
+    "input": {
+      "required": {}
+    },
+    "input_order": {
+      "required": []
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "CONDITIONING",
+      "LATENT",
+      "VAE",
+      "CLIP_VISION",
+      "UPSCALE_MODEL",
+      "CONDITIONING",
+      "MASK"
+    ],
+    "output_is_list": [false, false, false, false, false, false, false, false],
+    "output_name": [
+      "positive_conditioning",
+      "negative_conditioning",
+      "latent_image_batch",
+      "vae_decoder_model",
+      "clip_vision_encoder",
+      "upscale_model_loaded",
+      "control_net_applied",
+      "segmentation_masks"
+    ],
+    "name": "MockManyOutputs",
+    "display_name": "Mock Many Outputs",
+    "description": "Eight outputs with long names, like the context nodes of some packs: destructuring them all doesn't fit on a line.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/outputs",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
   }
 }

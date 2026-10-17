@@ -75,12 +75,13 @@ takes, but may not do what was meant.
 ## Importing prompts
 
 `importApi` reads a prompt back into a workflow (plan §10). Its paths point into the prompt, as
-validation's do. It also reports `E_INVALID_JSON`, `E_INVALID_PROMPT` (a node it can't read is
-left out) and `E_INVALID_LINK` (the input is left out).
+validation's do. It also reports the parser's codes (`E_INVALID_JSON`, `W_NON_FINITE_NUMBER`,
+`W_PRECISION_LOSS`), `E_INVALID_PROMPT` (a node it can't read, or with an empty id, is left out)
+and `E_INVALID_LINK` (the input is left out).
 
 | Code | Meaning | What happens |
 |---|---|---|
-| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`. | The node is kept as a raw node with its wire keys, so it exports as it came. |
+| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. | The node is kept as a raw node with its wire keys, so it exports as it came. |
 
 ## Generating types
 
@@ -95,9 +96,9 @@ with dynamic-combo option keys in between, e.g. `["SaveVideo", "format", "mp4", 
 ## Transpiling
 
 `transpile` writes builder code for a workflow (plan §10). Its paths point into the workflow's
-nodes, by id. It also reports `E_DEPENDENCY_CYCLE` (no program can build a cycle; those nodes are
-left out) and `E_DANGLING_LINK` (a link to a node the workflow doesn't have; the input is left
-out).
+nodes, by id. It also reports `E_DEPENDENCY_CYCLE` (no program can build a cycle; nodes on one, and
+nodes that depend on one, are left out), `E_DANGLING_LINK` (a link to a node the workflow doesn't
+have; the input is left out) and whatever the exporter reports.
 
 | Code | Meaning | What happens |
 |---|---|---|

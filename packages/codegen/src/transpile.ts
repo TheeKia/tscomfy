@@ -33,6 +33,7 @@ import {
   indentIfBreak,
   join,
   line,
+  fill,
   print,
   softline,
   textWidth,
@@ -88,6 +89,15 @@ export function transpile(workflow: Workflow, options: TranspileOptions): Transp
   if (options.name === options.schemaName) {
     throw new TypeError("transpile: options.name and options.schemaName must differ");
   }
+  for (const value of [options.name, options.schemaName]) {
+    if (TAKEN.includes(value)) {
+      throw new TypeError(`transpile: ${JSON.stringify(value)} is a name the module itself uses`);
+    }
+  }
+  const declaration = `export const ${options.name}: Workflow<NodesOf<typeof ${options.schemaName}>> =`;
+  if (textWidth(declaration) > PRINT_WIDTH) {
+    throw new TypeError("transpile: options.name and options.schemaName are too long for one line");
+  }
   return new Transpiler(workflow, options).run();
 }
 
@@ -97,20 +107,20 @@ interface Plan {
   readonly definition: NodeDef | undefined;
   /** `typed`: `n.Class(…)`; `raw`: `raw(…)` with wire keys. */
   readonly mode: "typed" | "raw";
-  /** Wire inputs, for raw nodes; links are `[id, slot]`. */
+  /** The node's exported inputs, which a raw node is written with; links are `[id, slot]`. */
   readonly wire: { readonly [key: string]: JsonValue };
 }
 
-/** How a link's source output is referred to. */
-type Reference = Doc;
+/** Names the builder code's own bindings and imports take, which no variable may. */
+const TAKEN = ["n", "raw", "workflow", "Workflow", "NodesOf"];
 
 class Transpiler {
   readonly #workflow: Workflow;
   readonly #options: TranspileOptions;
   readonly #diagnostics: Diagnostic[] = [];
   readonly #plans = new Map<NodeId, Plan>();
-  readonly #references = new Map<string, Reference>();
-  readonly #inlined = new Map<NodeId, Doc>();
+  readonly #references = new Map<string, Doc>();
+  readonly #inlined = new Set<NodeId>();
   readonly #usedSlots = new Map<NodeId, Set<number>>();
   readonly #names: NameRegistry;
   #usesN = false;
@@ -119,13 +129,15 @@ class Transpiler {
   constructor(workflow: Workflow, options: TranspileOptions) {
     this.#workflow = workflow;
     this.#options = options;
-    this.#names = new NameRegistry(["n", "raw", "workflow", options.name, options.schemaName]);
+    this.#names = new NameRegistry([...TAKEN, options.name, options.schemaName]);
   }
 
   run(): TranspileResult {
     const nodes = [...this.#workflow.graph.nodes.values()];
-    const wire = exportApi(this.#workflow, { validate: false, meta: false }).prompt;
-    const typing = new Typing(this.#workflow);
+    const exported = exportApi(this.#workflow, { validate: false, meta: false });
+    // What the exporter can't send, the program can't build either.
+    this.#diagnostics.push(...exported.diagnostics);
+    const order = this.#order(nodes);
     // A link to an output a node doesn't have can only be written as raw(…).output(slot).
     const missing = new Map<NodeId, number>();
     for (const node of nodes) {
@@ -133,11 +145,14 @@ class Transpiler {
         const source = this.#workflow.graph.nodes.get(ref.node);
         const outputs =
           source === undefined ? undefined : this.#workflow.schema.nodes[source.classType]?.outputs;
-        if (outputs !== undefined && outputs[ref.slot] === undefined)
+        if (outputs !== undefined && outputs[ref.slot] === undefined) {
           missing.set(ref.node, ref.slot);
+        }
       }
     }
-    for (const node of nodes) {
+    // In dependency order, so a node's sources are decided first: a raw source is `Out<"*">`.
+    const typing = new Typing(this.#workflow, (id) => this.#plans.get(id)?.mode);
+    for (const node of order) {
       const definition = Object.hasOwn(this.#workflow.schema.nodes, node.classType)
         ? this.#workflow.schema.nodes[node.classType]
         : undefined;
@@ -161,13 +176,13 @@ class Transpiler {
         node,
         definition,
         mode: node.raw || definition === undefined || reason !== undefined ? "raw" : "typed",
-        wire: wire[node.id]?.inputs ?? {},
+        wire: exported.prompt[node.id]?.inputs ?? {},
       });
     }
-    const order = this.#order(nodes);
-    const uses = this.#uses(order);
+    const plans = order.flatMap((node) => this.#plans.get(node.id) ?? []);
+    const uses = this.#uses(plans);
     const statements: Doc[] = [];
-    for (const plan of order) {
+    for (const plan of plans) {
       const statement = this.#statement(plan, uses);
       if (statement !== undefined) statements.push(statement);
     }
@@ -175,10 +190,10 @@ class Transpiler {
   }
 
   /**
-   * Dependency order, ties broken by graph order. Nodes in a cycle can't be built by any
-   * program; they are reported and left out.
+   * Dependency order, ties broken by graph order. No program can build a cycle, or a node that
+   * depends on one: they are reported and left out.
    */
-  #order(nodes: readonly GraphNode[]): Plan[] {
+  #order(nodes: readonly GraphNode[]): GraphNode[] {
     const index = new Map(nodes.map((node, position) => [node.id, position]));
     const dependents = new Map<NodeId, NodeId[]>();
     const waiting = new Map<NodeId, number>();
@@ -187,51 +202,58 @@ class Transpiler {
         references(node.inputs).flatMap((ref) => (index.has(ref.node) ? [ref.node] : [])),
       );
       waiting.set(node.id, sources.size);
-      for (const source of sources)
-        dependents.set(source, [...(dependents.get(source) ?? []), node.id]);
+      for (const source of sources) {
+        const list = dependents.get(source);
+        if (list === undefined) dependents.set(source, [node.id]);
+        else list.push(node.id);
+      }
     }
-    // A min-heap would do; the ready list stays short in real graphs, so insertion sort is fine.
-    const ready = nodes.filter((node) => waiting.get(node.id) === 0).map((node) => node.id);
-    const order: Plan[] = [];
-    while (ready.length > 0) {
-      const id = ready.shift();
-      if (id === undefined) break;
-      const plan = this.#plans.get(id);
-      if (plan !== undefined) order.push(plan);
-      for (const dependent of dependents.get(id) ?? []) {
+    const ready = new MinHeap();
+    for (const node of nodes) if (waiting.get(node.id) === 0) ready.push(index.get(node.id) ?? 0);
+    const order: GraphNode[] = [];
+    for (let at = ready.pop(); at !== undefined; at = ready.pop()) {
+      const node = nodes[at];
+      if (node === undefined) continue;
+      order.push(node);
+      for (const dependent of dependents.get(node.id) ?? []) {
         const left = (waiting.get(dependent) ?? 0) - 1;
         waiting.set(dependent, left);
-        if (left === 0) {
-          const at = index.get(dependent) ?? 0;
-          const position = ready.findIndex((each) => (index.get(each) ?? 0) > at);
-          ready.splice(position === -1 ? ready.length : position, 0, dependent);
-        }
+        if (left === 0) ready.push(index.get(dependent) ?? 0);
       }
     }
-    for (const node of nodes) {
-      if ((waiting.get(node.id) ?? 0) > 0) {
-        this.#diagnostics.push(
-          createDiagnostic(
-            "E_DEPENDENCY_CYCLE",
-            [node.id],
-            `Node ${node.id} (${node.classType}) depends on itself through its links; leaving it out.`,
-          ),
-        );
-      }
+    const left = nodes.filter((node) => (waiting.get(node.id) ?? 0) > 0);
+    const cyclic = inCycles(left);
+    for (const node of left) {
+      this.#diagnostics.push(
+        createDiagnostic(
+          "E_DEPENDENCY_CYCLE",
+          [node.id],
+          cyclic.has(node.id)
+            ? `Node ${node.id} (${node.classType}) depends on itself through its links; leaving it out.`
+            : `Node ${node.id} (${node.classType}) depends on nodes in a cycle; leaving it out.`,
+        ),
+      );
     }
     return order;
   }
 
-  /** How often each output (`id`, `slot`) is used, over the nodes that will be written. */
-  #uses(order: readonly Plan[]): Map<string, number> {
+  /** How often each output (`id`, `slot`) is used by what will be printed. */
+  #uses(plans: readonly Plan[]): Map<string, number> {
     const uses = new Map<string, number>();
-    for (const plan of order) {
-      for (const ref of references(plan.node.inputs)) {
+    for (const plan of plans) {
+      // A raw node prints its exported inputs, which may drop what the exporter can't send.
+      const refs =
+        plan.mode === "raw"
+          ? Object.values(plan.wire).flatMap((value) =>
+              isLink(value) ? [{ node: value[0], slot: value[1] }] : [],
+            )
+          : references(plan.node.inputs);
+      for (const ref of refs) {
         const key = slotKey(ref.node, ref.slot);
         uses.set(key, (uses.get(key) ?? 0) + 1);
-        const slots = this.#usedSlots.get(ref.node) ?? new Set<number>();
-        slots.add(ref.slot);
-        this.#usedSlots.set(ref.node, slots);
+        const slots = this.#usedSlots.get(ref.node);
+        if (slots === undefined) this.#usedSlots.set(ref.node, new Set([ref.slot]));
+        else slots.add(ref.slot);
       }
     }
     return uses;
@@ -247,16 +269,15 @@ class Transpiler {
       const slots = this.#usedSlots.get(node.id);
       if (slots === undefined) return [call, ";"];
       const name = this.#claim(camel(node.classType, "node"));
-      for (const slot of [...slots].toSorted((a, b) => a - b)) {
+      for (const slot of slots) {
         this.#references.set(slotKey(node.id, slot), [name, ".output(", String(slot), ")"]);
       }
       return statementDoc(`const ${name}`, call);
     }
     this.#usesN = true;
-    const callee =
-      isExportName(node.classType) || /^[A-Za-z_$][\w$]*$/.test(node.classType)
-        ? `n.${node.classType}`
-        : `n[${quote(node.classType)}]`;
+    const callee = /^[A-Za-z_$][\w$]*$/.test(node.classType)
+      ? `n.${node.classType}`
+      : `n[${quote(node.classType)}]`;
     const call = callDoc(callee, [this.#inputsObject(definition.inputs, node.inputs).doc, options]);
     const { outputs } = definition;
     const used = outputs.filter((output) => (uses.get(slotKey(node.id, output.index)) ?? 0) > 0);
@@ -269,7 +290,7 @@ class Transpiler {
         uses.get(key) === 1 &&
         references(node.inputs).every((ref) => !this.#inlined.has(ref.node))
       ) {
-        this.#inlined.set(node.id, call);
+        this.#inlined.add(node.id);
         this.#references.set(key, call);
         return undefined;
       }
@@ -277,15 +298,26 @@ class Transpiler {
       this.#references.set(key, name);
       return statementDoc(`const ${name}`, call);
     }
-    // Several outputs: destructure the ones used, by their names.
+    // Several outputs: destructure the ones used, by their names, while the pattern fits on its
+    // line (Prettier would break a longer one); otherwise index one variable.
     const last = Math.max(...used.map((output) => output.index));
-    const bindings = outputs.slice(0, last + 1).map((output) => {
-      if (!used.includes(output)) return "";
-      const name = this.#claim(camel(output.name, "output"));
-      this.#references.set(slotKey(node.id, output.index), name);
-      return name;
-    });
-    return statementDoc(`const [${bindings.join(", ")}]`, call);
+    const names = outputs
+      .slice(0, last + 1)
+      .map((output) => (used.includes(output) ? camel(output.name, "output") : ""));
+    if (textWidth(`  const [${names.join(", ")}] =`) <= PRINT_WIDTH) {
+      const bindings = outputs.slice(0, last + 1).map((output) => {
+        if (!used.includes(output)) return "";
+        const name = this.#claim(camel(output.name, "output"));
+        this.#references.set(slotKey(node.id, output.index), name);
+        return name;
+      });
+      return statementDoc(`const [${bindings.join(", ")}]`, call);
+    }
+    const name = this.#claim(camel(node.classType, "node"));
+    for (const output of used) {
+      this.#references.set(slotKey(node.id, output.index), [name, "[", String(output.index), "]"]);
+    }
+    return statementDoc(`const ${name}`, call);
   }
 
   #claim(base: string): string {
@@ -301,8 +333,9 @@ class Transpiler {
   }
 
   /**
-   * A typed node's inputs as an object literal, in schema order; at the top level, inputs equal
-   * to their default are left out (`omitDefaults`), as the exporter fills them back in.
+   * Inputs as an object literal, in the order given (the exporter orders them by the schema).
+   * Values equal to their default are left out at every level, as the exporter fills them in.
+   * Also returns how many properties were written.
    */
   #inputsObject(
     definitions: readonly InputDef[],
@@ -312,8 +345,11 @@ class Transpiler {
     const properties: Doc[] = [];
     for (const [name, value] of Object.entries(inputs)) {
       const definition = known.get(name);
-      if (definition !== undefined && equalsDefault(definition, value)) continue;
-      const key = propertyKey(name);
+      // The exporter fills defaults in; but what the types require must be written.
+      if (definition !== undefined && !isRequired(definition) && equalsDefault(definition, value)) {
+        continue;
+      }
+      const key = objectKey(name);
       const doc = this.#value(value, definition);
       // `{ model }` rather than `{ model: model }`.
       properties.push(doc === key ? key : propertyDoc(key, doc));
@@ -339,6 +375,7 @@ class Transpiler {
         );
       }
       const element = definition?.kind === "autogrow" ? definition.template : undefined;
+      if (isNumberList(value)) return numbersDoc(value);
       return arrayDoc(
         value.map((item: InputValue) => this.#value(item, element)),
         breaksArray(value),
@@ -356,16 +393,10 @@ class Transpiler {
         if (inputs === undefined || inputs.count === 0) return quote(key);
         return objectDoc([propertyDoc("option", quote(key)), propertyDoc("inputs", inputs.doc)]);
       }
-      if (definition?.kind === "autogrow") {
-        return objectDoc(
-          Object.entries(value).map(([slot, item]) =>
-            propertyDoc(propertyKey(slot), this.#value(item, definition.template)),
-          ),
-        );
-      }
+      const element = definition?.kind === "autogrow" ? definition.template : undefined;
       return objectDoc(
         Object.entries(value).map(([key, item]) =>
-          propertyDoc(propertyKey(key), this.#value(item, undefined)),
+          propertyDoc(objectKey(key), this.#value(item, element)),
         ),
       );
     }
@@ -382,16 +413,20 @@ class Transpiler {
             this.#dangling(plan.node.id, key, node);
             return [];
           }
-          return [propertyDoc(propertyKey(key), this.#reference(node, slot))];
+          return [propertyDoc(objectKey(key), this.#reference(node, slot))];
         }
         const unwrapped = isWrappedList(value) ? value["__value__"] : value;
-        return [propertyDoc(propertyKey(key), jsonDoc(unwrapped ?? null))];
+        return [propertyDoc(objectKey(key), jsonDoc(unwrapped ?? null))];
       }),
     );
   }
 
   #reference(node: NodeId, slot: number): Doc {
-    return this.#references.get(slotKey(node, slot)) ?? "undefined";
+    const reference = this.#references.get(slotKey(node, slot));
+    // Sources are written before their uses, and left-out nodes have no uses written.
+    if (reference === undefined)
+      throw new Error(`transpile: no reference for ${node}:${String(slot)}`);
+    return reference;
   }
 
   #dangling(id: NodeId, key: string, node: NodeId): void {
@@ -411,32 +446,144 @@ class Transpiler {
       ...(this.#options.header ?? []),
     ];
     const { name, schemaName } = this.#options;
-    const left = `export const ${name}: Workflow<NodesOf<typeof ${schemaName}>> = workflow(`;
     const build = `(${context.length === 0 ? "" : `{ ${context.join(", ")} }`}) =>`;
     const block: Doc =
       statements.length === 0
         ? "{}"
         : ["{", indent([hardline, join(hardline, statements)]), hardline, "}"];
-    // The build function hugs the call while its first line fits; otherwise each argument
-    // takes a line of its own, as Prettier lays out a last-argument function.
-    const hugged = textWidth(`${left}${schemaName}, ${build} {`) <= PRINT_WIDTH;
-    const body: Doc = hugged
-      ? [left, schemaName, ", ", build, " ", block, ");"]
-      : [
-          left,
-          indent([hardline, schemaName, ",", hardline, build, " ", block, ","]),
-          hardline,
-          ");",
-        ];
     return [
       ...headerLines(header),
       "",
       'import { type NodesOf, type Workflow, workflow } from "@tscomfy/core";',
-      `import { ${this.#options.schemaName} } from ${quote(this.#options.schemaModule)};`,
+      `import { ${schemaName} } from ${quote(this.#options.schemaModule)};`,
       "",
-      print(body, PRINT_WIDTH),
+      print(declarationDoc(name, schemaName, build, block, statements.length === 0), PRINT_WIDTH),
       "",
     ].join("\n");
+  }
+}
+
+/**
+ * `export const <name>: Workflow<…> = workflow(<schema>, <build> <block>);` laid out as Prettier
+ * lays out an assignment whose right side is a call with a function last: the function hugs the
+ * call while the line up to its `{` fits (with `});` for an empty block); otherwise the right side
+ * moves below `=` if that makes it fit, and failing that each argument takes a line of its own.
+ */
+function declarationDoc(
+  name: string,
+  schemaName: string,
+  build: string,
+  block: Doc,
+  empty: boolean,
+): Doc {
+  const left = `export const ${name}: Workflow<NodesOf<typeof ${schemaName}>> =`;
+  const hug = `workflow(${schemaName}, ${build} ${empty ? "{});" : "{"}`;
+  const hugged: Doc = [`workflow(${schemaName}, `, build, " ", block, ");"];
+  const expanded: Doc = [
+    "workflow(",
+    indent([hardline, schemaName, ",", hardline, build, " ", block, ","]),
+    hardline,
+    ");",
+  ];
+  if (textWidth(`${left} ${hug}`) <= PRINT_WIDTH) return [left, " ", hugged];
+  if (textWidth(`${left} workflow(`) <= PRINT_WIDTH) return [left, " ", expanded];
+  const below = textWidth(`  ${hug}`) <= PRINT_WIDTH ? hugged : expanded;
+  return [left, indent([hardline, below])];
+}
+
+/** The nodes of `nodes` that lie on a cycle among them (Tarjan's algorithm, iteratively). */
+function inCycles(nodes: readonly GraphNode[]): Set<NodeId> {
+  const ids = new Set(nodes.map((node) => node.id));
+  const edges = new Map(
+    nodes.map((node) => [
+      node.id,
+      [...new Set(references(node.inputs).map((ref) => ref.node))].filter((id) => ids.has(id)),
+    ]),
+  );
+  const order = new Map<NodeId, number>();
+  const low = new Map<NodeId, number>();
+  const stack: NodeId[] = [];
+  const onStack = new Set<NodeId>();
+  const cyclic = new Set<NodeId>();
+  let counter = 0;
+  for (const start of ids) {
+    if (order.has(start)) continue;
+    const frames: { readonly id: NodeId; next: number }[] = [{ id: start, next: 0 }];
+    order.set(start, counter);
+    low.set(start, counter++);
+    stack.push(start);
+    onStack.add(start);
+    while (frames.length > 0) {
+      const frame = frames.at(-1);
+      if (frame === undefined) break;
+      const targets = edges.get(frame.id) ?? [];
+      const target = targets[frame.next++];
+      if (target !== undefined) {
+        if (!order.has(target)) {
+          order.set(target, counter);
+          low.set(target, counter++);
+          stack.push(target);
+          onStack.add(target);
+          frames.push({ id: target, next: 0 });
+        } else if (onStack.has(target)) {
+          low.set(frame.id, Math.min(low.get(frame.id) ?? 0, order.get(target) ?? 0));
+        }
+        continue;
+      }
+      frames.pop();
+      const parent = frames.at(-1);
+      if (parent !== undefined) {
+        low.set(parent.id, Math.min(low.get(parent.id) ?? 0, low.get(frame.id) ?? 0));
+      }
+      if (low.get(frame.id) !== order.get(frame.id)) continue;
+      const component: NodeId[] = [];
+      for (let id = stack.pop(); id !== undefined; id = stack.pop()) {
+        onStack.delete(id);
+        component.push(id);
+        if (id === frame.id) break;
+      }
+      const self = (edges.get(frame.id) ?? []).includes(frame.id);
+      if (component.length > 1 || self) for (const id of component) cyclic.add(id);
+    }
+  }
+  return cyclic;
+}
+
+/** A binary min-heap of graph positions, for the dependency order's ready list. */
+class MinHeap {
+  readonly #items: number[] = [];
+
+  push(value: number): void {
+    const items = this.#items;
+    items.push(value);
+    for (let at = items.length - 1; at > 0;) {
+      const parent = (at - 1) >> 1;
+      const [up, down] = [items[at] ?? 0, items[parent] ?? 0];
+      if (down <= up) break;
+      items[at] = down;
+      items[parent] = up;
+      at = parent;
+    }
+  }
+
+  pop(): number | undefined {
+    const items = this.#items;
+    const top = items[0];
+    const last = items.pop();
+    if (top === undefined || last === undefined || items.length === 0) return top;
+    items[0] = last;
+    for (let at = 0; ;) {
+      const [left, right] = [2 * at + 1, 2 * at + 2];
+      let smallest = at;
+      if (left < items.length && (items[left] ?? 0) < (items[smallest] ?? 0)) smallest = left;
+      if (right < items.length && (items[right] ?? 0) < (items[smallest] ?? 0)) smallest = right;
+      if (smallest === at) break;
+      const [a, b] = [items[at] ?? 0, items[smallest] ?? 0];
+      items[at] = b;
+      items[smallest] = a;
+      at = smallest;
+    }
+    return top;
   }
 }
 
@@ -446,16 +593,32 @@ class Transpiler {
  */
 class Typing {
   readonly #workflow: Workflow;
+  /** How each node is written: `undefined` while undecided, or for a node left out. */
+  readonly #mode: (id: NodeId) => "typed" | "raw" | undefined;
   /** Resolved MatchType parameters by node and template. */
   readonly #parameters = new Map<string, Atom>();
 
-  constructor(workflow: Workflow) {
+  constructor(workflow: Workflow, mode: (id: NodeId) => "typed" | "raw" | undefined) {
     this.#workflow = workflow;
+    this.#mode = mode;
   }
 
+  /**
+   * Why the types can't express a node, or `undefined` when they can. Nodes are asked in
+   * dependency order, so their sources are decided; a typed node's MatchType parameters are then
+   * resolved at once, so later nodes look them up rather than recurse through long chains.
+   */
   problem(node: GraphNode, definition: NodeDef): string | undefined {
     const scope: Scope = { node, definition };
-    return this.#inputs(scope, definition.inputs, node.inputs, undefined, node.classType);
+    const problem = this.#inputs(scope, definition.inputs, node.inputs, undefined, node.classType);
+    if (problem === undefined) {
+      for (const output of definition.outputs) {
+        if (output.matchTemplate !== undefined) {
+          this.#parameter(node, definition, output.matchTemplate);
+        }
+      }
+    }
+    return problem;
   }
 
   /**
@@ -670,11 +833,13 @@ class Typing {
    */
   #atom(id: NodeId, slot: number): Atom | undefined {
     const node = this.#workflow.graph.nodes.get(id);
-    if (node === undefined) return undefined;
+    const mode = this.#mode(id);
+    if (node === undefined || mode === undefined) return undefined;
     const definition = Object.hasOwn(this.#workflow.schema.nodes, node.classType)
       ? this.#workflow.schema.nodes[node.classType]
       : undefined;
-    if (node.raw || definition === undefined) return STAR;
+    // Whatever is written as raw(…), known class or not, has `Out<"*">` outputs.
+    if (mode === "raw" || definition === undefined) return STAR;
     const output = definition.outputs[slot];
     if (output === undefined) return undefined;
     return outputAtom(output, (template) => this.#parameter(node, definition, template));
@@ -973,24 +1138,27 @@ function arrayDoc(items: readonly Doc[], breaks = false): Doc {
 
 /** `key: value`; a scalar stays on the key's line, anything else may move below it. */
 function propertyDoc(key: string, value: Doc): Doc {
-  if (typeof value === "string" && !value.startsWith('"') && !value.startsWith("'")) {
+  // Prettier never breaks after a key narrower than five columns (tab width plus three).
+  const short = textWidth(key) < 5;
+  if (short || (typeof value === "string" && !value.startsWith('"') && !value.startsWith("'"))) {
     return [key, ": ", value];
   }
   const id = groupId("property");
   return group([key, ":", group(indent(line), id), indentIfBreak(value, id)]);
 }
 
+/** A number literal as Prettier writes it: exponents without `+` (`1e21`, not `1e+21`). */
+function numberText(value: number): string {
+  return Object.is(value, -0) ? "-0" : String(value).replace("e+", "e");
+}
+
 function scalarDoc(value: string | number | bigint | boolean | null): Doc {
   if (typeof value === "string") return quote(value);
   if (typeof value === "bigint") return `${String(value)}n`;
-  if (typeof value === "number") return Object.is(value, -0) ? "-0" : String(value);
+  if (typeof value === "number") return numberText(value);
   return String(value);
 }
 
-/**
- * Whether Prettier breaks an array whatever its width: two or more elements, all objects with
- * more than one key or all arrays with more than one element.
- */
 /** "object" or "array" for an element with more than one entry. */
 function many(item: InputValue | JsonValue): "object" | "array" | undefined {
   if (isList(item)) return item.length > 1 ? "array" : undefined;
@@ -1000,6 +1168,10 @@ function many(item: InputValue | JsonValue): "object" | "array" | undefined {
   return undefined;
 }
 
+/**
+ * Whether Prettier breaks an array whatever its width: two or more elements, all objects with
+ * more than one key or all arrays with more than one element.
+ */
 function breaksArray(items: readonly (InputValue | JsonValue)[]): boolean {
   const first = items[0] === undefined ? undefined : many(items[0]);
   return items.length > 1 && first !== undefined && items.every((item) => many(item) === first);
@@ -1007,11 +1179,35 @@ function breaksArray(items: readonly (InputValue | JsonValue)[]): boolean {
 
 /** A JSON value as an expression. */
 function jsonDoc(value: JsonValue): Doc {
-  if (isList(value)) return arrayDoc(value.map(jsonDoc), breaksArray(value));
+  if (isList(value)) {
+    return isNumberList(value)
+      ? numbersDoc(value)
+      : arrayDoc(value.map(jsonDoc), breaksArray(value));
+  }
   if (typeof value === "object" && value !== null) {
     return objectDoc(
-      Object.entries(value).map(([key, item]) => propertyDoc(propertyKey(key), jsonDoc(item))),
+      Object.entries(value).map(([key, item]) => propertyDoc(objectKey(key), jsonDoc(item))),
     );
   }
   return scalarDoc(value);
+}
+
+/** A list of two or more numbers, which Prettier prints concisely, as many per line as fit. */
+function isNumberList(value: readonly (InputValue | JsonValue)[]): value is readonly number[] {
+  return value.length > 1 && value.every((item) => typeof item === "number");
+}
+
+function numbersDoc(values: readonly number[]): Doc {
+  const items = values.map((value, index) =>
+    index < values.length - 1 ? `${numberText(value)},` : numberText(value),
+  );
+  return group(["[", indent([softline, fill(items), ifBreak(",")]), softline, "]"]);
+}
+
+/**
+ * A key for an object literal. `__proto__` is computed, since a plain `__proto__:` would set
+ * the prototype rather than make a property.
+ */
+function objectKey(name: string): string {
+  return name === "__proto__" ? '["__proto__"]' : propertyKey(name);
 }

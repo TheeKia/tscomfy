@@ -57,6 +57,8 @@ export function pascal(name: string, fallback: string): string {
  */
 export class NameRegistry {
   readonly #taken = new Set<string>();
+  /** Per base, the first suffix not yet tried: names are never given back, so none below is free. */
+  readonly #next = new Map<string, number>();
 
   constructor(reserved: readonly string[] = []) {
     for (const name of reserved) this.#taken.add(name);
@@ -64,8 +66,13 @@ export class NameRegistry {
 
   /** A fresh name based on `base`, now taken. */
   claim(base: string): string {
-    let name = base;
-    for (let suffix = 2; this.#taken.has(name); suffix++) name = `${base}${String(suffix)}`;
+    let suffix = this.#next.get(base) ?? 1;
+    let name = suffix === 1 ? base : `${base}${String(suffix)}`;
+    while (this.#taken.has(name)) {
+      suffix++;
+      name = `${base}${String(suffix)}`;
+    }
+    this.#next.set(base, suffix + 1);
     this.#taken.add(name);
     return name;
   }

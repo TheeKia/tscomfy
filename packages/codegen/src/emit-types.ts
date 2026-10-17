@@ -744,11 +744,17 @@ class TypesEmitter {
   }
 }
 
-/**
- * Whether an input must be given: the backend requires it and no default fills it in.
- * Autogrow and DynamicGroup are required by their minimum alone: the backend enforces it even
- * when the input itself is optional.
- */
+/** Members of TypeScript's `Object` interface, which every object type has. */
+const OBJECT_MEMBERS: ReadonlySet<string> = new Set([
+  "constructor",
+  "toString",
+  "toLocaleString",
+  "valueOf",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+]);
+
 /**
  * The field a DynamicGroup row's type requires beyond the required ones (§7.2): a row is counted
  * only when one of its keys is sent, so when no field is required or has a default, the first
@@ -759,8 +765,16 @@ export function forcedRowField(fields: readonly InputDef[]): InputDef | undefine
   return sendable.some((field) => isRequired(field) || hasDefault(field)) ? undefined : sendable[0];
 }
 
-/** Whether the generated types require the input (shared with the transpiler). */
+/**
+ * Whether an input must be given: the backend requires it and no default fills it in.
+ * Autogrow and DynamicGroup are required by their minimum alone: the backend enforces it even
+ * when the input itself is optional. An input named after a member of `Object` is always
+ * required: TypeScript checks an optional property against the member every object literal
+ * has (`constructor: Function`), so leaving it out would fail to compile. Shared with the
+ * transpiler.
+ */
 export function isRequired(input: InputDef): boolean {
+  if (OBJECT_MEMBERS.has(input.name)) return true;
   switch (input.kind) {
     case "autogrow":
       return input.template.required && input.min > 0 && input.slots.length > 0;

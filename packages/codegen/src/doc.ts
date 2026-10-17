@@ -4,7 +4,7 @@
 // formatting the generated fixtures and the corpus output).
 
 /** A printable document. Arrays concatenate. */
-export type Doc = string | readonly Doc[] | Group | Indent | Line | IfBreak | IndentIfBreak;
+export type Doc = string | readonly Doc[] | Group | Indent | Line | IfBreak | IndentIfBreak | Fill;
 
 /** Names a group so other documents can follow its decision. */
 export interface GroupId {
@@ -40,6 +40,11 @@ interface IndentIfBreak {
   readonly group: GroupId;
 }
 
+interface Fill {
+  readonly kind: "fill";
+  readonly contents: readonly string[];
+}
+
 /**
  * Prints on one line if the whole group fits, else breaks every line directly inside it. With
  * an `id`, {@link indentIfBreak} can follow the decision.
@@ -51,6 +56,14 @@ export function group(contents: Doc, id?: GroupId): Doc {
 /** A fresh group id. */
 export function groupId(description: string): GroupId {
   return { description };
+}
+
+/**
+ * Prettier's `fill` over text separated by `line`s: as many items on each line as fit. An item
+ * goes on the current line when it fits there together with the item before it.
+ */
+export function fill(contents: readonly string[]): Doc {
+  return { kind: "fill", contents };
 }
 
 /** Indents the lines inside by one level. */
@@ -143,6 +156,24 @@ export function print(doc: Doc, width: number): string {
             doc: mode === "break" ? current.broken : current.flat,
           });
           break;
+        case "fill": {
+          const { contents } = current;
+          for (const [index, item] of contents.entries()) {
+            const next = contents[index + 1];
+            const start = column;
+            output.push(item);
+            column += textWidth(item);
+            if (next === undefined) break;
+            if (mode === "flat" || start + textWidth(item) + 1 + textWidth(next) <= width) {
+              output.push(" ");
+              column += 1;
+            } else {
+              output.push("\n", "  ".repeat(level));
+              column = level * 2;
+            }
+          }
+          break;
+        }
         case "line":
           if (mode === "flat" && current.mode !== "hard") {
             if (current.mode === "line") {
@@ -310,6 +341,14 @@ function fits(next: Command, rest: readonly Command[], width: number): boolean {
             doc: mode === "break" ? doc.broken : doc.flat,
           });
           break;
+        case "fill":
+          if (mode === "break") {
+            remaining -= textWidth(doc.contents[0] ?? "");
+            if (doc.contents.length > 1) return true;
+          } else {
+            remaining -= textWidth(doc.contents.join(" "));
+          }
+          break;
         case "line":
           if (mode === "break" || doc.mode === "hard") return true;
           if (doc.mode === "line") remaining -= 1;
@@ -326,6 +365,8 @@ function hasHardline(doc: Doc): boolean {
   switch (doc.kind) {
     case "line":
       return doc.mode === "hard";
+    case "fill":
+      return false;
     case "ifBreak":
       return hasHardline(doc.broken) || hasHardline(doc.flat);
     case "group":

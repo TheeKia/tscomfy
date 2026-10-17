@@ -177,3 +177,78 @@ describe("importApi", () => {
     expect(nodes(importApi(text, schema))[0]?.inputs["seed"]).toBe(18446744073709551615n);
   });
 });
+
+describe("what doesn't fold back faithfully is kept raw", () => {
+  const curveRows = looseSchema(
+    JSON.stringify({
+      Rows: {
+        input: {
+          required: {
+            rows: [
+              "COMFY_DYNAMICGROUP_V3",
+              { template: { required: { c: ["CURVE", {}], n: ["INT", { default: 1 }] } }, max: 2 },
+            ],
+          },
+        },
+        output: [],
+        name: "Rows",
+        display_name: "Rows",
+        category: "test",
+        python_module: "nodes",
+        output_node: true,
+      },
+    }),
+  );
+
+  test("a CURVE value in a row is unwrapped, so it isn't wrapped twice", () => {
+    const prompt = {
+      "1": {
+        inputs: {
+          "rows.0.c": { __type__: "CURVE", __value__: { points: [[0, 0]] } },
+          "rows.0.n": 1,
+        },
+        class_type: "Rows",
+        _meta: { title: "Rows" },
+      },
+    };
+    const { workflow, diagnostics } = importApi(JSON.stringify(prompt), curveRows);
+    expect(diagnostics).toEqual([]);
+    expect(toApi(workflow, { validate: false })).toEqual(prompt);
+  });
+
+  test.each([
+    ["a row past the group's max", { "rows.2.n": 1 }],
+    ["a row index far past it", { "rows.4294967295.n": 1 }],
+  ])("%s", (_name, inputs) => {
+    const prompt = { "1": { inputs, class_type: "Rows" } };
+    const { workflow, diagnostics } = importApi(JSON.stringify(prompt), curveRows);
+    expect(found(diagnostics)).toEqual([["W_IMPORTED_AS_RAW", ["1"]]]);
+    expect(toApi(workflow, { validate: false, meta: false })).toEqual(prompt);
+  });
+
+  test("a key two inputs would send", async () => {
+    const prompt = {
+      "1": {
+        inputs: { format: "mp4", "format.codec": "x" },
+        class_type: "MockDynamicComboCollision",
+      },
+    };
+    const result = await imported("dynamic-combo", prompt);
+    expect(found(result.diagnostics)).toEqual([["W_IMPORTED_AS_RAW", ["1"]]]);
+    expect(toApi(result.workflow, { validate: false, meta: false })).toEqual(prompt);
+  });
+
+  test("a display-only widget's key, which the exporter never sends", async () => {
+    const prompt = { "1": { inputs: { preview: "x" }, class_type: "MockValueWidgets" } };
+    const result = await imported("widget-types", prompt);
+    expect(found(result.diagnostics)).toEqual([["W_IMPORTED_AS_RAW", ["1"]]]);
+    expect(toApi(result.workflow, { validate: false, meta: false })).toEqual(prompt);
+  });
+
+  test("an empty node id is reported, not thrown", async () => {
+    const result = await imported("basic-pipeline", {
+      "": { class_type: "VAELoader", inputs: {} },
+    });
+    expect(found(result.diagnostics)).toEqual([["E_INVALID_PROMPT", [""]]]);
+  });
+});

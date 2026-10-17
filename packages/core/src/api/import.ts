@@ -8,6 +8,7 @@ import type { NodeId, Out } from "../graph/types.ts";
 import { assembleWorkflow, type AssembledNode } from "../graph/workflow.ts";
 import { parse } from "../json/parse.ts";
 import { isJsonObject, type JsonValue } from "../json/value.ts";
+import { sendsValue } from "../schema/frontend.ts";
 import type { TypedSchema } from "../schema/typed.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
 
@@ -63,6 +64,7 @@ function readNode(
     diagnostics.push(createDiagnostic("E_INVALID_PROMPT", [id, ...path], message));
     return undefined;
   };
+  if (id === "") return invalid([], "A node has an empty id; dropping it.");
   if (!isJsonObject(value)) return invalid([], `Node ${id} isn't an object; dropping it.`);
   const classType = value["class_type"];
   const inputs = value["inputs"] ?? {};
@@ -136,12 +138,17 @@ function fold(
   wire: { readonly [key: string]: InputValue },
 ): { readonly [name: string]: InputValue } | string {
   const claimed = new Set<string>();
+  let problem: string | undefined;
   const take = (key: string): InputValue | undefined => {
     if (!Object.hasOwn(wire, key)) return undefined;
+    // Two inputs would send the same key; the exporter would report a collision.
+    if (claimed.has(key)) {
+      problem = `${key} belongs to two inputs`;
+      return undefined;
+    }
     claimed.add(key);
     return wire[key];
   };
-  let problem: string | undefined;
 
   const input = (definition: InputDef, key: string): InputValue | undefined => {
     switch (definition.kind) {
@@ -187,8 +194,13 @@ function fold(
             problem = `${wireKey} isn't a field of group ${key}`;
             continue;
           }
+          // Checked before any list is built: a row past `max` can't be sent anyway.
+          if (Number(index) >= definition.max) {
+            problem = `${wireKey} is in a row past the group's ${String(definition.max)}`;
+            continue;
+          }
           const row = rows.get(Number(index)) ?? [];
-          row.push([field.name, take(wireKey) ?? null]);
+          row.push([field.name, input(field, wireKey) ?? null]);
           rows.set(Number(index), row);
         }
         if (rows.size === 0) return undefined;
@@ -206,6 +218,11 @@ function fold(
         });
       }
       case "value":
+        // The frontend never sends a display-only widget, so the exporter would drop the key.
+        if (!sendsValue(definition.widget) && Object.hasOwn(wire, key)) {
+          problem = `${key} is a display-only widget, which the exporter doesn't send`;
+          return undefined;
+        }
         return unwrapCurve(definition.widget, take(key));
       case "socket":
       case "int":

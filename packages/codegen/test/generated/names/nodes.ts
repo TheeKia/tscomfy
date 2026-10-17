@@ -35,7 +35,7 @@ export interface Nodes {
    *
    * Input names that are not identifiers, start with a digit, or shadow an Object.prototype member.
    */
-  readonly MockOddInputNames: (inputs?: MockOddInputNames$In, options?: NodeOptions) => Out<"INT">;
+  readonly MockOddInputNames: (inputs: MockOddInputNames$In, options?: NodeOptions) => Out<"INT">;
   /**
    * Text Encode Mock 1.5 · mock/names
    *
@@ -91,7 +91,7 @@ export interface MockOddInputNames$In {
   /** Default: `0`. */
   readonly "1st"?: number | In<"FLOAT">;
   /** Default: `false`. */
-  readonly constructor?: boolean | In<"BOOLEAN">;
+  readonly constructor: boolean | In<"BOOLEAN">;
 }
 
 /** Inputs of `TextEncodeMock1.5`. */

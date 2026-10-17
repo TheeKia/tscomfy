@@ -518,7 +518,8 @@ describe("transpile", () => {
       2,
       '--name "gen" isn\'t usable',
     ],
-    [["--prompt", "1.json", "--schema", "gen"], 2, 'Can\'t make an export name from "1.json"'],
+    [["--prompt", "1.json", "--schema", "gen"], 2, 'Can\'t name the export "1", after "1.json"'],
+    [["--prompt", "workflow.json", "--schema", "gen"], 2, 'Can\'t name the export "workflow"'],
     [["--prompt", "missing.json", "--schema", "gen"], 1, "There is no file at missing.json."],
     [
       ["--prompt", "prompts/My Txt2Img.json", "--schema", "nowhere"],

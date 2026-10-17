@@ -4852,6 +4852,92 @@ exports[`snapshots outputs 1`] = `
         ],
         "pythonModule": "custom_nodes.mock-pack",
       },
+      "MockManyOutputs": {
+        "category": "mock/outputs",
+        "classType": "MockManyOutputs",
+        "deprecated": false,
+        "description": "Eight outputs with long names, like the context nodes of some packs: destructuring them all doesn't fit on a line.",
+        "displayName": "Mock Many Outputs",
+        "experimental": false,
+        "inputs": [],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "positive_conditioning",
+            "type": {
+              "kind": "named",
+              "name": "CONDITIONING",
+            },
+          },
+          {
+            "index": 1,
+            "isList": false,
+            "name": "negative_conditioning",
+            "type": {
+              "kind": "named",
+              "name": "CONDITIONING",
+            },
+          },
+          {
+            "index": 2,
+            "isList": false,
+            "name": "latent_image_batch",
+            "type": {
+              "kind": "named",
+              "name": "LATENT",
+            },
+          },
+          {
+            "index": 3,
+            "isList": false,
+            "name": "vae_decoder_model",
+            "type": {
+              "kind": "named",
+              "name": "VAE",
+            },
+          },
+          {
+            "index": 4,
+            "isList": false,
+            "name": "clip_vision_encoder",
+            "type": {
+              "kind": "named",
+              "name": "CLIP_VISION",
+            },
+          },
+          {
+            "index": 5,
+            "isList": false,
+            "name": "upscale_model_loaded",
+            "type": {
+              "kind": "named",
+              "name": "UPSCALE_MODEL",
+            },
+          },
+          {
+            "index": 6,
+            "isList": false,
+            "name": "control_net_applied",
+            "type": {
+              "kind": "named",
+              "name": "CONDITIONING",
+            },
+          },
+          {
+            "index": 7,
+            "isList": false,
+            "name": "segmentation_masks",
+            "type": {
+              "kind": "named",
+              "name": "MASK",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
       "MockNoOutputs": {
         "category": "mock/outputs",
         "classType": "MockNoOutputs",
