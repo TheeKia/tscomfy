@@ -1,5 +1,6 @@
 import type { DiagnosticPath } from "../diagnostic/diagnostic.ts";
 import type { JsonObject, JsonValue } from "../json/value.ts";
+import { sendsValue } from "../schema/frontend.ts";
 import type {
   AutogrowInput,
   ComboInput,
@@ -50,6 +51,16 @@ const AUTOGROW_DEFAULT_MIN = 1;
 const AUTOGROW_DEFAULT_MAX = 10;
 const AUTOGROW_MAX_SLOTS = 100;
 const DYNAMIC_GROUP_MAX_ROWS = 20;
+
+/** The kinds a DynamicGroup field may have: widgets (the backend forbids sockets and dynamics). */
+const GROUP_FIELD_KINDS: ReadonlySet<InputDef["kind"]> = new Set([
+  "int",
+  "float",
+  "string",
+  "boolean",
+  "combo",
+  "value",
+]);
 
 const UPLOAD_FLAGS = ["image_upload", "video_upload", "audio_upload", "file_upload"] as const;
 
@@ -578,10 +589,21 @@ class SpecReader {
       );
     }
     const groupName = this.string("group_name");
+    const fields = readNestedSections(this.#context, template, [...this.#path, "template"], NORMAL);
+    // The backend's DynamicGroup takes only widget fields, without forceInput or dots in their
+    // names; and a row must have a field it sends, or no row could ever be counted.
+    if (
+      !fields.every((field) => GROUP_FIELD_KINDS.has(field.kind) && !field.name.includes(".")) ||
+      !fields.some((field) => field.kind !== "value" || sendsValue(field.widget))
+    ) {
+      return this.#invalid(
+        "A dynamic group's fields must be widgets that are sent, without forceInput or dots in their names.",
+      );
+    }
     return {
       kind: "dynamicGroup",
       ...this.base(),
-      fields: readNestedSections(this.#context, template, [...this.#path, "template"], NORMAL),
+      fields,
       min,
       max,
       ...(groupName === undefined ? {} : { groupName }),

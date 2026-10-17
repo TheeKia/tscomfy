@@ -309,10 +309,11 @@ export const ACCEPTS_CASES: readonly AcceptsCase[] = [
     expected: false,
   },
   {
-    name: "dynamic combo takes its own type",
+    // The backend compares the choice with the keys as it is: no link selects an option.
+    name: "dynamic combo takes no link, not even of its own type",
     input: dynamicCombo,
     output: output(named("COMFY_DYNAMICCOMBO_V3")),
-    expected: true,
+    expected: false,
   },
   {
     name: "dynamic combo rejects an option list",

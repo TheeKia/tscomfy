@@ -122,5 +122,87 @@
     "python_module": "custom_nodes.mock-pack",
     "category": "mock/malformed",
     "output_node": false
+  },
+  "MockBadGroupFields": {
+    "input": {
+      "required": {
+        "socket_field": [
+          "COMFY_DYNAMICGROUP_V3",
+          {
+            "template": {
+              "required": {
+                "image": ["IMAGE", {}]
+              }
+            },
+            "min": 0,
+            "max": 3
+          }
+        ],
+        "forced_field": [
+          "COMFY_DYNAMICGROUP_V3",
+          {
+            "template": {
+              "required": {
+                "n": [
+                  "INT",
+                  {
+                    "forceInput": true
+                  }
+                ]
+              }
+            },
+            "min": 0,
+            "max": 3
+          }
+        ],
+        "dynamic_field": [
+          "COMFY_DYNAMICGROUP_V3",
+          {
+            "template": {
+              "required": {
+                "m": [
+                  "COMFY_MATCHTYPE_V3",
+                  {
+                    "template": {
+                      "template_id": "t",
+                      "allowed_types": "*"
+                    }
+                  }
+                ]
+              }
+            },
+            "min": 0,
+            "max": 3
+          }
+        ],
+        "display_only": [
+          "COMFY_DYNAMICGROUP_V3",
+          {
+            "template": {
+              "required": {
+                "preview": ["RESOLUTION_PREVIEW", {}]
+              }
+            },
+            "min": 0,
+            "max": 3
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["socket_field", "forced_field", "dynamic_field", "display_only"]
+    },
+    "is_input_list": false,
+    "output": ["STRING"],
+    "output_is_list": [false],
+    "output_name": ["STRING"],
+    "name": "MockBadGroupFields",
+    "display_name": "Mock Bad Group Fields",
+    "description": "DynamicGroup templates the backend refuses: a socket, a forceInput widget, a dynamic input, and only a display-only widget.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/malformed",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
   }
 }

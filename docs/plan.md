@@ -591,7 +591,9 @@ The diagnostic model is §5.4.
     dropped or the node is, respectively.
   - Missing Autogrow and DynamicGroup counts take the backend's defaults (prefix: min 1, max 10,
     at most 100 slots; group: min 0, max 20). Counts outside those limits, which the backend's
-    constructors rule out, make the input unknown.
+    constructors rule out, make the input unknown. So does a DynamicGroup whose fields aren't
+    all widgets the backend allows there (no sockets, `forceInput`, dynamic inputs or dotted
+    names), or that has no field it sends.
   - Without source-text access (`W_PRECISION_LOSS`), integer-valued bounds beyond 2⁵³ move
     inward by one double, which covers any rounding.
   - Nodes are sorted by class type (D15).

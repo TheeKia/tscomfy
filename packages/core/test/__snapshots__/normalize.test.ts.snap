@@ -2877,6 +2877,54 @@ exports[`snapshots malformed 1`] = `
 {
   "diagnostics": [
     {
+      "code": "W_INVALID_INPUT_SPEC",
+      "message": "A dynamic group's fields must be widgets that are sent, without forceInput or dots in their names. Keeping the input as unknown.",
+      "path": [
+        "MockBadGroupFields",
+        "input",
+        "required",
+        "socket_field",
+        1,
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_SPEC",
+      "message": "A dynamic group's fields must be widgets that are sent, without forceInput or dots in their names. Keeping the input as unknown.",
+      "path": [
+        "MockBadGroupFields",
+        "input",
+        "required",
+        "forced_field",
+        1,
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_SPEC",
+      "message": "A dynamic group's fields must be widgets that are sent, without forceInput or dots in their names. Keeping the input as unknown.",
+      "path": [
+        "MockBadGroupFields",
+        "input",
+        "required",
+        "dynamic_field",
+        1,
+      ],
+      "severity": "warning",
+    },
+    {
+      "code": "W_INVALID_INPUT_SPEC",
+      "message": "A dynamic group's fields must be widgets that are sent, without forceInput or dots in their names. Keeping the input as unknown.",
+      "path": [
+        "MockBadGroupFields",
+        "input",
+        "required",
+        "display_only",
+        1,
+      ],
+      "severity": "warning",
+    },
+    {
       "code": "E_INVALID_INPUT_SECTION",
       "message": "Expected input.optional to be an object, got a string; dropping its inputs.",
       "path": [
@@ -3204,6 +3252,125 @@ exports[`snapshots malformed 1`] = `
   "schema": {
     "formatVersion": 1,
     "nodes": {
+      "MockBadGroupFields": {
+        "category": "mock/malformed",
+        "classType": "MockBadGroupFields",
+        "deprecated": false,
+        "description": "DynamicGroup templates the backend refuses: a socket, a forceInput widget, a dynamic input, and only a display-only widget.",
+        "displayName": "Mock Bad Group Fields",
+        "experimental": false,
+        "inputs": [
+          {
+            "kind": "unknown",
+            "lazy": false,
+            "name": "socket_field",
+            "rawLink": false,
+            "required": true,
+            "spec": [
+              "COMFY_DYNAMICGROUP_V3",
+              {
+                "max": 3,
+                "min": 0,
+                "template": {
+                  "required": {
+                    "image": [
+                      "IMAGE",
+                      {},
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+          {
+            "kind": "unknown",
+            "lazy": false,
+            "name": "forced_field",
+            "rawLink": false,
+            "required": true,
+            "spec": [
+              "COMFY_DYNAMICGROUP_V3",
+              {
+                "max": 3,
+                "min": 0,
+                "template": {
+                  "required": {
+                    "n": [
+                      "INT",
+                      {
+                        "forceInput": true,
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+          {
+            "kind": "unknown",
+            "lazy": false,
+            "name": "dynamic_field",
+            "rawLink": false,
+            "required": true,
+            "spec": [
+              "COMFY_DYNAMICGROUP_V3",
+              {
+                "max": 3,
+                "min": 0,
+                "template": {
+                  "required": {
+                    "m": [
+                      "COMFY_MATCHTYPE_V3",
+                      {
+                        "template": {
+                          "allowed_types": "*",
+                          "template_id": "t",
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+          {
+            "kind": "unknown",
+            "lazy": false,
+            "name": "display_only",
+            "rawLink": false,
+            "required": true,
+            "spec": [
+              "COMFY_DYNAMICGROUP_V3",
+              {
+                "max": 3,
+                "min": 0,
+                "template": {
+                  "required": {
+                    "preview": [
+                      "RESOLUTION_PREVIEW",
+                      {},
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "STRING",
+            "type": {
+              "kind": "named",
+              "name": "STRING",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
       "MockBadInputSpecs": {
         "category": "mock/malformed",
         "classType": "MockBadInputSpecs",

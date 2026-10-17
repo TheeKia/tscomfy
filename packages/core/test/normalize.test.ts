@@ -546,6 +546,7 @@ describe("malformed input", () => {
   test("drops unusable nodes and keeps the rest", async () => {
     const { schema } = await normalizeMock("malformed");
     expect(Object.keys(schema.nodes)).toEqual([
+      "MockBadGroupFields",
       "MockBadInputSpecs",
       "MockDuplicateInput",
       "MockMatchNoTemplate",

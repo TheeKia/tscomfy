@@ -10,7 +10,8 @@ import type { ComboOption, InputDef, OutputDef, OutputType, SocketType } from ".
  * - otherwise the comma lists must share a type.
  *
  * List outputs don't change the answer: ComfyUI maps a list over a non-list input. An Autogrow
- * input answers for its slots. Inputs that can't be linked as a whole (DynamicGroup) and specs
+ * input answers for its slots. Inputs that can't be linked as a whole (DynamicGroup, and a
+ * dynamic combo, whose choice a link never matches) and specs
  * the normalizer couldn't interpret answer `false`, whatever the output: stricter than the
  * backend, never looser.
  */
@@ -47,11 +48,11 @@ export function acceptsType(input: InputDef, output: OutputType): boolean {
         ? legacyComboAccepts(input.options, output)
         : socketAccepts(input.type, output);
     case "dynamicCombo":
-      return socketAccepts(DYNAMIC_COMBO, output);
+      // The backend compares the choice with the option keys as it is, so a link never selects
+      // an option: the input and its option inputs are dropped (§8).
+      return false;
   }
 }
-
-const DYNAMIC_COMBO: SocketType = { kind: "named", name: "COMFY_DYNAMICCOMBO_V3" };
 
 /** Whether a socket of type `input` takes a link from an output of type `output` (§5.2). */
 export function socketAccepts(input: SocketType, output: OutputType): boolean {

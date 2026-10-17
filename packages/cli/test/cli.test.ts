@@ -230,12 +230,12 @@ describe("generate", () => {
     const io = memoryIo({ "info.json": malformed });
     expect(await run(["generate", "--from", "info.json", "--out", "gen"], io)).toBe(0);
     const report = io.stdout().split("\n").slice(2);
-    expect(report[0]).toBe("6 errors and 36 warnings in the node definitions:");
+    expect(report[0]).toBe("6 errors and 44 warnings in the node definitions:");
     expect(report.filter((line) => /^ {2}\S/.test(line))).toEqual([
       "  (no pack): 6",
-      "  custom_nodes.mock-pack: 36",
+      "  custom_nodes.mock-pack: 44",
     ]);
-    expect(report).toContain("    … and 31 more (--verbose shows all)");
+    expect(report).toContain("    … and 39 more (--verbose shows all)");
     expect(
       report.filter((line) => line.startsWith("    E_") || line.startsWith("    W_")),
     ).toHaveLength(10);
@@ -247,7 +247,7 @@ describe("generate", () => {
     const lines = verbose.stdout().split("\n");
     expect(
       lines.filter((line) => line.startsWith("    E_") || line.startsWith("    W_")),
-    ).toHaveLength(42);
+    ).toHaveLength(50);
     expect(lines.some((line) => line.includes("more (--verbose"))).toBeFalse();
   });
 
