@@ -146,6 +146,27 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "MockComboBoolean": {
+    "input": {
+      "required": {
+        "flag": [[false, true], { "default": true }],
+        "mode": [["off", "auto"], { "default": false }]
+      }
+    },
+    "input_order": { "required": ["flag", "mode"] },
+    "is_input_list": false,
+    "output": ["BOOLEAN"],
+    "output_is_list": [false],
+    "output_name": ["BOOLEAN"],
+    "name": "MockComboBoolean",
+    "display_name": "Mock Combo Boolean",
+    "description": "A legacy combo whose options are booleans, and a combo whose default is not one of its options.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "MockCustomWidgetType": {
     "input": {
       "required": {

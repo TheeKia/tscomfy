@@ -1,0 +1,31 @@
+{
+  "MockNullFields": {
+    "input": {
+      "required": {
+        "strength": ["FLOAT", { "default": null, "min": 0, "max": 10, "tooltip": null }]
+      },
+      "optional": null
+    },
+    "input_order": { "required": ["strength"] },
+    "is_input_list": false,
+    "output": ["STRING", "INT"],
+    "output_is_list": [null, true],
+    "output_name": ["text", "count"],
+    "output_tooltips": [null, null],
+    "output_matchtypes": null,
+    "name": "MockNullFields",
+    "display_name": null,
+    "description": null,
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/nulls",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  }
+}

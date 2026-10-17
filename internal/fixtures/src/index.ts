@@ -25,9 +25,11 @@ export const MOCK_OBJECT_INFO_NAMES = [
   "malformed",
   "match-type",
   "names",
+  "nulls",
   "numbers",
   "outputs",
   "sockets",
+  "widget-types",
 ] as const;
 
 export type MockObjectInfoName = (typeof MOCK_OBJECT_INFO_NAMES)[number];

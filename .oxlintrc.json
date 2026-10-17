@@ -37,7 +37,8 @@
     "typescript/prefer-nullish-coalescing": "error",
     "typescript/require-array-sort-compare": "error",
     "typescript/no-redundant-type-constituents": "error",
-    "typescript/no-deprecated": "error"
+    "typescript/no-deprecated": "error",
+    "typescript/consistent-return": "off"
   },
   "overrides": [
     {

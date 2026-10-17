@@ -1,7 +1,7 @@
 # tscomfy: implementation plan
 
 > Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`). MIT.
-> Publishing is not a priority. Status: revision 3, 2026-10-17: Phase 1 prerequisites settled (D14, D15, §14). **Phase 0 complete.**
+> Publishing is not a priority. Status: revision 4, 2026-10-17: widget classification (D16) and the final schema model from Phase 1. **Phases 0 and 1 complete.**
 > Every claim marked **[verified]** was checked hands-on; the evidence is in [§16](#16-verification-log).
 
 ## 1. Goal
@@ -63,6 +63,7 @@ differences in §7.4.
 | D13 | **The generated runtime schema is a `.ts` module holding `JSON.parse("…")`**, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check. The `JSON.parse` module costs 20 MB and 0.02 s, needs no copy step and no `resolveJsonModule`. **[verified]** |
 | D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
 | D15 | **Schema identity.** `Schema.nodes` is sorted by class type (code-unit order). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
+| D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its core widget registry. INT/FLOAT/STRING/BOOLEAN/COMBO get their own kinds; the other core widgets (COLOR, BOUNDING_BOX, CURVE, …) become a `value` kind holding JSON; everything else, `TYPE:name` types included, is a socket. The socket type stays `type` | This is the only rule that matches which inputs get values in exported prompts. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
 
 ## 4. Architecture
 
@@ -113,60 +114,69 @@ and nothing is hidden in methods. `Workflow` is a frozen value.
 
 ### 5.1 Schema
 
-```ts
-interface Schema {
-  readonly formatVersion: 1;
-  readonly comfyVersion?: string;                      // from /system_stats, passed by the caller; not hashed
-  readonly nodes: Readonly<Record<string, NodeDef>>;   // key = class_type, exactly as on the server; sorted (D15)
-}
+The full model, with JSDoc, is `packages/core/src/schema/types.ts`. In outline:
 
-interface NodeDef {
-  readonly classType: string;
-  readonly displayName: string;
-  readonly category: string;
-  readonly pythonModule: string;
-  readonly description?: string;
+```ts
+type Schema = {
+  readonly formatVersion: 1;
+  readonly comfyVersion?: string;                    // from /system_stats, passed by the caller; not hashed
+  readonly nodes: { readonly [classType: string]: NodeDef };   // exact class_type keys; sorted (D15); null prototype
+};
+
+type NodeDef = {
+  readonly classType: string; readonly displayName: string; readonly category: string;
+  readonly pythonModule: string; readonly description?: string;
   readonly outputNode: boolean;
   readonly isInputList: boolean;          // node-level is_input_list (42 nodes in the real dump)
-  readonly deprecated?: boolean;
-  readonly experimental?: boolean;
-  readonly inputs: readonly InputDef[];   // ordered by input_order; hidden inputs dropped
+  readonly deprecated: boolean; readonly experimental: boolean;
+  readonly inputs: readonly InputDef[];   // input_order, required first; hidden inputs dropped
   readonly outputs: readonly OutputDef[]; // index = slot, never filtered
-}
+};
 
-type InputDef =
-  | SocketInput                 // custom types, "*", comma unions, forceInput widgets
-  | IntInput | FloatInput | BooleanInput | StringInput
-  | ComboInput                  // legacy [[…]] and ["COMBO",{options}] unified; numeric options kept;
-                                //   flags: multiselect, upload, remote; options may be empty
-  | AutogrowInput               // prefix form (array) or names form (record); min/max; template input
-  | DynamicComboInput           // options[] → { key, inputs: InputDef[] }   (recursive)
-  | DynamicGroupInput           // row template InputDef[]; min/max (upstream calls it unstable)
-  | MatchTypeInput              // templateId + allowed SocketType
-  | UnknownInput;               // spec we couldn't interpret; kept so later stages degrade gracefully
+type InputDef =                 // all share name, required, tooltip?, lazy, rawLink
+  | SocketInput                 // custom types, "*", comma unions, TYPE:name, forceInput widgets
+  | IntInput | FloatInput | StringInput | BooleanInput   // + type (the socket type), socketless, widgetType?
+  | ComboInput                  // form "legacy" | "combo"; options (strings, numbers, booleans; may be empty);
+                                //   multiselect, upload, remote, socketless
+  | ValueInput                  // other core frontend widgets (D16): widget, type, default?: JsonValue
+  | AutogrowInput               // form "prefix" | "names"; slots (every slot name); min; template (a socket)
+  | DynamicComboInput           // options: { key, inputs: InputDef[] }[]   (recursive)
+  | DynamicGroupInput           // fields: InputDef[]; min; max ≤ 20; groupName? (upstream: unstable)
+  | MatchTypeInput              // templateId; allowed: SocketType
+  | UnknownInput;               // spec: the raw spec, kept so later stages degrade gracefully
 
 type SocketType =
   | { readonly kind: "named"; readonly name: string }
-  | { readonly kind: "union"; readonly names: readonly string[] }   // "IMAGE,MASK", V3 MultiType
-  | { readonly kind: "any" };                                       // "*"
+  | { readonly kind: "union"; readonly names: readonly string[] }   // "IMAGE,MASK"; may contain "*"
+  | { readonly kind: "any" };                                       // exactly "*"
 
-interface OutputDef {
-  readonly index: number; readonly name: string; readonly type: SocketType | { readonly kind: "combo" };
-  readonly isList: boolean; readonly matchTemplate?: string;   // from output_matchtypes
-}
+type OutputDef = {
+  readonly index: number; readonly name: string;
+  readonly type: SocketType | { readonly kind: "combo"; readonly options: readonly ComboOption[] };
+  readonly isList: boolean; readonly tooltip?: string;
+  readonly matchTemplate?: string;      // MatchType outputs; their type is then "any"
+};
 ```
 
-Every input carries `name`, `required`, `tooltip?`, `default?` (only when the schema states one),
-widget constraints (`min`, `max`, `step`, `multiline`, …) and `lazy`/`rawLink` flags. DynamicSlot
-is backend-only, unused by the frontend and absent from the dump; it maps to `UnknownInput` until a real node needs it.
+- **Plain data.** These are type aliases, not interfaces, so a `Schema` is assignable to
+  `JsonValue` (a type test checks it) and serializes with `stringify`. The normalizer returns it
+  deeply frozen, and builds every object in a fixed field order.
+- **Integers** are `number` when safe and `bigint` otherwise (`IntValue`), never both forms for
+  one value.
+- **Defaults** appear only when the schema states one and the backend would accept it (§9).
+- DynamicSlot is backend-only, unused by the frontend and absent from the dump; it maps to
+  `UnknownInput` (`W_UNSUPPORTED_INPUT_TYPE`) until a real node needs it.
 
 ### 5.2 Type compatibility
 
 `accepts(input, output)` follows the backend's `validate_node_input`, non-strict:
-- `*` on either side passes.
-- MatchType passes (it is checked at template level instead).
-- A combo-list output into a combo input passes.
+- `*` on either side passes, also as a member of a comma list.
+- MatchType passes on either side (it is checked at template level instead).
+- An option-list output passes into a `COMBO`-form combo only. A legacy `[[…]]` combo's type is
+  its option list itself, so the backend matches it only against `*` or an identical list.
 - Comma sets pass when they overlap.
+- An Autogrow answers for its slots (the template's type). DynamicGroup inputs and unknown specs
+  answer `false`: stricter than the backend, never looser.
 
 The generated types are a **subset** of this rule: union outputs must fit inside the input's set.
 That is stricter, and the real dump has no union outputs at all. A table-driven suite runs the
@@ -258,6 +268,7 @@ type In<T extends string> = Out<T | "*">;     // what a socket of type T accepts
 | multiselect combo | `readonly (Alias)[]` |
 | upload or remote combo | `Alias \| (string & {})`: the options are runtime state (input folder contents), so this keeps autocomplete without false errors |
 | empty combo (36–55 in the dump) | `string`, plus a codegen diagnostic |
+| value widget (COLOR, BOUNDING_BOX, CURVE, …; D16) | `JsonValue`, `\| In<type>` unless socketless |
 | input with an explicit schema default | optional (`?:`); the exporter fills it in |
 | Autogrow, prefix form | `readonly T[]` |
 | Autogrow, names form | `{ readonly a: T; readonly b?: T }` (first `min` names required) |
@@ -456,9 +467,20 @@ The diagnostic model is §5.4.
     FLOAT bounds (19 in the dump, e.g. `max: 18446744073709551615`) become numbers rounded
     **inward** (max down, min up). The backend compares exactly, so a value we accept stays
     within its bound.
-  - `TYPE:name` input types (`INT:seed`, 3 inputs in the dump): how the frontend and backend treat
-    them is researched at the start of Phase 1, before the normalizer handles them.
-  - Output nodes are sorted by class type (D15).
+  - Widget or socket follows the frontend (D16). `forceInput` makes a widget a socket, except
+    for legacy combos: a COMBO socket would not express their exact-list link rule (§5.2), and
+    the backend accepts constants for them anyway. Autogrow templates are always sockets, as the
+    backend forces them.
+  - `TYPE:name` input types (`INT:seed`, 3 inputs in the dump) are sockets of that exact type.
+    The frontend has no widget for them, and the backend neither coerces them nor links them to
+    `INT` (§16).
+  - `null` means unset: Python servers send `None` for `display_name` (223 V3 nodes),
+    `output_is_list` entries, defaults and tooltips. No diagnostic.
+  - A default the backend would reject (not one of the combo's options, the wrong type) is
+    dropped with `W_INVALID_INPUT_OPTION`, because the exporter fills defaults in (§7.2).
+  - Missing Autogrow and DynamicGroup counts take the backend's defaults (prefix: min 1, max 10,
+    at most 100 slots; group: min 0, max 20).
+  - Nodes are sorted by class type (D15).
 - **emitTypes** (codegen): a small internal `CodeWriter`. Output is deterministic and already
   oxfmt-formatted; generated files are excluded from linting. Identifiers for interfaces and combo aliases:
   - derived from input names, sanitized
@@ -628,7 +650,7 @@ Each phase ends with `bun run check` and `bun run test:corpus` passing and a sho
 
 Exit: empty packages build, lint, format-check and test; mock fixtures are committed; the corpus is gitignored.
 
-**Phase 1: schema and normalizer**
+**Phase 1: schema and normalizer** (done)
 - `json/`: lossless `parse` and deterministic `stringify` (§7.5, D10). They move up from Phases 3
   and 6 because the normalizer reads big integers and `hashSchema` serializes the schema.
 - `diagnostic/`: the model, the code registry and `docs/diagnostics.md` (§5.4, D14).
@@ -644,6 +666,8 @@ re-parses to the same value; snapshot tests; the `accepts` table suite.
 **Phase 2: type emitter**
 - `codegen.emitTypes` and `emitSchemaModule`, using the encoding in §6, which the spike already validated.
 - `hashSchema` (D15) for the file headers, tested against published SHA-256 vectors and `Bun.CryptoHasher`.
+- The schema module must keep bigints (134 bounds in the dump): a plain `JSON.parse("…")` would
+  round them, so the module parses with `parse` or encodes them.
 - Combo alias naming; JSDoc.
 
 Exit: generated output for every mock and for the local corpus compiles; type tests cover every row of §6.2 and every
@@ -652,6 +676,10 @@ case in §6.3–6.4; `bench:types` is within budget.
 **Phase 3: builder and API export**
 - Graph IR, `workflow()`, `OutputRef`, node handles.
 - Default filling, schema-driven flattening, `__value__` wrapping, `_meta`, frontend key order (§7.4).
+- Research first, against the frontend version the corpus came from: how each value widget
+  serializes (RESOLUTION_PREVIEW sets `serialize: false` and is absent from the corpus export;
+  IMAGECOMPARE sends a value the schema has no default for; CURVE is wrapped as
+  `{"__type__": "CURVE", …}`), and DynamicGroup, which frontend 1.55.17 has no handler for.
 
 Exit: byte-stable API output; parity tests (§7.4) pass, one committed mock workflow
 (`mocks/workflows/`) per rule, distilled from corpus exports. Re-exporting the corpus itself needs
@@ -721,4 +749,7 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Hand-written synchronous SHA-256 (D15) | 62 ms on the 3.4 MB dump in Bun 1.4.3; matches `Bun.CryptoHasher` on the dump and on empty input |
 | Frontend API key order (§7.4) | All 13 nodes of a corpus API export: `inputs`, `class_type`, `_meta`; widget inputs in `input_order` (linked ones included), then socket-only inputs |
 | Separating corpus tests (§13) | `bun test --path-ignore-patterns='**/*.corpus.test.ts'` skips them; a positional filter selects only them (Bun 1.4.3) |
+| Widget classification (D16) | Frontend 1.55.17 `addInputSocket`/`addInputWidget` (`litegraphService.ts`) look up `widgetType ?? type` in `ComfyWidgets` (`widgets.ts`): INT, FLOAT, BOOLEAN, STRING, MARKDOWN, COMBO, IMAGEUPLOAD, COLOR, IMAGECOMPARE, BOUNDING_BOX, CHART, GALLERIA, PAINTER, COMPOSITOR, TEXTAREA, CURVE, RANGE, VIDEO_EDIT, RESOLUTION_PREVIEW, BOUNDING_BOXES, COLORS, plus `COMFY_DYNAMICCOMBO_V3`; Autogrow and MatchType are handled as dynamic inputs; no DynamicGroup handler. The dump has 25 inputs on non-primitive core widgets and 12 with `widgetType` (FLOAT on `FLOAT,INT`, STRING on a file union, PAINTER, three pack widgets) |
+| `TYPE:name` types | `INT:seed` is not a frontend widget (not in the registry, not in the bundle). Backend `validate_inputs` coerces only exact `INT`/`FLOAT`/`STRING`/`BOOLEAN` but still checks min/max; `validate_node_input("INT", "INT:seed")` is false |
+| Normalizing the corpus dump | 1,758 of 1,758 nodes, 55–66 ms in Bun 1.4.3. 12 warnings, all real server inconsistencies: 7 combo defaults that aren't options, 3 `output_*` arrays longer than `output`, 2 `name` mismatches. Also found and distilled into mocks: `null` for unset fields, boolean combo options (3), value widgets, `widgetType` |
 | Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |

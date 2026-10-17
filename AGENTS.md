@@ -12,9 +12,9 @@ time, and runtime validation catches the rest. Output is API-format JSON.
 **Out of scope:** executing workflows (queueing, websockets, progress), running nodes in-process,
 GUIs, MCP servers. Don't add these.
 
-**Status:** Phase 0 (foundation) is done. Next is Phase 1: lossless `parse`/`stringify`, the
-diagnostic model, the `core` schema model, `accepts()` and the `/object_info` normalizer. Phases
-and exit criteria are in `docs/plan.md` §14.
+**Status:** Phases 0 (foundation) and 1 (lossless JSON, diagnostics, the schema model,
+`accepts()`, the `/object_info` normalizer) are done. Next is Phase 2: the type emitter in
+`codegen`. Phases and exit criteria are in `docs/plan.md` §14.
 
 ## Where things are
 
@@ -22,6 +22,7 @@ and exit criteria are in `docs/plan.md` §14.
 |---|---|
 | `docs/plan.md` | The plan: decisions (§3), architecture (§4), type encoding (§6), frontend parity rules (§7.4), phases (§14), verification log (§16) |
 | `docs/decisions/` | One ADR per decision in plan §3 |
+| `docs/diagnostics.md` | Every diagnostic code; a test keeps it in sync with `DIAGNOSTIC_CODES` |
 | `docs/research/` | Ground-truth notes on ComfyUI's serialization and the prior-art review, with source citations |
 | `packages/{core,codegen,cli}` | The publishable packages, `@tscomfy/<folder>` |
 | `internal/fixtures` | `@tscomfy/fixtures` (private): mocks and the local corpus |
@@ -107,6 +108,10 @@ bun run clean     # tsc never deletes stale outputs; clean when files are remove
   order depends on the process locale (Node under `LANG=sv_SE` puts `z` before `ä`; Bun doesn't).
 - 851 real inputs have dots in their names: never split input keys on `.` without the schema.
 - In API JSON a bare list is a link; list-valued widget values are sent as `{"__value__": [...]}`.
+- Python servers send `null` for unset fields (`display_name` on V3 nodes, defaults, tooltips):
+  treat it as absent.
+- Widget or socket is decided by the frontend's widget registry, keyed by `widgetType ?? type`
+  (plan D16). `INT:seed` is a socket type, not an INT.
 
 ## Local environment
 

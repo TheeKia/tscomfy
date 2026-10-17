@@ -30,6 +30,23 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "MockDuplicateInput": {
+    "input": {
+      "required": { "value": ["INT", { "default": 1 }] },
+      "optional": { "value": ["FLOAT", {}] }
+    },
+    "input_order": { "required": ["value"], "optional": ["value"] },
+    "is_input_list": false,
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["INT"],
+    "name": "MockDuplicateInput",
+    "display_name": "Mock Duplicate Input",
+    "description": "The same input name in the required and the optional section.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/malformed",
+    "output_node": false
+  },
   "MockMissingFields": {
     "input": { "required": { "value": ["INT", { "default": 1 }] } }
   },

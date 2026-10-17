@@ -47,6 +47,23 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "MockExtraOutputMetadata": {
+    "input": { "required": { "model": ["MODEL"] } },
+    "input_order": { "required": ["model"] },
+    "is_input_list": false,
+    "output": ["MODEL"],
+    "output_is_list": [false],
+    "output_name": ["model", "clip"],
+    "output_tooltips": ["The patched model.", "The patched text encoder."],
+    "name": "MockExtraOutputMetadata",
+    "display_name": "Mock Extra Output Metadata",
+    "description": "output_name and output_tooltips have more entries than output, as a subclass that drops an output can leave behind.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/outputs",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "MockOutputNames": {
     "input": { "required": { "image": ["IMAGE"] } },
     "input_order": { "required": ["image"] },
