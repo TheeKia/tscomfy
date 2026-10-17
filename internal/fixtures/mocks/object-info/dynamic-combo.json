@@ -1,0 +1,259 @@
+{
+  "MockDynamicComboSimple": {
+    "input": {
+      "required": {
+        "image": ["IMAGE"],
+        "mode": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "tooltip": "How to resize.",
+            "options": [
+              { "key": "keep", "inputs": { "required": {} } },
+              {
+                "key": "scale dimensions",
+                "inputs": {
+                  "required": {
+                    "width": ["INT", { "default": 512, "min": 0, "max": 16384 }],
+                    "height": ["INT", { "default": 512, "min": 0, "max": 16384 }]
+                  },
+                  "optional": {
+                    "crop": ["COMBO", { "options": ["disabled", "center"], "default": "center" }]
+                  }
+                }
+              },
+              {
+                "key": "scale by",
+                "inputs": { "required": { "factor": ["FLOAT", { "min": 0.01, "max": 8.0 }] } }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["image", "mode"] },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "MockDynamicComboSimple",
+    "display_name": "Mock Dynamic Combo",
+    "description": "Options without inputs, with required inputs, with optional inputs, and an option whose input has no default.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/dynamic",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockDynamicComboNested": {
+    "input": {
+      "required": {
+        "video": ["VIDEO"],
+        "format": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              {
+                "key": "auto",
+                "inputs": {
+                  "required": {
+                    "codec": [
+                      "COMFY_DYNAMICCOMBO_V3",
+                      { "options": [{ "key": "auto", "inputs": { "required": {} } }] }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "mp4",
+                "inputs": {
+                  "required": {
+                    "codec": [
+                      "COMFY_DYNAMICCOMBO_V3",
+                      {
+                        "options": [
+                          { "key": "auto", "inputs": { "required": {} } },
+                          {
+                            "key": "h264",
+                            "inputs": {
+                              "required": {
+                                "encoding": [
+                                  "COMFY_DYNAMICCOMBO_V3",
+                                  {
+                                    "options": [
+                                      { "key": "auto", "inputs": { "required": {} } },
+                                      {
+                                        "key": "custom",
+                                        "inputs": {
+                                          "required": {
+                                            "crf": ["INT", { "default": 23, "min": 0, "max": 51 }]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "codec": ["COMBO", { "options": ["auto", "h264"], "default": "auto" }]
+      }
+    },
+    "input_order": { "required": ["video", "format"], "optional": ["codec"] },
+    "is_input_list": false,
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "output_tooltips": [],
+    "output_matchtypes": null,
+    "name": "MockDynamicComboNested",
+    "display_name": "Mock Dynamic Combo Nested",
+    "description": "Three levels of nesting (format.codec.encoding) and a top-level `codec` that collides with the nested `codec` if flattened by name.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/dynamic",
+    "output_node": true,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockDynamicComboMixed": {
+    "input": {
+      "required": {
+        "model": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              {
+                "key": "Model [pro]",
+                "inputs": {
+                  "required": {
+                    "prompt": ["STRING", { "default": "", "multiline": true }]
+                  },
+                  "optional": {
+                    "images": [
+                      "COMFY_AUTOGROW_V3",
+                      {
+                        "template": {
+                          "input": { "required": { "image": ["IMAGE", {}] } },
+                          "names": ["image_1", "image_2", "image_3"],
+                          "min": 0
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "List",
+                "inputs": {
+                  "required": {
+                    "list": [
+                      "COMFY_MATCHTYPE_V3",
+                      { "template": { "template_id": "item", "allowed_types": "*" } }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["model"] },
+    "is_input_list": false,
+    "output": ["COMFY_MATCHTYPE_V3"],
+    "output_is_list": [false],
+    "output_name": ["item"],
+    "output_tooltips": [null],
+    "output_matchtypes": ["item"],
+    "name": "MockDynamicComboMixed",
+    "display_name": "Mock Dynamic Combo Mixed",
+    "description": "An option key with spaces and brackets, an Autogrow inside an option, and a MatchType inside an option driving the output type.",
+    "python_module": "comfy_api_nodes.nodes_mock",
+    "category": "mock/dynamic",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": true,
+    "price_badge": {
+      "engine": "jsonata",
+      "depends_on": {
+        "widgets": [{ "name": "model", "type": "COMBO" }],
+        "inputs": [],
+        "input_groups": []
+      },
+      "expr": "{\"type\":\"usd\",\"usd\":0.05}"
+    },
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockDynamicComboOptional": {
+    "input": {
+      "required": { "audio": ["AUDIO"] },
+      "optional": {
+        "format": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              { "key": "flac", "inputs": { "required": {} } },
+              {
+                "key": "mp3",
+                "inputs": {
+                  "required": {
+                    "quality": ["COMBO", { "options": ["V0", "128k", "320k"], "default": "V0" }]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["audio"], "optional": ["format"] },
+    "is_input_list": false,
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "output_tooltips": [],
+    "output_matchtypes": null,
+    "name": "MockDynamicComboOptional",
+    "display_name": "Mock Dynamic Combo Optional",
+    "description": "A dynamic combo in the optional section; the backend adds nothing when its key is absent.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/dynamic",
+    "output_node": true,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  }
+}

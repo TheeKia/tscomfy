@@ -1,0 +1,52 @@
+{
+  "MockSockets": {
+    "input": {
+      "required": {
+        "image": ["IMAGE"],
+        "custom": ["MOCK_CUSTOM_TYPE", { "tooltip": "A pack-defined socket type." }],
+        "any": ["*"],
+        "union": ["STRING,FILE_3D_GLB,FILE_3D", {}],
+        "forced_int": ["INT", { "forceInput": true }],
+        "forced_string": ["STRING", { "forceInput": true, "default": "" }]
+      },
+      "optional": {
+        "lazy_image": ["IMAGE", { "lazy": true }],
+        "raw_link": ["LATENT", { "rawLink": true }],
+        "socketless": ["STRING", { "default": "x", "socketless": true }],
+        "default_input": ["FLOAT", { "default": 0.5, "defaultInput": true }]
+      }
+    },
+    "input_order": {
+      "required": ["image", "custom", "any", "union", "forced_int", "forced_string"],
+      "optional": ["lazy_image", "raw_link", "socketless", "default_input"]
+    },
+    "is_input_list": false,
+    "output": ["*", "MOCK_CUSTOM_TYPE"],
+    "output_is_list": [false, false],
+    "output_name": ["anything", "custom"],
+    "name": "MockSockets",
+    "display_name": "Mock Sockets",
+    "description": "Socket-only inputs: custom type, any-type, comma union, forceInput widgets, lazy, rawLink, socketless, defaultInput; an any-typed output.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/sockets",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockAnyPassthrough": {
+    "input": { "required": { "value": ["*", {}] } },
+    "input_order": { "required": ["value"] },
+    "is_input_list": false,
+    "output": ["*"],
+    "output_is_list": [false],
+    "output_name": ["*"],
+    "name": "MockAnyPassthrough",
+    "display_name": "Mock Any Passthrough",
+    "description": "Any-typed in and out, with an output literally named \"*\".",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/sockets",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  }
+}

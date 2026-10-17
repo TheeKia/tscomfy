@@ -1,0 +1,182 @@
+{
+  "CheckpointLoaderSimple": {
+    "input": {
+      "required": {
+        "ckpt_name": [
+          ["model-a.safetensors", "model-b.safetensors", "sub/model-c.ckpt"],
+          { "tooltip": "Checkpoint file to load." }
+        ]
+      }
+    },
+    "input_order": { "required": ["ckpt_name"] },
+    "is_input_list": false,
+    "output": ["MODEL", "CLIP", "VAE"],
+    "output_is_list": [false, false, false],
+    "output_name": ["MODEL", "CLIP", "VAE"],
+    "output_tooltips": ["Denoising model.", "Text encoder.", "Image autoencoder."],
+    "name": "CheckpointLoaderSimple",
+    "display_name": "Load Checkpoint",
+    "description": "Loads a diffusion model checkpoint.",
+    "python_module": "nodes",
+    "category": "loaders",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": ["checkpoint", "load model"]
+  },
+  "VAELoader": {
+    "input": { "required": { "vae_name": [["vae-a.safetensors", "pixel_space"]] } },
+    "input_order": { "required": ["vae_name"] },
+    "is_input_list": false,
+    "output": ["VAE"],
+    "output_is_list": [false],
+    "output_name": ["VAE"],
+    "name": "VAELoader",
+    "display_name": "Load VAE",
+    "description": "",
+    "python_module": "nodes",
+    "category": "loaders",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "CLIPTextEncode": {
+    "input": {
+      "required": {
+        "text": [
+          "STRING",
+          { "multiline": true, "dynamicPrompts": true, "tooltip": "Prompt text." }
+        ],
+        "clip": ["CLIP", { "tooltip": "Text encoder to use." }]
+      }
+    },
+    "input_order": { "required": ["text", "clip"] },
+    "is_input_list": false,
+    "output": ["CONDITIONING"],
+    "output_is_list": [false],
+    "output_name": ["CONDITIONING"],
+    "output_tooltips": ["Encoded prompt."],
+    "name": "CLIPTextEncode",
+    "display_name": "CLIP Text Encode (Prompt)",
+    "description": "Encodes a text prompt into conditioning.",
+    "python_module": "nodes",
+    "category": "conditioning",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": ["prompt"]
+  },
+  "EmptyLatentImage": {
+    "input": {
+      "required": {
+        "width": ["INT", { "default": 512, "min": 16, "max": 16384, "step": 8 }],
+        "height": ["INT", { "default": 512, "min": 16, "max": 16384, "step": 8 }],
+        "batch_size": ["INT", { "default": 1, "min": 1, "max": 4096 }]
+      }
+    },
+    "input_order": { "required": ["width", "height", "batch_size"] },
+    "is_input_list": false,
+    "output": ["LATENT"],
+    "output_is_list": [false],
+    "output_name": ["LATENT"],
+    "name": "EmptyLatentImage",
+    "display_name": "Empty Latent Image",
+    "description": "Creates an empty latent batch.",
+    "python_module": "nodes",
+    "category": "latent",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "KSampler": {
+    "input": {
+      "required": {
+        "model": ["MODEL", { "tooltip": "Model used for denoising." }],
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 18446744073709551615,
+            "control_after_generate": true,
+            "tooltip": "Noise seed."
+          }
+        ],
+        "steps": ["INT", { "default": 20, "min": 1, "max": 10000 }],
+        "cfg": ["FLOAT", { "default": 8.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01 }],
+        "sampler_name": [["euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde"]],
+        "scheduler": [["simple", "normal", "karras", "exponential"]],
+        "positive": ["CONDITIONING"],
+        "negative": ["CONDITIONING"],
+        "latent_image": ["LATENT"],
+        "denoise": ["FLOAT", { "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01 }]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "seed",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "positive",
+        "negative",
+        "latent_image",
+        "denoise"
+      ]
+    },
+    "is_input_list": false,
+    "output": ["LATENT"],
+    "output_is_list": [false],
+    "output_name": ["LATENT"],
+    "output_tooltips": ["Denoised latent."],
+    "name": "KSampler",
+    "display_name": "KSampler",
+    "description": "Denoises a latent with the given model and conditioning.",
+    "python_module": "nodes",
+    "category": "sampling",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": ["sampler"]
+  },
+  "VAEDecode": {
+    "input": { "required": { "samples": ["LATENT"], "vae": ["VAE"] } },
+    "input_order": { "required": ["samples", "vae"] },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "VAEDecode",
+    "display_name": "VAE Decode",
+    "description": "Decodes latents into images.",
+    "python_module": "nodes",
+    "category": "latent",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "SaveImage": {
+    "input": {
+      "required": {
+        "images": ["IMAGE", { "tooltip": "Images to save." }],
+        "filename_prefix": ["STRING", { "default": "ComfyUI", "tooltip": "File name prefix." }]
+      },
+      "hidden": { "prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO" }
+    },
+    "input_order": {
+      "required": ["images", "filename_prefix"],
+      "hidden": ["prompt", "extra_pnginfo"]
+    },
+    "is_input_list": false,
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "SaveImage",
+    "display_name": "Save Image",
+    "description": "Saves images to the output directory.",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": true,
+    "has_intermediate_output": false,
+    "search_aliases": ["save"]
+  }
+}

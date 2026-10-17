@@ -1,0 +1,91 @@
+{
+  "MockDynamicGroup": {
+    "input": {
+      "required": {
+        "model": ["MODEL"],
+        "loras": [
+          "COMFY_DYNAMICGROUP_V3",
+          {
+            "tooltip": "One row per LoRA.",
+            "template": {
+              "required": {
+                "lora_name": [
+                  "COMBO",
+                  { "options": ["lora-a.safetensors", "lora-b.safetensors"], "multiselect": false }
+                ],
+                "strength": [
+                  "FLOAT",
+                  { "default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01 }
+                ],
+                "enabled": ["BOOLEAN", { "default": true }]
+              }
+            },
+            "min": 1,
+            "max": 20,
+            "group_name": "LoRA"
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["model", "loras"] },
+    "is_input_list": false,
+    "output": ["MODEL"],
+    "output_is_list": [false],
+    "output_name": ["MODEL"],
+    "output_tooltips": ["The patched model."],
+    "output_matchtypes": null,
+    "name": "MockDynamicGroup",
+    "display_name": "Mock Dynamic Group",
+    "description": "Rows of widget fields. Wire keys: loras.0.lora_name, loras.0.strength, loras.1.lora_name, ...",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/dynamic",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockDynamicGroupOptional": {
+    "input": {
+      "required": { "text": ["STRING", { "default": "" }] },
+      "optional": {
+        "replacements": [
+          "COMFY_DYNAMICGROUP_V3",
+          {
+            "template": {
+              "required": { "find": ["STRING", { "default": "" }] },
+              "optional": { "replace": ["STRING", { "default": "" }] }
+            },
+            "min": 0,
+            "max": 5
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["text"], "optional": ["replacements"] },
+    "is_input_list": false,
+    "output": ["STRING"],
+    "output_is_list": [false],
+    "output_name": ["STRING"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "MockDynamicGroupOptional",
+    "display_name": "Mock Dynamic Group Optional",
+    "description": "Optional group, min 0, rows with a required and an optional field, no group_name.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/dynamic",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  }
+}

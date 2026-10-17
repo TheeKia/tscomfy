@@ -1,0 +1,21 @@
+{
+  "name": "@tscomfy/codegen",
+  "version": "0.0.0",
+  "description": "Generates TypeScript types and schema modules for tscomfy from a ComfyUI server's node definitions.",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@tscomfy/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@tscomfy/core": "workspace:*"
+  }
+}

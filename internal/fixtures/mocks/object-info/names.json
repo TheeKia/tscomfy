@@ -1,0 +1,107 @@
+{
+  "Context Big (mock-pack)": {
+    "input": {
+      "required": {},
+      "optional": { "model": ["MODEL"], "seed": ["INT", { "forceInput": true }] }
+    },
+    "input_order": { "required": [], "optional": ["model", "seed"] },
+    "is_input_list": false,
+    "output": ["MODEL", "INT"],
+    "output_is_list": [false, false],
+    "output_name": ["MODEL", "SEED"],
+    "name": "Context Big (mock-pack)",
+    "display_name": "Context Big (mock-pack)",
+    "description": "Class name with spaces and parentheses.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/names",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "TextEncodeMock1.5": {
+    "input": { "required": { "text": ["STRING", { "multiline": true }] } },
+    "input_order": { "required": ["text"] },
+    "is_input_list": false,
+    "output": ["CONDITIONING"],
+    "output_is_list": [false],
+    "output_name": ["CONDITIONING"],
+    "name": "TextEncodeMock1.5",
+    "display_name": "Text Encode Mock 1.5",
+    "description": "Class name containing a dot.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/names",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "Mock Node 🐍": {
+    "input": {
+      "required": {
+        "flag": ["BOOLEAN", { "default": false, "label_on": "on", "label_off": "off" }]
+      }
+    },
+    "input_order": { "required": ["flag"] },
+    "is_input_list": false,
+    "output": ["BOOLEAN"],
+    "output_is_list": [false],
+    "output_name": ["BOOLEAN"],
+    "name": "Mock Node 🐍",
+    "display_name": "Mock Node 🐍",
+    "description": "Class name with an emoji.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/names",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockModelMergeBlocks": {
+    "input": {
+      "required": {
+        "model1": ["MODEL"],
+        "model2": ["MODEL"],
+        "time_embed.": ["FLOAT", { "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01 }],
+        "input_blocks.0.": ["FLOAT", { "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01 }],
+        "input_blocks.1.": ["FLOAT", { "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01 }],
+        "out.": ["FLOAT", { "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01 }]
+      }
+    },
+    "input_order": {
+      "required": ["model1", "model2", "time_embed.", "input_blocks.0.", "input_blocks.1.", "out."]
+    },
+    "is_input_list": false,
+    "output": ["MODEL"],
+    "output_is_list": [false],
+    "output_name": ["MODEL"],
+    "name": "MockModelMergeBlocks",
+    "display_name": "Mock Model Merge Blocks",
+    "description": "Ordinary (non-dynamic) inputs whose names contain dots: they must never be split as dynamic keys.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/names",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockOddInputNames": {
+    "input": {
+      "required": {
+        "with space": ["INT", { "default": 1 }],
+        "with-dash": ["STRING", { "default": "" }],
+        "1st": ["FLOAT", { "default": 0.0 }],
+        "constructor": ["BOOLEAN", { "default": false }]
+      }
+    },
+    "input_order": { "required": ["with space", "with-dash", "1st", "constructor"] },
+    "is_input_list": false,
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["INT"],
+    "name": "MockOddInputNames",
+    "display_name": "Mock Odd Input Names",
+    "description": "Input names that are not identifiers, start with a digit, or shadow an Object.prototype member.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/names",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  }
+}

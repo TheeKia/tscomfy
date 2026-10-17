@@ -1,0 +1,50 @@
+{
+  "MockHiddenInputs": {
+    "input": {
+      "required": { "images": ["IMAGE"] },
+      "hidden": {
+        "prompt": "PROMPT",
+        "unique_id": "UNIQUE_ID",
+        "extra_pnginfo": "EXTRA_PNGINFO",
+        "dynprompt": "DYNPROMPT",
+        "auth_token_comfy_org": "AUTH_TOKEN_COMFY_ORG",
+        "api_key_comfy_org": "API_KEY_COMFY_ORG",
+        "comfy_usage_source": "COMFY_USAGE_SOURCE",
+        "spec_as_tuple": ["STRING", { "default": "" }],
+        "any_type": "*",
+        "empty_type": "",
+        "plain_int": "INT",
+        "object_spec": { "type": "STRING" }
+      }
+    },
+    "input_order": {
+      "required": ["images"],
+      "hidden": [
+        "prompt",
+        "unique_id",
+        "extra_pnginfo",
+        "dynprompt",
+        "auth_token_comfy_org",
+        "api_key_comfy_org",
+        "comfy_usage_source",
+        "spec_as_tuple",
+        "any_type",
+        "empty_type",
+        "plain_int",
+        "object_spec"
+      ]
+    },
+    "is_input_list": false,
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "MockHiddenInputs",
+    "display_name": "Mock Hidden Inputs",
+    "description": "Hidden inputs in every shape seen in the wild: known server-filled names, tuple specs, any-type, empty strings, plain widget types, and an object.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/hidden",
+    "output_node": true,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  }
+}

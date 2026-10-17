@@ -1,0 +1,46 @@
+{
+  "MockNotAnObject": 42,
+  "MockBadInputSpecs": {
+    "input": {
+      "required": {
+        "null_spec": null,
+        "string_spec": "IMAGE",
+        "number_type": [3, {}],
+        "empty_tuple": [],
+        "options_not_object": ["INT", "oops"],
+        "dynamic_combo_no_options": ["COMFY_DYNAMICCOMBO_V3", {}],
+        "autogrow_no_template": ["COMFY_AUTOGROW_V3", { "template": {} }],
+        "matchtype_no_template": ["COMFY_MATCHTYPE_V3", {}],
+        "dynamic_group_no_template": ["COMFY_DYNAMICGROUP_V3", { "min": 0, "max": 3 }],
+        "unknown_v3_type": ["COMFY_SOMETHING_NEW_V3", { "anything": true }]
+      },
+      "optional": "not-a-record"
+    },
+    "input_order": { "required": ["null_spec", "string_spec", "missing_from_input"] },
+    "is_input_list": false,
+    "output": ["IMAGE", "MASK"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockBadInputSpecs",
+    "display_name": "Mock Bad Input Specs",
+    "description": "Each input is malformed in a different way; output arrays disagree in length; input_order names an input that does not exist.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/malformed",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockMissingFields": {
+    "input": { "required": { "value": ["INT", { "default": 1 }] } }
+  },
+  "MockNameMismatch": {
+    "input": { "required": {} },
+    "output": [],
+    "name": "SomethingElse",
+    "display_name": "Mock Name Mismatch",
+    "description": "The `name` field disagrees with the object_info key.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/malformed",
+    "output_node": false
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "MockAutogrowPrefix": {
+    "input": {
+      "required": {
+        "images": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": { "required": { "image": ["IMAGE", {}] } },
+              "prefix": "image",
+              "min": 1,
+              "max": 50
+            }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["images"] },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "MockAutogrowPrefix",
+    "display_name": "Mock Autogrow Prefix",
+    "description": "Prefix form: slots image0..image49, the first one required. Wire keys: images.image0, images.image1, ...",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/autogrow",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockAutogrowPrefixOptional": {
+    "input": {
+      "required": {
+        "prompt": ["STRING", { "default": "", "multiline": true }],
+        "ref_images": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": {
+                "required": { "ref_image": ["IMAGE", { "tooltip": "Reference image." }] }
+              },
+              "prefix": "ref_image_",
+              "min": 0,
+              "max": 4
+            }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["prompt", "ref_images"] },
+    "is_input_list": false,
+    "output": ["VIDEO"],
+    "output_is_list": [false],
+    "output_name": ["VIDEO"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "MockAutogrowPrefixOptional",
+    "display_name": "Mock Autogrow Prefix (min 0)",
+    "description": "Prefix ending in an underscore, min 0 so every slot is optional.",
+    "python_module": "comfy_api_nodes.nodes_mock",
+    "category": "mock/autogrow",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": true,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockAutogrowNames": {
+    "input": {
+      "required": {
+        "expression": ["STRING", { "default": "a + b" }],
+        "values": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": { "required": { "value": ["FLOAT,INT", {}] } },
+              "names": ["a", "b", "c", "d"],
+              "min": 2
+            }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["expression", "values"] },
+    "is_input_list": false,
+    "output": ["FLOAT", "INT"],
+    "output_is_list": [false, false],
+    "output_name": ["FLOAT", "INT"],
+    "output_tooltips": [null, null],
+    "output_matchtypes": null,
+    "name": "MockAutogrowNames",
+    "display_name": "Mock Autogrow Names",
+    "description": "Names form with a comma-union template type; the first two names are required. Wire keys: values.a, values.b, ...",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/autogrow",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockAutogrowOptionalTemplate": {
+    "input": {
+      "required": {},
+      "optional": {
+        "masks": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": { "optional": { "mask": ["MASK", {}] } },
+              "prefix": "mask",
+              "min": 1,
+              "max": 8
+            }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": [], "optional": ["masks"] },
+    "is_input_list": false,
+    "output": ["MASK"],
+    "output_is_list": [false],
+    "output_name": ["MASK"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "MockAutogrowOptionalTemplate",
+    "display_name": "Mock Autogrow Optional Template",
+    "description": "The Autogrow is optional and its template input sits in the optional section, so min does not make slots required.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/autogrow",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  }
+}

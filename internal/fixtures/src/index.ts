@@ -1,0 +1,76 @@
+/**
+ * @module @tscomfy/fixtures
+ *
+ * Test data for tscomfy. Mocks are committed, hand-written and stable; the corpus is real data
+ * captured locally and never committed (see README.md and docs/plan.md §13).
+ *
+ * Loaders return raw JSON text, not parsed values: how the text is parsed (for example, keeping
+ * integers beyond 2^53 exact) is part of what the tests check.
+ */
+
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+
+const root = join(import.meta.dir, "..");
+
+/** Names of the committed mock `/object_info` responses in `mocks/object-info/`. */
+export const MOCK_OBJECT_INFO_NAMES = [
+  "autogrow",
+  "basic-pipeline",
+  "combos",
+  "dynamic-combo",
+  "dynamic-group",
+  "hidden",
+  "legacy-and-flags",
+  "malformed",
+  "match-type",
+  "names",
+  "numbers",
+  "outputs",
+  "sockets",
+] as const;
+
+export type MockObjectInfoName = (typeof MOCK_OBJECT_INFO_NAMES)[number];
+
+/** Absolute path of the directory holding the mock `/object_info` files. */
+export const MOCK_OBJECT_INFO_DIR: string = join(root, "mocks", "object-info");
+
+/** Raw JSON text of one mock `/object_info` response. */
+export function readMockObjectInfo(name: MockObjectInfoName): Promise<string> {
+  return Bun.file(join(MOCK_OBJECT_INFO_DIR, `${name}.json`)).text();
+}
+
+/** Sections of the local corpus. */
+export type CorpusSection = "object-info" | "workflows/api" | "workflows/ui";
+
+/** One file of the local corpus. */
+export interface CorpusFile {
+  /** File name, e.g. `local.json`. */
+  readonly name: string;
+  /** Absolute path. */
+  readonly path: string;
+}
+
+/** Absolute path of the local corpus directory. */
+export const CORPUS_DIR: string = join(root, "corpus");
+
+/**
+ * Lists the JSON files in one section of the local corpus, sorted by name. Returns an empty list
+ * when the section doesn't exist, so corpus tests skip cleanly on a fresh clone.
+ */
+export async function listCorpus(section: CorpusSection): Promise<readonly CorpusFile[]> {
+  const dir = join(CORPUS_DIR, section);
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  return entries
+    .filter((name) => name.endsWith(".json"))
+    .toSorted((a, b) => a.localeCompare(b))
+    .map((name) => ({ name, path: join(dir, name) }));
+}

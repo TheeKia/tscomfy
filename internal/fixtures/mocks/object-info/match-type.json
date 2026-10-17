@@ -1,0 +1,108 @@
+{
+  "MockSwitch": {
+    "input": {
+      "required": { "switch": ["BOOLEAN", {}] },
+      "optional": {
+        "on_false": [
+          "COMFY_MATCHTYPE_V3",
+          { "lazy": true, "template": { "template_id": "switch", "allowed_types": "*" } }
+        ],
+        "on_true": [
+          "COMFY_MATCHTYPE_V3",
+          { "lazy": true, "template": { "template_id": "switch", "allowed_types": "*" } }
+        ]
+      }
+    },
+    "input_order": { "required": ["switch"], "optional": ["on_false", "on_true"] },
+    "is_input_list": false,
+    "output": ["COMFY_MATCHTYPE_V3"],
+    "output_is_list": [false],
+    "output_name": ["output"],
+    "output_tooltips": [null],
+    "output_matchtypes": ["switch"],
+    "name": "MockSwitch",
+    "display_name": "Mock Switch",
+    "description": "Two lazy, optional inputs of any type sharing one template; the output follows them.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/match-type",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockMatchConstrained": {
+    "input": {
+      "required": {
+        "input": [
+          "COMFY_MATCHTYPE_V3",
+          { "template": { "template_id": "input_type", "allowed_types": "IMAGE,MASK" } }
+        ],
+        "scale": ["FLOAT", { "default": 1.0, "min": 0.01, "max": 8.0 }]
+      }
+    },
+    "input_order": { "required": ["input", "scale"] },
+    "is_input_list": false,
+    "output": ["COMFY_MATCHTYPE_V3"],
+    "output_is_list": [false],
+    "output_name": ["output"],
+    "output_tooltips": [null],
+    "output_matchtypes": ["input_type"],
+    "name": "MockMatchConstrained",
+    "display_name": "Mock Match Constrained",
+    "description": "A template restricted to IMAGE or MASK.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/match-type",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockMatchMultiOutput": {
+    "input": {
+      "required": {
+        "count": ["INT", { "default": 4, "min": 0 }]
+      },
+      "optional": {
+        "initial_value": [
+          "COMFY_MATCHTYPE_V3",
+          { "template": { "template_id": "carried", "allowed_types": "*" } }
+        ],
+        "items": [
+          "COMFY_MATCHTYPE_V3",
+          { "template": { "template_id": "item", "allowed_types": "*" } }
+        ]
+      }
+    },
+    "input_order": { "required": ["count"], "optional": ["initial_value", "items"] },
+    "is_input_list": false,
+    "output": ["FLOW_CONTROL", "INT", "COMFY_MATCHTYPE_V3", "COMFY_MATCHTYPE_V3"],
+    "output_is_list": [false, false, false, false],
+    "output_name": ["flow_control", "index", "item", "value"],
+    "output_tooltips": [null, null, null, null],
+    "output_matchtypes": [null, null, "item", "carried"],
+    "name": "MockMatchMultiOutput",
+    "display_name": "Mock Match Multi Output",
+    "description": "Two templates; output_matchtypes has nulls for fixed-type outputs.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/match-type",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  }
+}

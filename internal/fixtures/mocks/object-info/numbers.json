@@ -1,0 +1,62 @@
+{
+  "MockNumbers": {
+    "input": {
+      "required": {
+        "seed": [
+          "INT",
+          { "default": 0, "min": 0, "max": 18446744073709551615, "control_after_generate": true }
+        ],
+        "signed": [
+          "INT",
+          { "default": 0, "min": -9223372036854775808, "max": 9223372036854775807 }
+        ],
+        "no_default_int": ["INT", { "min": 1, "max": 64 }],
+        "slider": ["INT", { "default": 50, "min": 0, "max": 100, "step": 5, "display": "slider" }],
+        "ratio": [
+          "FLOAT",
+          { "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001, "round": false }
+        ],
+        "rounded": [
+          "FLOAT",
+          { "default": 7.5, "min": 0.0, "max": 30.0, "step": 0.5, "round": 0.01 }
+        ],
+        "no_default_float": ["FLOAT", {}],
+        "list_default": ["FLOAT", { "default": [1.0], "forceInput": false }],
+        "int_list_default": ["INT", { "default": [1, 2, 3] }]
+      },
+      "optional": {
+        "text": ["STRING", { "multiline": true, "dynamicPrompts": true, "default": "" }],
+        "single_line": ["STRING", { "multiline": false, "placeholder": "type here" }],
+        "toggle": ["BOOLEAN", { "default": true, "label_on": "enabled", "label_off": "disabled" }],
+        "no_default_bool": ["BOOLEAN"],
+        "no_default_string": ["STRING"]
+      }
+    },
+    "input_order": {
+      "required": [
+        "seed",
+        "signed",
+        "no_default_int",
+        "slider",
+        "ratio",
+        "rounded",
+        "no_default_float",
+        "list_default",
+        "int_list_default"
+      ],
+      "optional": ["text", "single_line", "toggle", "no_default_bool", "no_default_string"]
+    },
+    "is_input_list": false,
+    "output": ["INT", "FLOAT"],
+    "output_is_list": [false, false],
+    "output_name": ["INT", "FLOAT"],
+    "name": "MockNumbers",
+    "display_name": "Mock Numbers",
+    "description": "Integer bounds beyond 2^53 (exact in this file), widgets without defaults, list-valued defaults, and every widget option variant.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/widgets",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  }
+}

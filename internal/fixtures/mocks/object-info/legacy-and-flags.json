@@ -1,0 +1,71 @@
+{
+  "MockLegacyMinimal": {
+    "input": {
+      "required": { "image": ["IMAGE"], "amount": ["FLOAT", { "default": 1.0 }] },
+      "optional": { "mask": ["MASK"] }
+    },
+    "output": ["IMAGE"],
+    "name": "MockLegacyMinimal",
+    "display_name": "Mock Legacy Minimal",
+    "description": "",
+    "python_module": "custom_nodes.old-pack",
+    "category": "mock/legacy",
+    "output_node": false
+  },
+  "MockNoInputs": {
+    "input": {},
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["value"],
+    "name": "MockNoInputs",
+    "display_name": "Mock No Inputs",
+    "description": "",
+    "python_module": "custom_nodes.old-pack",
+    "category": "mock/legacy",
+    "output_node": false
+  },
+  "MockDeprecated": {
+    "input": { "required": { "value": ["INT", { "default": 0 }] } },
+    "input_order": { "required": ["value"] },
+    "is_input_list": false,
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["INT"],
+    "name": "MockDeprecated",
+    "display_name": "Mock Deprecated",
+    "description": "Superseded by another node.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/legacy",
+    "output_node": false,
+    "deprecated": true,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": ["old"],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "MockDevOnly": {
+    "input": { "required": { "value": ["STRING", { "default": "", "advanced": true }] } },
+    "input_order": { "required": ["value"] },
+    "is_input_list": false,
+    "output": ["STRING"],
+    "output_is_list": [false],
+    "output_name": ["STRING"],
+    "name": "MockDevOnly",
+    "display_name": "Mock Dev Only",
+    "description": "Experimental, dev-only, with an advanced input.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/legacy",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "dev_only": true,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [],
+    "essentials_category": "Basics",
+    "has_intermediate_output": true
+  }
+}

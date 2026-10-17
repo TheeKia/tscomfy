@@ -1,0 +1,27 @@
+{
+  "name": "tscomfy",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "internal/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf packages/*/dist",
+    "test": "bun test --conditions=@tscomfy/source packages internal",
+    "lint": "oxlint --type-aware",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "check": "tsc -b && bun run lint && bun run format:check && bun run test"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "expect-type": "1.4.0",
+    "oxfmt": "0.73.0",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "typescript": "7.0.2"
+  },
+  "packageManager": "bun@1.4.3"
+}

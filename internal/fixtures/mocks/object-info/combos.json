@@ -1,0 +1,178 @@
+{
+  "MockComboForms": {
+    "input": {
+      "required": {
+        "legacy_bare": [["alpha", "beta", "gamma"]],
+        "legacy_with_options": [
+          ["alpha", "beta"],
+          { "default": "beta", "tooltip": "Legacy form." }
+        ],
+        "v2": [
+          "COMBO",
+          { "options": ["one", "two", "three"], "default": "two", "multiselect": false }
+        ],
+        "v2_no_default": ["COMBO", { "options": ["one", "two"] }],
+        "legacy_control": [["first", "second"], { "control_after_generate": true }]
+      }
+    },
+    "input_order": {
+      "required": ["legacy_bare", "legacy_with_options", "v2", "v2_no_default", "legacy_control"]
+    },
+    "is_input_list": false,
+    "output": ["STRING"],
+    "output_is_list": [false],
+    "output_name": ["STRING"],
+    "name": "MockComboForms",
+    "display_name": "Mock Combo Forms",
+    "description": "Legacy [[...]] and v2 [\"COMBO\", {options}] combo specs.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockComboNumeric": {
+    "input": {
+      "required": {
+        "legacy_numeric": [[8, 10, 12], { "default": 10 }],
+        "v2_numeric": ["COMBO", { "options": [5, 10, 15], "default": 5 }],
+        "v2_mixed": ["COMBO", { "options": ["auto", 2, 4] }]
+      }
+    },
+    "input_order": { "required": ["legacy_numeric", "v2_numeric", "v2_mixed"] },
+    "is_input_list": false,
+    "output": ["INT"],
+    "output_is_list": [false],
+    "output_name": ["INT"],
+    "name": "MockComboNumeric",
+    "display_name": "Mock Combo Numeric",
+    "description": "Combos whose options are numbers, or a mix of numbers and strings.",
+    "python_module": "comfy_api_nodes.nodes_mock",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockComboEmpty": {
+    "input": {
+      "required": {
+        "legacy_empty": [[]],
+        "v2_empty": ["COMBO", { "options": [] }]
+      }
+    },
+    "input_order": { "required": ["legacy_empty", "v2_empty"] },
+    "is_input_list": false,
+    "output": ["MODEL"],
+    "output_is_list": [false],
+    "output_name": ["MODEL"],
+    "name": "MockComboEmpty",
+    "display_name": "Mock Combo Empty",
+    "description": "Combos with no options, as a loader shows when no model files are installed.",
+    "python_module": "nodes",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockComboUploadRemote": {
+    "input": {
+      "required": {
+        "upload": [["photo-1.png", "photo-2.webp"], { "image_upload": true }],
+        "remote": [
+          "COMBO",
+          {
+            "image_upload": true,
+            "image_folder": "output",
+            "remote": {
+              "route": "/internal/files/output",
+              "refresh_button": true,
+              "control_after_refresh": "first"
+            }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["upload", "remote"] },
+    "is_input_list": false,
+    "output": ["IMAGE", "MASK"],
+    "output_is_list": [false, false],
+    "output_name": ["IMAGE", "MASK"],
+    "name": "MockComboUploadRemote",
+    "display_name": "Mock Combo Upload/Remote",
+    "description": "An upload combo (options are input-folder contents) and a remote combo (options fetched at runtime, none listed).",
+    "python_module": "nodes",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "experimental": true,
+    "search_aliases": []
+  },
+  "MockComboMultiselect": {
+    "input": {
+      "required": {
+        "tags": [
+          "COMBO",
+          { "options": ["red", "green", "blue"], "multiselect": true, "default": ["red"] }
+        ]
+      }
+    },
+    "input_order": { "required": ["tags"] },
+    "is_input_list": false,
+    "output": ["STRING"],
+    "output_is_list": [false],
+    "output_name": ["STRING"],
+    "name": "MockComboMultiselect",
+    "display_name": "Mock Combo Multiselect",
+    "description": "A multi-select combo: its value is a list, sent wrapped as {\"__value__\": [...]}.",
+    "python_module": "comfy_extras.nodes_mock",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockComboOutput": {
+    "input": { "required": {} },
+    "input_order": { "required": [] },
+    "is_input_list": false,
+    "output": [["euler", "dpmpp_2m"], ["simple", "karras"], "INT"],
+    "output_is_list": [false, false, false],
+    "output_name": ["sampler_name", "scheduler", "steps"],
+    "name": "MockComboOutput",
+    "display_name": "Mock Combo Output",
+    "description": "Outputs typed as option lists, which may connect to combo inputs.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockCustomWidgetType": {
+    "input": {
+      "required": {
+        "components": [
+          "MOCK_COMBO",
+          {
+            "options": [
+              { "label": "Background", "value": 0 },
+              { "label": "Hair", "value": 1 }
+            ],
+            "multi_select": { "placeholder": "select components", "chip": true }
+          }
+        ]
+      }
+    },
+    "input_order": { "required": ["components"] },
+    "is_input_list": false,
+    "output": ["MASK"],
+    "output_is_list": [false],
+    "output_name": ["mask"],
+    "name": "MockCustomWidgetType",
+    "display_name": "Mock Custom Widget Type",
+    "description": "A custom type with widget-like options, rendered by a frontend extension. Not a COMBO to the backend.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/combos",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  }
+}
