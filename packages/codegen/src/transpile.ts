@@ -141,7 +141,8 @@ class Transpiler {
 
   run(): TranspileResult {
     const nodes = [...this.#workflow.graph.nodes.values()];
-    const exported = exportApi(this.#workflow, { validate: false, meta: false });
+    // Before modes: a bypassed or muted raw node is written with its own inputs.
+    const exported = exportApi(this.#workflow, { validate: false, meta: false, modes: false });
     // What the exporter can't send, the program can't build either.
     this.#diagnostics.push(...exported.diagnostics);
     const order = this.#order(nodes);

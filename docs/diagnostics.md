@@ -39,7 +39,7 @@ Paths of export diagnostics point into the prompt: a node id, `inputs`, and the 
 | Code | Meaning | What happens |
 |---|---|---|
 | `E_INPUT_KEY_COLLISION` | Two inputs of one node send the same wire key: a flattened dynamic key such as `format.codec` equals another input's name. | The first is kept; `toApi` throws a `ValidationError`. |
-| `W_LINK_DROPPED` | A link resolves to nothing through bypassed or muted nodes (plan §12): it comes from a muted node; or from a bypassed node with no input for the type, whose chosen input isn't linked, or that loops back through bypassed nodes. The frontend leaves such an input out too. | The input is left out; validation then reports it if it is required. |
+| `W_LINK_DROPPED` | A link resolves to nothing through bypassed or muted nodes (plan §12): it comes from a muted node; or from a bypassed node with no input for the type, whose chosen input isn't linked, or that loops back through bypassed nodes (where the frontend throws). | A widget sends its value instead (its default), as the frontend does; any other input is left out, and validation reports it if it is required. |
 | `E_TOO_MANY_DYNAMIC_INPUTS` | An Autogrow is given more slots than it has, or a DynamicGroup more rows than its `max`. The generated types prevent it; untyped code can still do it. Validation reports the same for a prompt with a group key in a row at or past `max`. | The extra entries aren't sent; `toApi` throws a `ValidationError`. |
 
 ## Validating prompts

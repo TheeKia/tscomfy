@@ -29,6 +29,11 @@ export interface ToApiOptions {
    * `true`. Problems building the prompt itself are reported either way.
    */
   readonly validate?: boolean;
+  /**
+   * Apply bypass and mute (docs/plan.md §12). Default `true`. With `false`, every node is sent
+   * as if it ran, as a tool that rewrites workflows needs (the transpiler).
+   */
+  readonly modes?: boolean;
 }
 
 /**
@@ -79,7 +84,9 @@ export function exportApi(
   }
   // Bypassed and muted nodes aren't sent; links through them are resolved as the frontend does.
   const prompt: ApiPrompt = Object.fromEntries(
-    modal.some((node) => node.mode !== undefined) ? applyModes(modal, diagnostics) : entries,
+    options.modes !== false && modal.some((node) => node.mode !== undefined)
+      ? applyModes(modal, diagnostics)
+      : entries,
   );
   if (options.validate !== false) diagnostics.push(...validateApi(prompt, workflow.schema));
   return { prompt, diagnostics };
@@ -139,16 +146,22 @@ class NodeExport {
           this.#add(isOutputRef(value) ? "socket" : "widget", key, encode(value), inOption);
         }
         return;
+      case "combo":
+        // No widget, so no default: sent only as given, among the sockets when it is a link.
+        if (input.forceInput === true) {
+          if (value !== undefined) {
+            this.#add(isOutputRef(value) ? "socket" : "widget", key, encode(value), inOption);
+          }
+          return;
+        }
+        this.#widget(input, value, key, inOption);
+        return;
       case "int":
       case "float":
       case "string":
       case "boolean":
-      case "combo": {
-        // `null` is a value; only a missing input takes the default (the frontend's, §7.2).
-        const sent = value === undefined ? input.default : value;
-        if (sent !== undefined) this.#add("widget", key, encode(sent), inOption);
+        this.#widget(input, value, key, inOption);
         return;
-      }
       case "value": {
         if (!sendsValue(input.widget)) return;
         const sent = value === undefined ? input.default : value;
@@ -175,6 +188,18 @@ class NodeExport {
         this.#dynamicGroup(input, value, key, inOption);
         return;
     }
+  }
+
+  /** A primitive widget: its value, or its default (the frontend's, §7.2) when none is given. */
+  #widget(
+    input: Extract<InputDef, { kind: "int" | "float" | "string" | "boolean" | "combo" }>,
+    value: InputValue | undefined,
+    key: string,
+    inOption: boolean,
+  ): void {
+    // `null` is a value; only a missing input takes the default.
+    const sent = value === undefined ? input.default : value;
+    if (sent !== undefined) this.#add("widget", key, encode(sent), inOption);
   }
 
   #dynamicCombo(

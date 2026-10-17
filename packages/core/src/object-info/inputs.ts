@@ -280,8 +280,9 @@ function readInput(
   }
   const reader = new SpecReader(context, name, required, options, optionsPath);
 
-  // Legacy combos ignore forceInput: their links only match an identical option list (§5.2),
-  // which a COMBO socket would not express.
+  // Legacy combos stay combos under forceInput: their links only match an identical option list
+  // (§5.2), which a COMBO socket would not express. They record the flag, since the frontend
+  // then draws a socket and no widget.
   if (head !== undefined && isArray(head)) {
     return reader.legacyCombo(head, [...path, 0]) ?? unknown(context, name, required, spec, path);
   }
@@ -458,6 +459,7 @@ class SpecReader {
     return this.#combo("legacy", [...rawOptions].filter(isComboOption), {
       type: { kind: "named", name: "COMBO" },
       socketless: this.flag("socketless"),
+      ...(this.flag("forceInput") ? { forceInput: true } : {}),
     });
   }
 
@@ -666,6 +668,7 @@ class SpecReader {
       readonly type: SocketType;
       readonly socketless: boolean;
       readonly widgetType?: string;
+      readonly forceInput?: true;
     },
   ): ComboInput {
     // `multiselect` is what the backend validates by; `multi_select` is what makes the frontend

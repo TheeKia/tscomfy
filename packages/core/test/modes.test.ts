@@ -37,6 +37,44 @@ const schema = looseSchema(
     Widgeted: node({ strength: ["FLOAT", { default: 1 }], image: ["IMAGE"] }, ["IMAGE"]),
     // An untyped input: the next hop's target type is `*`.
     Any: node({ value: ["*"] }, ["IMAGE"]),
+    Switch: node(
+      {
+        on_false: ["COMFY_MATCHTYPE_V3", { template: { template_id: "t", allowed_types: "*" } }],
+        on_true: ["COMFY_MATCHTYPE_V3", { template: { template_id: "t", allowed_types: "*" } }],
+      },
+      ["COMFY_MATCHTYPE_V3"],
+      { output_matchtypes: ["t"] },
+    ),
+    // A legacy combo with forceInput is a socket to the frontend, in declaration order.
+    Forced: node(
+      {
+        steps: ["INT", { default: 20 }],
+        sampler: [["a", "b"], { forceInput: true }],
+        image: ["IMAGE"],
+      },
+      ["COMBO", "IMAGE"],
+    ),
+    // A dynamic combo whose option has a widget before a socket.
+    Options: node(
+      {
+        mode: [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            options: [
+              {
+                key: "a",
+                inputs: { required: { strength: ["FLOAT", { default: 1 }], image: ["IMAGE"] } },
+              },
+              { key: "b", inputs: { required: {} } },
+            ],
+          },
+        ],
+      },
+      ["IMAGE", "IMAGE"],
+    ),
+    Seeded: node({ seed: ["INT", { default: 7 }], noise: ["INT"] }, ["LATENT"], {
+      output_node: true,
+    }),
     Sink: node(
       {
         image: ["IMAGE"],
@@ -145,13 +183,15 @@ describe("bypass", () => {
   });
 
   test("1. for a `*` target, the input at the output's index, or the first", () => {
+    // (The frontend, given a node with no input at all, throws rather than build the prompt;
+    // here the link is dropped and reported.)
     const result = sinkOf(({ n }) => {
       const [image, mask] = n["Src"]!({}, { id: "src" });
       const passed = n["Pass"]!({ image, mask }, { id: "p", mode: "bypass" });
       n["Sink"]?.({ any: passed[1] }, { id: "s" });
     });
     expect(result.links).toEqual({ any: ["src", 1] });
-    // Output 0 of a node with no inputs: index 0, which doesn't exist, so nothing.
+    // Output 2 of a node with no inputs: rule 1 picks input 0, which doesn't exist.
     const empty = sinkOf(({ n }) => {
       n["Sink"]?.({ any: n["Src"]!({}, { id: "src", mode: "bypass" })[2] }, { id: "s" });
     });
@@ -239,5 +279,117 @@ describe("bypass", () => {
     expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
       "Input image of node s is left out: the bypassed nodes it is linked through form a cycle at node a.",
     ]);
+  });
+});
+
+describe("slots as the frontend has them", () => {
+  test("narrows MatchType types by the node's links, for the consumer and the bypassed node", () => {
+    // on_true's IMAGE narrows on_false to IMAGE, so the bypassed Swapped's IMAGE input (rule 3)
+    // feeds it, not the MASK one at the same index (rule 1, were on_false still `*`).
+    const result = sinkOf(({ n }) => {
+      const [image, mask] = n["Src"]!({}, { id: "src" });
+      const swapped = n["Swapped"]!({ mask, image }, { id: "w", mode: "bypass" });
+      const picked = n["Switch"]!({ on_false: swapped, on_true: image }, { id: "sw" });
+      n["Sink"]?.({ image: picked }, { id: "s" });
+    });
+    const { prompt } = exportApi(
+      workflow(schema, ({ n }) => {
+        const [image, mask] = n["Src"]!({}, { id: "src" });
+        const swapped = n["Swapped"]!({ mask, image }, { id: "w", mode: "bypass" });
+        n["Switch"]?.({ on_false: swapped, on_true: image }, { id: "sw" });
+      }),
+      { validate: false },
+    );
+    expect(prompt["sw"]?.inputs).toEqual({ on_false: ["src", 0], on_true: ["src", 0] });
+    expect(result.links).toEqual({ image: ["sw", 0] });
+  });
+
+  test("narrows a bypassed MatchType node's output to what its links share", () => {
+    // The bypassed switch's output is IMAGE (its on_true), so its IMAGE input is chosen.
+    const result = sinkOf(({ n }) => {
+      const [image, mask] = n["Src"]!({}, { id: "src" });
+      const picked = n["Switch"]!({ on_false: mask, on_true: image }, { id: "sw", mode: "bypass" });
+      n["Sink"]?.({ either: picked }, { id: "s" });
+    });
+    expect(result.links).toEqual({ either: ["src", 1] });
+  });
+
+  test("lists a forceInput legacy combo among the sockets, in declaration order", () => {
+    // Slots: sampler (socket), image (socket), steps (widget): output 1 takes input 1, the image.
+    const result = sinkOf(({ n }) => {
+      const [options, image] = n["Src"]!({}, { id: "src" });
+      const forced = n["Forced"]!({ sampler: options, image }, { id: "f", mode: "bypass" });
+      n["Sink"]?.({ any: forced[1] }, { id: "s" });
+    });
+    expect(result.links).toEqual({ any: ["src", 1] });
+  });
+
+  test("lists a chosen option's inputs in declaration order, after the combo's slot", () => {
+    // Slots: mode, mode.strength, mode.image: output 1 takes mode.strength, which isn't linked.
+    const result = sinkOf(({ n }) => {
+      const image = n["Src"]!({}, { id: "src" })[0]!;
+      const options = n["Options"]!(
+        { mode: { option: "a", inputs: { image } } },
+        { id: "o", mode: "bypass" },
+      );
+      n["Sink"]?.({ any: options[1] }, { id: "s" });
+    });
+    expect(result.links).toEqual({});
+    expect(result.dropped).toEqual([["s", "inputs", "any"]]);
+  });
+
+  test("keeps a widget's value when its link resolves to nothing", () => {
+    const { prompt, diagnostics } = exportApi(
+      workflow(schema, ({ n }) => {
+        const [, , latent] = n["Src"]!({}, { id: "src" });
+        const muted = n["Pass"]!({}, { id: "m", mode: "mute" });
+        n["Seeded"]?.({ seed: muted[0], noise: muted[0] }, { id: "s" });
+        void latent;
+      }),
+      { validate: false },
+    );
+    // seed is a widget with a default: the frontend sends that; noise has none: left out.
+    expect(prompt["s"]?.inputs).toEqual({ seed: 7 });
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Input seed of node s sends its widget's value instead: it is linked to node m, which is muted.",
+      "Input noise of node s is left out: it is linked to node m, which is muted.",
+    ]);
+  });
+
+  test("keeps a link to an output a bypassed node doesn't have, for validation to report", () => {
+    const built = workflow(schema, ({ n, raw }) => {
+      n["Src"]?.({}, { id: "src" });
+      raw("Pass", { image: ["src", 0] }, { id: "p", mode: "bypass" });
+      n["Sink"]?.({ image: raw("Pass", {}, { id: "p2" }).output(5) }, { id: "s" });
+    });
+    expect(exportApi(built, { validate: false }).prompt["s"]?.inputs).toEqual({ image: ["p2", 5] });
+  });
+});
+
+describe("modes", () => {
+  test("refuse anything but bypass and mute at runtime", () => {
+    expect(() =>
+      workflow(schema, ({ raw }) => {
+        Reflect.apply(raw, undefined, ["Src", {}, { mode: "always" }]);
+      }),
+    ).toThrow(TypeError);
+  });
+
+  test("resolve many links through a long bypassed chain in linear time", () => {
+    const built = workflow(schema, ({ n }) => {
+      const [image, mask] = n["Src"]!({}, { id: "src" });
+      let current = n["Pass"]!({ image, mask }, { id: "p0", mode: "bypass" });
+      for (let index = 1; index < 10_000; index++) {
+        current = n["Pass"]!(
+          { image: current[0], mask },
+          { id: `p${String(index)}`, mode: "bypass" },
+        );
+        n["Sink"]?.({ image: current[0] }, { id: `s${String(index)}` });
+      }
+    });
+    const started = performance.now();
+    const { prompt } = exportApi(built, { validate: false });
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(prompt["s9999"]?.inputs).toEqual({ image: ["src", 0] });
   });
 });

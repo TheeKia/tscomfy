@@ -39,7 +39,7 @@ const built = workflow(basic, ({ n, raw }) => {
   );
   n["VAELoader"]?.({ vae_name: "pixel_space" }, { id: "stray" });
   raw("UnknownPack", {}, { id: "unknown" });
-  // A muted decode: kept, as save3's link points to it, but its own sources aren't needed.
+  // A muted decode: kept with what it links to, so no link points to a node left out.
   const extra = n["VAELoader"]!({ vae_name: "pixel_space" }, { id: "extraVae" });
   const muted = n["VAEDecode"]!({ samples: latent, vae: extra }, { id: "muted", mode: "mute" });
   n["SaveImage"]?.({ images: muted }, { id: "save3" });
@@ -58,6 +58,7 @@ describe("prune", () => {
       "save",
       "decode2",
       "save2",
+      "extraVae",
       "muted",
       "save3",
     ]);
@@ -67,7 +68,7 @@ describe("prune", () => {
     const original = toApi(built, { validate: false });
     const pruned = toApi(prune(built), { validate: false });
     expect(Object.keys(pruned)).toEqual(
-      Object.keys(original).filter((id) => !["stray", "unknown", "extraVae"].includes(id)),
+      Object.keys(original).filter((id) => !["stray", "unknown"].includes(id)),
     );
     for (const [id, node] of Object.entries(pruned)) expect(original[id]).toEqual(node);
   });
@@ -85,7 +86,41 @@ describe("splitOutputs", () => {
     expect(splitOutputs(built).map(ids)).toEqual([
       ["ckpt", "latent", "pos", "sample", "decode", "save"],
       ["ckpt", "latent", "decode2", "save2"],
-      ["muted", "save3"],
+      ["latent", "extraVae", "muted", "save3"],
     ]);
+  });
+});
+
+describe("splitOutputs", () => {
+  test("puts an output node another depends on in both", () => {
+    const outputs = looseSchema(
+      JSON.stringify({
+        Out: {
+          input: { required: {}, optional: { x: ["IMAGE"] } },
+          output: ["IMAGE"],
+          name: "Out",
+          display_name: "Out",
+          category: "t",
+          python_module: "nodes",
+          output_node: true,
+        },
+      }),
+    );
+    const chained = workflow(outputs, ({ n }) => {
+      const first = n["Out"]!({}, { id: "a" });
+      n["Out"]?.({ x: first }, { id: "b" });
+    });
+    expect(splitOutputs(chained).map(ids)).toEqual([["a"], ["a", "b"]]);
+  });
+
+  test("takes time in proportion to what it returns", () => {
+    const many = workflow(basic, ({ n }) => {
+      for (let index = 0; index < 10_000; index++) {
+        n["SaveImage"]?.({ images: n["VAEDecode"]!({}) });
+      }
+    });
+    const started = performance.now();
+    expect(splitOutputs(many)).toHaveLength(10_000);
+    expect(performance.now() - started).toBeLessThan(2_000);
   });
 });

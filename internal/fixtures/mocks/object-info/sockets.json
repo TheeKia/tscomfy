@@ -48,5 +48,40 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "MockForcedLegacyCombo": {
+    "input": {
+      "required": {
+        "sampler": [
+          ["euler", "dpmpp_2m"],
+          {
+            "forceInput": true
+          }
+        ],
+        "model": ["MODEL"],
+        "steps": [
+          "INT",
+          {
+            "default": 20,
+            "min": 1
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["sampler", "model", "steps"]
+    },
+    "is_input_list": false,
+    "output": ["MODEL"],
+    "output_is_list": [false],
+    "output_name": ["MODEL"],
+    "name": "MockForcedLegacyCombo",
+    "display_name": "Mock Forced Legacy Combo",
+    "description": "A legacy combo with forceInput, as context nodes of some packs have: the frontend draws it as a socket, no widget.",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/sockets",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
   }
 }

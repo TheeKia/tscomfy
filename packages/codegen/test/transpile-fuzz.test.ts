@@ -58,10 +58,16 @@ const SCHEMAS: readonly (readonly [string, TypedSchema<unknown>])[] = [
 ];
 
 /** A node function of `n` by class, untyped: the fuzzer builds whatever the runtime takes. */
-function call(n: unknown, classType: string, inputs: object, id: string): unknown {
+function call(
+  n: unknown,
+  classType: string,
+  inputs: object,
+  id: string,
+  mode?: "bypass" | "mute",
+): unknown {
   const node: unknown = Reflect.get(Object(n), classType);
   if (typeof node !== "function") throw new Error(`no node ${classType}`);
-  return Reflect.apply(node, undefined, [inputs, { id }]);
+  return Reflect.apply(node, undefined, [inputs, mode === undefined ? { id } : { id, mode }]);
 }
 
 const LONG =
@@ -131,6 +137,16 @@ const CRAFTED: readonly Case[] = [
       n.CLIPTextEncode({ clip, text: "muted" }, { mode: "mute" });
       const latent = n.EmptyLatentImage({}, { mode: "bypass", title: "Skipped" });
       n.SaveImage({ images: n.VAEDecode({ samples: latent, vae }) });
+    }),
+  },
+  {
+    name: "raw nodes with modes",
+    schema: "basic-pipeline",
+    built: workflow(basic, ({ n, raw }) => {
+      const source = raw("MockSource").output(0);
+      const passed = raw("MockPass", { image: source }, { mode: "bypass" }).output(0);
+      raw("MockMuted", { image: source, strength: 2 }, { mode: "mute" });
+      n.SaveImage({ images: passed });
     }),
   },
   {
@@ -254,7 +270,8 @@ function fuzz(seed: number): Case {
           return given === undefined ? [] : [[input.name, given]];
         }),
       );
-      const result = call(n, classType, inputs, String(index + 1));
+      const mode = next() < 0.1 ? pick(["bypass", "mute"] as const) : undefined;
+      const result = call(n, classType, inputs, String(index + 1), mode);
       if (isOutputRef(result)) sources.push(result);
       else if (Array.isArray(result)) sources.push(...result.filter(isOutputRef));
     }

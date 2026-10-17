@@ -118,6 +118,11 @@ export type ComboInput = WidgetBase & {
   readonly upload: boolean;
   /** Options are fetched by the frontend at runtime. */
   readonly remote: boolean;
+  /**
+   * A legacy combo with `forceInput`: the frontend draws a socket and no widget, so it sends a
+   * link or nothing, and no default is filled in.
+   */
+  readonly forceInput?: true;
 };
 
 /**

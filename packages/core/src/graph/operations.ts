@@ -7,11 +7,10 @@ import { type AssembledNode, assembleWorkflow } from "./workflow.ts";
 
 /**
  * The workflow without the nodes no output node needs (§12): what remains are the output nodes
- * that run (not bypassed or muted) and everything they depend on. Bypassed nodes are followed
- * through, as the exporter resolves links through them; a muted node is kept, so links to it
- * stay what they were, but what it depends on isn't. Nodes of classes the schema doesn't know
- * are kept only when something kept depends on them. Cosmetic: the backend only runs output
- * nodes and their ancestors anyway.
+ * that run (not bypassed or muted) and everything they link to, through bypassed and muted
+ * nodes too, so the result is a workflow the builder could make (no link to a node left out).
+ * Nodes of classes the schema doesn't know are kept only when something kept links to them.
+ * Cosmetic: the backend only runs output nodes and their ancestors anyway.
  */
 export function prune<N>(workflow: Workflow<N>): Workflow<N> {
   return subset(workflow, needed(workflow, outputNodes(workflow)));
@@ -35,7 +34,7 @@ function outputNodes(workflow: Workflow): GraphNode[] {
   );
 }
 
-/** `roots` and what they depend on, following links, but not into muted nodes' inputs. */
+/** `roots` and every node they link to, directly or not. */
 function needed(workflow: Workflow, roots: readonly GraphNode[]): ReadonlySet<NodeId> {
   const kept = new Set<NodeId>();
   const pending = roots.map((root) => root.id);
@@ -44,7 +43,6 @@ function needed(workflow: Workflow, roots: readonly GraphNode[]): ReadonlySet<No
     const node = workflow.graph.nodes.get(id);
     if (node === undefined) continue;
     kept.add(id);
-    if (node.mode === "mute") continue;
     for (const ref of references(node.inputs)) if (!kept.has(ref)) pending.push(ref);
   }
   return kept;
@@ -52,11 +50,26 @@ function needed(workflow: Workflow, roots: readonly GraphNode[]): ReadonlySet<No
 
 /** The nodes in `ids`, in graph order, as a new workflow. */
 function subset<N>(workflow: Workflow<N>, ids: ReadonlySet<NodeId>): Workflow<N> {
+  const order = positions(workflow);
+  const kept = [...ids].toSorted((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
   return assembleWorkflow(workflow.schema, (link) =>
-    [...workflow.graph.nodes.values()]
-      .filter((node) => ids.has(node.id))
-      .map((node) => copy(node, link)),
+    kept.flatMap((id) => {
+      const node = workflow.graph.nodes.get(id);
+      return node === undefined ? [] : [copy(node, link)];
+    }),
   );
+}
+
+/** Each node's position in graph order, computed once per workflow. */
+const orders = new WeakMap<Workflow, ReadonlyMap<NodeId, number>>();
+
+function positions(workflow: Workflow): ReadonlyMap<NodeId, number> {
+  let order = orders.get(workflow);
+  if (order === undefined) {
+    order = new Map([...workflow.graph.nodes.keys()].map((id, index) => [id, index]));
+    orders.set(workflow, order);
+  }
+  return order;
 }
 
 /** A node for another workflow: references belong to the workflow that made them. */
