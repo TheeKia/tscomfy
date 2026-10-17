@@ -106,10 +106,11 @@ widgetTypes.MockWidgetTypeOverrides({ custom: state, sketch: "mask.png", count: 
 
 // Value widgets take JSON.
 widgetTypes.MockValueWidgets({ compare: ["a", "b"], region: { x: 1, y: 2, width: 3, height: 4 } });
-expectTypeOf(widgetTypes.MockValueWidgets)
-  .parameter(0)
-  .toHaveProperty("color")
-  .toEqualTypeOf<JsonValue | undefined>();
+expectTypeOf<NonNullable<Parameters<WidgetTypes["MockValueWidgets"]>[0]>["color"]>().toEqualTypeOf<
+  JsonValue | undefined
+>();
+// IMAGECOMPARE's value is the frontend's ["", ""] unless given, so it is optional.
+widgetTypes.MockValueWidgets();
 // @ts-expect-error -- a socketless value widget takes no link
 widgetTypes.MockValueWidgets({ compare: null, color: string });
 
@@ -206,6 +207,8 @@ expectTypeOf(named[3]).toEqualTypeOf<Out<"INT">>();
 autogrow.MockAutogrowOptionalRequired({ images: [image] });
 // @ts-expect-error -- images.image0 is required by min 1
 autogrow.MockAutogrowOptionalRequired({});
+// @ts-expect-error -- max 4 slots: there is no images.image4
+autogrow.MockAutogrowOptionalRequired({ images: [image, image, image, image, image] });
 // MatchType slots: the first infers the template, the others must agree.
 expectTypeOf(autogrow.MockAutogrowMatchType({ values: [image, image] })).toEqualTypeOf<
   Out<"IMAGE">
@@ -271,6 +274,8 @@ expectTypeOf(
 dynamicGroup.MockDynamicGroupOptionalMin({ rows: [{}] });
 // @ts-expect-error -- min 1 row, although the group is optional
 dynamicGroup.MockDynamicGroupOptionalMin({});
+// @ts-expect-error -- max 3 rows: the backend rejects more
+dynamicGroup.MockDynamicGroupOptionalMin({ rows: [{}, {}, {}, {}] });
 
 dynamicGroup.MockDynamicGroup({ model, loras: [{ lora_name: "lora-a.safetensors" }] });
 dynamicGroup.MockDynamicGroup({

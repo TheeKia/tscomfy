@@ -107,9 +107,12 @@ export type ComboInput = WidgetBase & {
   readonly form: "legacy" | "combo";
   /** Server order. May be empty (no model files installed, or a remote combo). */
   readonly options: readonly ComboOption[];
-  /** A list for multi-select combos. */
+  /**
+   * What the frontend sends when no value is given (§7.2): `[]` for a multi-select widget, the
+   * first option in place of a falsy default. Absent when the server states none.
+   */
   readonly default?: ComboOption | readonly ComboOption[];
-  /** The value is a list of options. */
+  /** The backend validates a list value element by element. */
   readonly multiselect: boolean;
   /** Options are files the user can upload, so they change at runtime. */
   readonly upload: boolean;
@@ -125,6 +128,7 @@ export type ValueInput = WidgetBase & {
   readonly kind: "value";
   /** The frontend widget that edits the value. */
   readonly widget: string;
+  /** What the frontend sends when no value is given: the server's default, for most widgets. */
   readonly default?: JsonValue;
 };
 

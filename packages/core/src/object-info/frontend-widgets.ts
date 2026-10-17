@@ -5,6 +5,8 @@
 // (`addInputSocket`, `addInputWidget`). Packs can register more widgets in the browser; those
 // are invisible in /object_info.
 
+import type { JsonObject, JsonValue } from "../json/value.ts";
+
 /** Widgets tscomfy models with their own input kind. */
 export type PrimitiveWidget = "INT" | "FLOAT" | "STRING" | "BOOLEAN" | "COMBO";
 
@@ -44,6 +46,24 @@ export function isPrimitiveWidget(type: string): type is PrimitiveWidget {
 /** Whether `type` is a core frontend widget with a JSON value. */
 export function isValueWidget(type: string): boolean {
   return VALUE_WIDGETS.has(type);
+}
+
+/**
+ * The value the frontend gives a value widget when none is given, which is what the exporter
+ * fills in. Most widgets start at the server's default; a few ignore it (1.55.17 composables):
+ * IMAGECOMPARE starts at `["", ""]`, GALLERIA at the spec's `images`, CHART at its `data`.
+ */
+export function initialValue(widget: string, options: JsonObject): JsonValue | undefined {
+  switch (widget) {
+    case "IMAGECOMPARE":
+      return ["", ""];
+    case "GALLERIA":
+      return options["images"] ?? [];
+    case "CHART":
+      return options["data"] ?? {};
+    default:
+      return options["default"] ?? undefined;
+  }
 }
 
 /** The V3 dynamic input types this normalizer understands. */

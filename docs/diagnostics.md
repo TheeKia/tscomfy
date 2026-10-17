@@ -39,6 +39,7 @@ Paths of export diagnostics point into the prompt: a node id, `inputs`, and the 
 | Code | Meaning | What happens |
 |---|---|---|
 | `E_INPUT_KEY_COLLISION` | Two inputs of one node send the same wire key: a flattened dynamic key such as `format.codec` equals another input's name. | The first is kept; `toApi` throws a `ValidationError`. |
+| `E_TOO_MANY_DYNAMIC_INPUTS` | An Autogrow is given more slots than it has, or a DynamicGroup more rows than its `max`. The generated types prevent it; untyped code can still do it. | The extra entries aren't sent; `toApi` throws a `ValidationError`. |
 
 ## Generating types
 

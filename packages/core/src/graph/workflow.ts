@@ -2,7 +2,7 @@ import { namedOutputs } from "../schema/frontend.ts";
 import type { TypedSchema } from "../schema/typed.ts";
 import type { NodeDef } from "../schema/types.ts";
 import type { BuildContext, Graph, GraphNode, InputValue, RawNode, Workflow } from "./graph.ts";
-import { isOutputRef, outputRef } from "./output-ref.ts";
+import { isOutputRef, outputRef, ownerOf } from "./output-ref.ts";
 import type { NodeHandle, NodeId } from "./types.ts";
 
 /**
@@ -11,18 +11,27 @@ import type { NodeHandle, NodeId } from "./types.ts";
  * … in creation order unless set with `options.id`.
  *
  * Throws a `TypeError` for misuse the types can't catch: a duplicate or empty id, a node function
- * called after `build` returned, or an input value that isn't JSON or an output reference.
+ * called after `build` returned or from an async `build`, an input value that isn't JSON or an
+ * output reference of this workflow, or a sparse array.
  */
 export function workflow<N>(
   schema: TypedSchema<N>,
   build: (context: BuildContext<N>) => void,
 ): Workflow<N> {
   const builder = new GraphBuilder<N>(schema);
-  build({
-    n: builder.nodes(),
-    raw: (classType, inputs, options) => builder.raw(classType, inputs, options),
-  });
-  builder.close();
+  let returned: unknown;
+  try {
+    returned = build({
+      n: builder.nodes(),
+      raw: (classType, inputs, options) => builder.raw(classType, inputs, options),
+    });
+  } finally {
+    builder.close();
+  }
+  // Nodes added after an `await` would come too late; refuse rather than build half a graph.
+  if (isThenable(returned)) {
+    throw new TypeError("workflow: the build function must be synchronous");
+  }
   return Object.freeze({ schema, graph: builder.graph() });
 }
 
@@ -47,6 +56,10 @@ class GraphBuilder<N> {
       {
         get: (_target, key) => (typeof key === "string" ? this.#function(key) : undefined),
         has: (_target, key) => typeof key === "string" && Object.hasOwn(this.#schema.nodes, key),
+        // `n` is read-only: its functions come from the schema.
+        set: () => false,
+        defineProperty: () => false,
+        deleteProperty: () => false,
       },
     );
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- N types exactly these functions
@@ -55,7 +68,15 @@ class GraphBuilder<N> {
 
   raw(classType: string, inputs: unknown, options: unknown): RawNode {
     const id = this.#add(classType, inputs, options, true);
-    return Object.freeze({ id, output: (slot: number) => outputRef<"*">(id, slot) });
+    return Object.freeze({
+      id,
+      output: (slot: number) => {
+        if (!Number.isSafeInteger(slot) || slot < 0) {
+          throw new TypeError(`workflow: output slot ${String(slot)} is not a slot index`);
+        }
+        return outputRef<"*">(this, id, slot);
+      },
+    });
   }
 
   close(): void {
@@ -73,7 +94,7 @@ class GraphBuilder<N> {
     const definition = this.#schema.nodes[classType];
     if (definition === undefined) return undefined;
     const created = (inputs?: unknown, options?: unknown): unknown =>
-      result(definition, this.#add(classType, inputs, options, false));
+      result(this, definition, this.#add(classType, inputs, options, false));
     this.#functions.set(classType, created);
     return created;
   }
@@ -98,7 +119,7 @@ class GraphBuilder<N> {
       Object.freeze({
         id,
         classType,
-        inputs: freezeInputs(inputs),
+        inputs: freezeInputs(inputs, this),
         ...(title === undefined ? {} : { title }),
         raw,
       }),
@@ -108,11 +129,11 @@ class GraphBuilder<N> {
 }
 
 /** What a node function returns (§6.2): a handle, one output, or a tuple with named members. */
-function result(definition: NodeDef, id: NodeId): unknown {
+function result(owner: object, definition: NodeDef, id: NodeId): unknown {
   const { outputs } = definition;
   if (outputs.length === 0) return Object.freeze({ id } satisfies NodeHandle);
-  if (outputs.length === 1) return outputRef(id, 0);
-  const refs: unknown[] = outputs.map((output) => outputRef(id, output.index));
+  if (outputs.length === 1) return outputRef(owner, id, 0);
+  const refs: unknown[] = outputs.map((output) => outputRef(owner, id, output.index));
   for (const [name, slot] of namedOutputs(outputs)) {
     Object.defineProperty(refs, name, { value: refs[slot], enumerable: true });
   }
@@ -136,23 +157,29 @@ function readOptions(options: unknown): { readonly id?: NodeId; readonly title?:
 }
 
 /** A frozen copy of the given inputs; `undefined` values are left out, as if not given. */
-function freezeInputs(inputs: unknown): { readonly [name: string]: InputValue } {
+function freezeInputs(inputs: unknown, owner: object): { readonly [name: string]: InputValue } {
   if (inputs === undefined) return Object.freeze({});
   if (!isPlainObject(inputs)) throw new TypeError("workflow: node inputs must be a plain object");
   const entries: [string, InputValue][] = [];
   for (const [name, value] of Object.entries(inputs)) {
-    if (value !== undefined) entries.push([name, freezeValue(value, name)]);
+    if (value !== undefined) entries.push([name, freezeValue(value, name, owner)]);
   }
   return Object.freeze(Object.fromEntries(entries));
 }
 
-function freezeValue(value: unknown, path: string): InputValue {
+function freezeValue(value: unknown, path: string, owner: object): InputValue {
+  if (isOutputRef(value)) {
+    // A reference into another workflow would silently link to whatever has its id here.
+    if (ownerOf(value) !== owner) {
+      throw new TypeError(`workflow: input ${path} is an output of another workflow`);
+    }
+    return value;
+  }
   if (
     value === null ||
     typeof value === "string" ||
     typeof value === "boolean" ||
-    typeof value === "bigint" ||
-    isOutputRef(value)
+    typeof value === "bigint"
   ) {
     return value;
   }
@@ -161,17 +188,30 @@ function freezeValue(value: unknown, path: string): InputValue {
     throw new TypeError(`workflow: input ${path} is ${String(value)}, which has no JSON form`);
   }
   if (Array.isArray(value)) {
-    return Object.freeze(
-      value.map((item: unknown, index) => freezeValue(item, `${path}[${String(index)}]`)),
-    );
+    const items: InputValue[] = [];
+    for (let index = 0; index < value.length; index++) {
+      const where = `${path}[${String(index)}]`;
+      // A hole would serialize as invalid JSON, or silently skip an Autogrow slot.
+      if (!(index in value)) throw new TypeError(`workflow: input ${where} is a hole in an array`);
+      items.push(freezeValue(value[index], where, owner));
+    }
+    return Object.freeze(items);
   }
   if (isPlainObject(value)) {
     const entries = Object.entries(value).flatMap(([key, item]): [string, InputValue][] =>
-      item === undefined ? [] : [[key, freezeValue(item, `${path}.${key}`)]],
+      item === undefined ? [] : [[key, freezeValue(item, `${path}.${key}`, owner)]],
     );
     return Object.freeze(Object.fromEntries(entries));
   }
   throw new TypeError(`workflow: input ${path} must be JSON or an output reference`);
+}
+
+function isThenable(value: unknown): boolean {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof Reflect.get(value, "then") === "function"
+  );
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

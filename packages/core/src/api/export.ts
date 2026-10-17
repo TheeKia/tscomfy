@@ -42,7 +42,9 @@ export interface ToApiOptions {
  * the frontend's order. Serialize it with `stringify`, which keeps big integers exact.
  *
  * Throws a {@link ValidationError} when the prompt can't be built faithfully: a flattened
- * dynamic key that collides with another input of the node (`E_INPUT_KEY_COLLISION`).
+ * dynamic key that collides with another input of the node (`E_INPUT_KEY_COLLISION`), or more
+ * Autogrow slots or group rows than exist (`E_TOO_MANY_DYNAMIC_INPUTS`). Throws a `TypeError` for
+ * an output reference nested inside a JSON value, which no input can carry.
  */
 export function toApi(workflow: Workflow, options: ToApiOptions = {}): ApiPrompt {
   const { prompt, diagnostics } = exportApi(workflow, options);
@@ -129,19 +131,16 @@ class NodeExport {
       case "int":
       case "float":
       case "string":
-      case "boolean": {
-        const sent = value ?? input.default;
-        if (sent !== undefined) this.#add("widget", key, encode(sent), inOption);
-        return;
-      }
+      case "boolean":
       case "combo": {
-        const sent = value ?? comboDefault(input);
+        // `null` is a value; only a missing input takes the default (the frontend's, §7.2).
+        const sent = value === undefined ? input.default : value;
         if (sent !== undefined) this.#add("widget", key, encode(sent), inOption);
         return;
       }
       case "value": {
         if (!sendsValue(input.widget)) return;
-        const sent = value ?? input.default;
+        const sent = value === undefined ? input.default : value;
         if (sent === undefined) return;
         const encoded = encode(sent);
         // The frontend marks CURVE values with their type; other objects pass as they are.
@@ -188,7 +187,9 @@ class NodeExport {
     }
     this.#add("widget", key, chosen, inOption);
     const option = input.options.find((each) => each.key === chosen);
+    const known = new Set<string>();
     for (const child of option?.inputs ?? []) {
+      known.add(child.name);
       this.#input(
         child,
         Object.hasOwn(children, child.name) ? children[child.name] : undefined,
@@ -196,6 +197,7 @@ class NodeExport {
         true,
       );
     }
+    this.#unknown(children, known, `${key}.`, true);
   }
 
   #autogrow(
@@ -207,15 +209,17 @@ class NodeExport {
     if (value === undefined) return;
     // Only given (connected) slots are sent, in slot order.
     if (isList(value)) {
-      value.forEach((item, index) => {
-        const slot = input.slots[index] ?? String(index);
-        this.#input(input.template, item, `${key}.${slot}`, inOption);
+      if (value.length > input.slots.length) this.#tooMany(key, value.length, input.slots.length);
+      input.slots.slice(0, value.length).forEach((slot, index) => {
+        this.#input(input.template, value[index], `${key}.${slot}`, inOption);
       });
     } else if (isRecord(value)) {
       for (const slot of input.slots) {
-        if (Object.hasOwn(value, slot))
+        if (Object.hasOwn(value, slot)) {
           this.#input(input.template, value[slot], `${key}.${slot}`, inOption);
+        }
       }
+      this.#unknown(value, new Set(input.slots), `${key}.`, inOption);
     }
   }
 
@@ -226,17 +230,54 @@ class NodeExport {
     inOption: boolean,
   ): void {
     if (value === undefined || !isList(value)) return;
-    value.forEach((row, index) => {
+    if (value.length > input.max) this.#tooMany(key, value.length, input.max);
+    const names = new Set(input.fields.map((field) => field.name));
+    value.slice(0, input.max).forEach((row, index) => {
       const fields = isRecord(row) ? row : {};
+      const prefix = `${key}.${String(index)}`;
       for (const field of input.fields) {
         this.#input(
           field,
           Object.hasOwn(fields, field.name) ? fields[field.name] : undefined,
-          `${key}.${String(index)}.${field.name}`,
+          `${prefix}.${field.name}`,
           inOption,
         );
       }
+      this.#unknown(fields, names, `${prefix}.`, inOption);
     });
+  }
+
+  /**
+   * Keys inside a structured value that the schema doesn't know: passed through after the known
+   * ones, as unknown top-level inputs are; validation flags them.
+   */
+  #unknown(
+    values: { readonly [key: string]: InputValue },
+    known: ReadonlySet<string>,
+    prefix: string,
+    inOption: boolean,
+  ): void {
+    for (const [name, value] of Object.entries(values)) {
+      if (!known.has(name)) {
+        this.#add(
+          isOutputRef(value) ? "socket" : "widget",
+          `${prefix}${name}`,
+          encode(value),
+          inOption,
+        );
+      }
+    }
+  }
+
+  /** More slots or rows than the backend reads: the rest can't be sent. */
+  #tooMany(key: string, given: number, most: number): void {
+    this.#diagnostics.push(
+      createDiagnostic(
+        "E_TOO_MANY_DYNAMIC_INPUTS",
+        [this.#node.id, "inputs", key],
+        `Input ${key} of node ${this.#node.id} has ${String(given)} entries, but at most ${String(most)} can be sent; dropping the rest.`,
+      ),
+    );
   }
 
   /** Places a key in its group; a key already taken is a collision. */
@@ -256,19 +297,6 @@ class NodeExport {
       group === "widget" ? this.#widgets : inOption ? this.#optionSockets : this.#sockets;
     target.push([key, value]);
   }
-}
-
-/**
- * The value the frontend gives a combo it wasn't given one for (`useComboWidget.ts`): a
- * multi-select starts empty whatever the default; a single combo takes its default unless that
- * is falsy, then its first option.
- */
-function comboDefault(input: Extract<InputDef, { kind: "combo" }>): InputValue | undefined {
-  if (input.multiselect) return [];
-  if (input.default === undefined) return undefined;
-  return input.default === "" || input.default === 0 || input.default === false
-    ? (input.options[0] ?? input.default)
-    : input.default;
 }
 
 /** Inputs of a raw node, or of a class the schema doesn't know: passed through as given. */

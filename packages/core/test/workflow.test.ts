@@ -3,6 +3,10 @@ import { type GraphNode, isOutputRef, workflow } from "@tscomfy/core";
 import { readMockObjectInfo } from "@tscomfy/fixtures";
 import { type LooseNodes, looseSchema } from "./loose.ts";
 
+async function asyncBuild(): Promise<void> {
+  await Promise.resolve();
+}
+
 const basic = looseSchema(await readMockObjectInfo("basic-pipeline"));
 const outputs = looseSchema(await readMockObjectInfo("outputs"));
 
@@ -131,5 +135,59 @@ describe("the graph", () => {
         Reflect.apply(raw, undefined, ["X", { value }]);
       }),
     ).toThrow(TypeError);
+  });
+
+  test("rejects an output of another workflow", () => {
+    let foreign: unknown;
+    workflow(basic, ({ n }) => {
+      foreign = n["VAELoader"]!({ vae_name: "pixel_space" });
+    });
+    expect(() =>
+      workflow(basic, ({ raw }) => {
+        Reflect.apply(raw, undefined, ["X", { vae: foreign }]);
+      }),
+    ).toThrow(/another workflow/);
+  });
+
+  test("rejects holes in arrays", () => {
+    expect(() =>
+      workflow(basic, ({ raw }) => {
+        const values: number[] = [];
+        values[0] = 1;
+        values[2] = 3;
+        raw("X", { values });
+      }),
+    ).toThrow(/hole/);
+  });
+
+  test("rejects an async build function", () => {
+    // The types allow it (a Promise is assignable to void), so it must fail at runtime.
+    expect(() => Reflect.apply(workflow, undefined, [basic, asyncBuild])).toThrow(/synchronous/);
+  });
+
+  test("closes the builder even when the build function throws", () => {
+    let leaked: LooseNodes[string] | undefined;
+    expect(() =>
+      workflow(basic, ({ n }) => {
+        leaked = n["VAELoader"];
+        throw new Error("boom");
+      }),
+    ).toThrow("boom");
+    expect(() => leaked?.({ vae_name: "pixel_space" })).toThrow(TypeError);
+  });
+
+  test("keeps n read-only", () => {
+    workflow(basic, ({ n }) => {
+      expect(Reflect.defineProperty(n, "VAELoader", { value: 1 })).toBeFalse();
+      expect(Reflect.set(n, "VAELoader", 1)).toBeFalse();
+      expect(Reflect.deleteProperty(n, "VAELoader")).toBeFalse();
+      expect(typeof n["VAELoader"]).toBe("function");
+    });
+  });
+
+  test.each([-1, 1.5, Number.NaN])("rejects raw output slot %p", (slot) => {
+    workflow(basic, ({ raw }) => {
+      expect(() => raw("X").output(slot)).toThrow(TypeError);
+    });
   });
 });

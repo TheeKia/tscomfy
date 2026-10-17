@@ -27,6 +27,7 @@ import {
   AUTOGROW,
   DYNAMIC_COMBO,
   DYNAMIC_GROUP,
+  initialValue,
   isPrimitiveWidget,
   isV3DynamicType,
   isValueWidget,
@@ -450,7 +451,7 @@ class SpecReader {
   }
 
   value(widget: string, type: SocketType): InputDef {
-    const value = this.#options["default"] ?? undefined;
+    const value = initialValue(widget, this.#options);
     return {
       kind: "value",
       ...this.base(),
@@ -645,18 +646,26 @@ class SpecReader {
       readonly widgetType?: string;
     },
   ): ComboInput {
+    // `multiselect` is what the backend validates by; `multi_select` is what makes the frontend
+    // draw a multi-select widget. V3 multi-selects send both.
     const multiselect = this.flag("multiselect");
+    const frontendMultiselect = this.#options["multi_select"] ?? undefined;
     // A default the backend would reject is dropped rather than filled in later. With no options
     // listed (remote and upload combos, empty folders) membership can't be checked here.
     const isMember = (value: JsonValue): value is ComboOption =>
       isComboOption(value) && (options.length === 0 || options.includes(value));
-    const value = this.#read(
+    const read = this.#read(
       "default",
-      multiselect ? "a list of the options" : "one of the options",
+      multiselect ? "one or a list of the options" : "one of the options",
       (raw): ComboOption | readonly ComboOption[] | undefined => {
-        if (!multiselect) return isMember(raw) ? raw : undefined;
-        return isArray(raw) && raw.every(isMember) ? raw : undefined;
+        if (isMember(raw)) return raw;
+        return multiselect && isArray(raw) && raw.every(isMember) ? raw : undefined;
       },
+    );
+    const value = comboInitialValue(
+      read,
+      options,
+      multiselect && frontendMultiselect !== undefined && frontendMultiselect !== false,
     );
     return {
       kind: "combo",
@@ -809,6 +818,23 @@ function exact(value: number | bigint | undefined): string {
   return typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value)
     ? BigInt(value).toString()
     : String(value);
+}
+
+/**
+ * The value the frontend gives a combo when none is given (ComfyUI_frontend 1.55.17
+ * `useComboWidget.ts`), which is what the exporter fills in: a multi-select widget starts empty
+ * whatever the default; otherwise a truthy default, or the first option in place of a falsy one.
+ * No default stays no default: tscomfy doesn't invent one (§7.2).
+ */
+function comboInitialValue(
+  read: ComboOption | readonly ComboOption[] | undefined,
+  options: readonly ComboOption[],
+  multiselectWidget: boolean,
+): ComboOption | readonly ComboOption[] | undefined {
+  if (multiselectWidget) return [];
+  if (read === undefined) return undefined;
+  if (read === "" || read === 0 || read === false) return options[0] ?? read;
+  return read;
 }
 
 function isComboOption(value: JsonValue): value is ComboOption {

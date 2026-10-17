@@ -113,18 +113,25 @@
       "required": {
         "tags": [
           "COMBO",
-          { "options": ["red", "green", "blue"], "multiselect": true, "default": ["red"] }
-        ]
+          {
+            "options": ["red", "green", "blue"],
+            "multiselect": true,
+            "multi_select": { "placeholder": "Pick tags" },
+            "default": ["red"]
+          }
+        ],
+        "legacy_multi": ["COMBO", { "options": ["a", "b"], "multiselect": true, "default": ["a"] }],
+        "frontend_multi": ["COMBO", { "options": ["x", "y"], "multi_select": {}, "default": "x" }]
       }
     },
-    "input_order": { "required": ["tags"] },
+    "input_order": { "required": ["tags", "legacy_multi", "frontend_multi"] },
     "is_input_list": false,
     "output": ["STRING"],
     "output_is_list": [false],
     "output_name": ["STRING"],
     "name": "MockComboMultiselect",
     "display_name": "Mock Combo Multiselect",
-    "description": "A multi-select combo: its value is a list, sent wrapped as {\"__value__\": [...]}.",
+    "description": "Multi-select flags: both (V3, a multi-select widget that starts empty), multiselect alone (the frontend draws a single combo), multi_select alone (the backend validates a single value).",
     "python_module": "comfy_extras.nodes_mock",
     "category": "mock/combos",
     "output_node": false,

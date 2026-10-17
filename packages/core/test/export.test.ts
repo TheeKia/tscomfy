@@ -85,4 +85,45 @@ describe("toApi", () => {
     });
     expect(() => toApi(built)).toThrow(TypeError);
   });
+
+  test("sends an explicit null, rather than the default", async () => {
+    const widgets = looseSchema(await readMockObjectInfo("widget-types"));
+    const built = workflow(widgets, ({ n }) => {
+      n["MockValueWidgets"]?.({ compare: null, color: null, curve_value: null });
+    });
+    expect(toApi(built)["1"]?.inputs).toMatchObject({
+      color: null,
+      compare: null,
+      curve_value: null,
+    });
+  });
+
+  test("passes unknown keys inside structured values through, flattened", async () => {
+    const groups = looseSchema(await readMockObjectInfo("dynamic-group"));
+    const built = workflow(groups, ({ n }) => {
+      n["MockDynamicGroupOptional"]?.({ replacements: [{ find: "a", extra: 1 }] });
+    });
+    expect(toApi(built)["1"]?.inputs).toEqual({
+      text: "",
+      "replacements.0.find": "a",
+      "replacements.0.replace": "",
+      "replacements.0.extra": 1,
+    });
+  });
+
+  test("reports more group rows than the maximum and sends only the allowed ones", async () => {
+    const groups = looseSchema(await readMockObjectInfo("dynamic-group"));
+    const built = workflow(groups, ({ n }) => {
+      n["MockDynamicGroupOptionalMin"]?.({ rows: [{}, {}, {}, {}] });
+    });
+    const { prompt, diagnostics } = exportApi(built);
+    expect(diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toEqual([
+      ["E_TOO_MANY_DYNAMIC_INPUTS", ["1", "inputs", "rows"]],
+    ]);
+    expect(Object.keys(prompt["1"]?.inputs ?? {})).toEqual([
+      "rows.0.value",
+      "rows.1.value",
+      "rows.2.value",
+    ]);
+  });
 });

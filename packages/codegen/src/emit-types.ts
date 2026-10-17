@@ -63,6 +63,7 @@ export function headerLines(header: readonly string[]): string[] {
 
 /** Names the generated file imports from @tscomfy/core. */
 const CORE_TYPES = [
+  "Bounded",
   "In",
   "JsonValue",
   "Match",
@@ -119,6 +120,7 @@ class TypesEmitter {
   readonly #parameterNames = new Set<string>();
   readonly #comboAliases = new Map<string, string>();
   readonly #socketAliases = new Map<string, string>();
+  readonly #lengthAliases = new Map<string, string>();
   readonly #shared: { readonly name: string; readonly doc: Doc }[] = [];
   readonly #imports = new Set<CoreType>();
   readonly #diagnostics: Diagnostic[] = [];
@@ -447,7 +449,7 @@ class TypesEmitter {
           path,
         );
         return {
-          atoms: [repeated(row.reference, row.reference, input.min)],
+          atoms: [this.#repeated(row.reference, row.reference, input.min, input.max)],
           templates: row.templates,
         };
       }
@@ -544,7 +546,7 @@ class TypesEmitter {
     // template is, whatever section the Autogrow itself is in.
     const required = template.required ? Math.min(input.min, input.slots.length) : 0;
     if (input.form === "prefix") {
-      return { atoms: [repeated(first, rest, required)], templates };
+      return { atoms: [this.#repeated(first, rest, required, input.slots.length)], templates };
     }
     const members = input.slots.map((slotName, index) => [
       "readonly ",
@@ -646,6 +648,39 @@ class TypesEmitter {
     }
   }
 
+  /**
+   * A list of `minimum` to `maximum` elements (§6.2): the backend reads no more slots or rows
+   * than exist, so neither may the types. `first` types the first element and `rest` the others,
+   * so a MatchType slot list infers from its first only. The length is bounded with a shared
+   * `Length<min>To<max>` alias rather than a long tuple, which costs far more to type-check.
+   */
+  #repeated(first: Doc, rest: Doc, minimum: number, maximum: number): Doc {
+    const elements: Doc[] =
+      minimum === 0
+        ? first === rest
+          ? []
+          : [[first, "?"]]
+        : [first, ...Array.from({ length: minimum - 1 }, () => rest)];
+    const list: Doc =
+      elements.length === 0 ? ["readonly ", rest, "[]"] : tuple([...elements, ["...", rest, "[]"]]);
+    this.#imports.add("Bounded");
+    return reference("Bounded", [list, this.#lengths(minimum, maximum)]);
+  }
+
+  /** A shared alias for the lengths `minimum` to `maximum`. */
+  #lengths(minimum: number, maximum: number): string {
+    const key = `${String(minimum)}-${String(maximum)}`;
+    const existing = this.#lengthAliases.get(key);
+    if (existing !== undefined) return existing;
+    const name = this.#claimShared(`Length${String(minimum)}To${String(maximum)}`);
+    this.#lengthAliases.set(key, name);
+    const lengths = Array.from({ length: maximum - minimum + 1 }, (_, index) =>
+      String(minimum + index),
+    );
+    this.#shared.push({ name, doc: aliasDoc(name, [], lengths, "Allowed list lengths.") });
+    return name;
+  }
+
   /** A MatchType template's constraint. */
   #allowed(type: SocketType, templateId: string): string {
     switch (type.kind) {
@@ -717,13 +752,11 @@ function isRequired(input: InputDef): boolean {
       return input.template.required && input.min > 0 && input.slots.length > 0;
     case "dynamicGroup":
       return input.min > 0;
-    case "combo":
-      // Left out, a multi-select is sent as [] (the frontend's value), which the backend accepts.
-      return input.required && !input.multiselect && input.default === undefined;
     case "int":
     case "float":
     case "string":
     case "boolean":
+    case "combo":
     case "value":
       return input.required && input.default === undefined;
     case "socket":
@@ -739,25 +772,9 @@ function literal(option: ComboOption): string {
 }
 
 /** `Name` or `Name<A, B>`, breaking the arguments the way oxfmt does when they don't fit. */
-function reference(name: string, args: readonly string[]): Doc {
+function reference(name: string, args: readonly Doc[]): Doc {
   if (args.length === 0) return name;
   return group([name, "<", indent([softline, join([",", line], args)]), softline, ">"]);
-}
-
-/**
- * `readonly T[]`, with the first `minimum` elements required. `first` types the first element
- * and `rest` the others, so a MatchType slot list infers from its first element only.
- */
-function repeated(first: Doc, rest: Doc, minimum: number): Doc {
-  if (minimum === 0) {
-    return first === rest
-      ? ["readonly ", rest, "[]"]
-      : tuple([
-          [first, "?"],
-          ["...", rest, "[]"],
-        ]);
-  }
-  return tuple([first, ...Array.from({ length: minimum - 1 }, () => rest), ["...", rest, "[]"]]);
 }
 
 function tuple(elements: readonly Doc[]): Doc {
@@ -852,9 +869,7 @@ function nodeDocLines(node: NodeDef): string[] {
 function inputDocLines(input: InputDef): string[] {
   const lines = input.tooltip === undefined ? [] : [input.tooltip];
   const facts: string[] = [];
-  if (input.kind === "combo" && input.multiselect) {
-    facts.push("Default: `[]` (the frontend ignores the server's default for multi-selects).");
-  } else if ("default" in input) {
+  if ("default" in input) {
     facts.push(`Default: \`${stringify(input.default)}\`.`);
   }
   if (input.kind === "int" || input.kind === "float") {

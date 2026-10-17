@@ -1,11 +1,19 @@
 {
   "1": {
-    "inputs": { "tags": { "__value__": ["red", "blue"] } },
+    "inputs": {
+      "tags": { "__value__": ["red", "blue"] },
+      "legacy_multi": { "__value__": ["a"] },
+      "frontend_multi": "x"
+    },
     "class_type": "MockComboMultiselect",
     "_meta": { "title": "Mock Combo Multiselect" }
   },
   "2": {
-    "inputs": { "tags": { "__value__": [] } },
+    "inputs": {
+      "tags": { "__value__": [] },
+      "legacy_multi": { "__value__": ["a"] },
+      "frontend_multi": "x"
+    },
     "class_type": "MockComboMultiselect",
     "_meta": { "title": "Mock Combo Multiselect" }
   },

@@ -235,8 +235,8 @@ interface Diagnostic {
 - **One model everywhere** (D14). The parser, normalizer, exporter, validator and codegen all
   return this type. It lives in `core/src/diagnostic/`.
 - **Path roots.** Normalizer paths point into the raw `/object_info` document, e.g.
-  `["KSampler", "input", "required", "seed", 1, "max"]`. Export and validation paths point into the
-  structured workflow, e.g. `["5", "inputs", "format", "codec"]`. Parse errors have an empty path
+  `["KSampler", "input", "required", "seed", 1, "max"]`. Export paths point into the prompt, by
+  node id and wire key, e.g. `["5", "inputs", "format.codec"]`. Parse errors have an empty path
   and give the position in the message. Keys are strings and array indexes are numbers, so a
   dotted name is always one segment.
 - **Severity.** `error`: the item was dropped, or the backend would reject the result. `warning`:
@@ -288,10 +288,10 @@ type In<T extends string> = Out<T | "*">;     // what a socket of type T accepts
 | empty combo (36–55 in the dump) | `string`, plus a codegen diagnostic |
 | value widget (COLOR, BOUNDING_BOX, CURVE, …; D16) | `JsonValue`, `\| In<type>` unless socketless |
 | input with an explicit schema default | optional (`?:`); the exporter fills it in |
-| Autogrow, prefix form | `readonly T[]`, or `readonly [T, …, ...T[]]` with the first `min` slots required (at most the slot count). The backend requires them even when the Autogrow is optional, so the minimum decides. MatchType slots: the first infers the template, the rest use `Match<NoInfer<T>>` |
+| Autogrow, prefix form | `Bounded<readonly [T, …, ...T[]], Length1To4>`: the first `min` slots required (at most the slot count), at most as many slots as exist. The backend requires the minimum even when the Autogrow is optional. MatchType slots: the first infers the template, the rest use `Match<NoInfer<T>>` |
 | Autogrow, names form | an interface `{ readonly a: T; readonly b?: T }` (first `min` names required) |
 | DynamicCombo | a union of option interfaces `{ option: "mp4"; inputs: {…} }`, plus the bare `"flac"` key for each option whose inputs may all be left out. Recursive (§6.4) |
-| DynamicGroup | a row interface, repeated like Autogrow slots (first `min` rows required, even when the group is optional) |
+| DynamicGroup | a row interface, bounded like Autogrow slots: `min` to `max` rows, even when the group is optional |
 | output | `Out<"T">`; a union `Out<Alias>`; exactly `*` `Out<"*">`; an option list `Out<OptionList>`; a comma list with `*` its other members, a padded `*` `Out<string>` (§5.2) |
 | node without inputs | `{ readonly [key: string]: never }`, so any key is an error (`{}` would accept anything) |
 | MatchType | generic node function (§6.3) |
@@ -415,7 +415,7 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
 ### 7.1 Principles
 
 - **No global state.** The builder context (`{ n, raw }`) is a parameter, so nested and concurrent builds are safe.
-- **Object arguments.** The second argument holds node options: `{ id?, title?, mode? }`.
+- **Object arguments.** The second argument holds node options: `{ id?, title? }` (`mode` comes in Phase 7).
 - **Templates are plain TS functions** (above). There is no template DSL and no `ParamRef` in the IR:
   re-running the builder is cheap, and plain parameters give the best types.
 - **Composition is plain functions** taking `n` and refs. Mapping them to UI subgraphs comes with the UI format.
@@ -427,7 +427,9 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
   name (`namedOutputs`) lives in core and serves both codegen and the builder. Results and output
   references are frozen; references are instances only the builder creates.
 - **Misuse throws** a `TypeError`: an empty or taken explicit id, a node added after the build
-  function returned, an input value that is neither JSON nor an output reference.
+  function returned (or threw), an async build function, an input value that is neither JSON nor
+  an output reference, an output reference from another workflow (it would link to whatever has
+  that id here), a sparse array, a raw output slot that isn't an index. `n` is read-only.
 
 ### 7.2 Defaults policy
 
@@ -437,9 +439,13 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
   widget value.
 - **Never invent implicit defaults.** The frontend falls back to `0`, `""`, `false` or the first combo
   option; we don't, so those inputs stay **required** in the types. Explicit beats a silently chosen first checkpoint.
-- **Except where the frontend overrides the schema** (`useComboWidget.ts`, 1.55.17), we do what it
-  does: a multi-select starts as `[]` whatever its default (so it is optional in the types), and a
-  combo whose default is falsy (`0`, `""`, `false`) starts at its first option.
+- **Where the frontend overrides the schema's default, we do what it does.** The normalizer stores
+  the frontend's initial value as `default` (1.55.17 composables), so the exporter, codegen's
+  optionality and its JSDoc all follow one rule:
+  - a combo the frontend draws as a multi-select (`multi_select` and the backend's `multiselect`
+    both set, as V3 multi-selects do) starts as `[]`;
+  - a combo with a falsy default (`0`, `""`, `false`) starts at its first option;
+  - IMAGECOMPARE starts at `["", ""]`, GALLERIA at the spec's `images`, CHART at its `data`.
 - **Display-only widgets** (RESOLUTION_PREVIEW, IMAGEUPLOAD: `options.serialize === false`) are
   never sent, and codegen leaves them out of the input types.
 
@@ -451,18 +457,19 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
 
 ### 7.4 Parity with the frontend's API output
 
-Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
+Researched in frontend 1.55.17 (the version the corpus came from) and backend 0.41 `execution.py`.
 
 | Rule | What we do |
 |---|---|
-| Every widget value is sent; unconnected socket-only inputs are left out | Same |
+| Every widget value is sent; unconnected socket-only inputs are left out | Same for every widget with a value or a default. **An optional widget without a default is left out**, and so is an optional dynamic combo not given: the frontend sends `0`, `""`, `false`, the first option or the first key. We never invent values (§7.2), and the frontend's `0` can even fall outside `min` |
+| A combo with `multi_select` but not the backend's `multiselect` is a multi-select widget, which sends a list the backend then rejects | **We follow the backend**: a single value |
 | Key order: each node is `inputs`, `class_type`, `_meta`. Inside `inputs`: every widget in widget order (a linked widget keeps its widget's position), a dynamic combo's option widgets right after it, depth-first; then connected socket-only inputs in input order (Autogrow slots in slot order); then a dynamic combo's option sockets | Same, so `stringify` reproduces an export byte for byte. Confirmed in `executionUtil.ts`, `litegraphService.ts` and `dynamicWidgets.ts` (1.55.17), and on every node of a corpus export |
 | A CURVE value is sent as `{"__type__": "CURVE", "__value__": …}` | Same |
 | A list-valued widget is sent as `{"__value__": [...]}`, because the backend reads a bare list as a link | Same; the importer unwraps it |
 | `_meta.title` is always present (title, or display name) | Same (`toApi({ meta: false })` turns it off) |
 | control_after_generate is never sent (its widget has `serialize: false`) | Not modeled; seeds are plain values |
 | Autogrow sends connected slots only (`images.image0`, …) | Same |
-| DynamicGroup keys are `group.<row>.<field>` | Same |
+| DynamicGroup keys are `group.<row>.<field>` | Same keys, as the backend parses them. Frontend 1.55.17 has no DynamicGroup handler at all, so there is nothing to match there; rows go at the group's widget position, as newer frontends place them |
 | **The frontend resolves `{a\|b}` dynamic prompts and strips `/* */` and `//` comments** in `dynamicPrompts` STRING inputs, so `http://` gets truncated | **We don't** (determinism, fidelity). An opt-in `dynamicPrompt()` helper may come later. Documented. |
 | **The frontend substitutes `%…%`** in save-node `filename_prefix` values | **We don't**; the text is sent verbatim. Documented. |
 
@@ -470,8 +477,11 @@ Researched in frontend 1.58 `executionUtil.ts` and backend 0.41 `execution.py`.
 
 - `toApi()` returns a plain `ApiPrompt` object, which may hold `bigint`. It throws a
   `ValidationError` carrying every diagnostic when the prompt can't be built faithfully: so far a
-  flattened key that collides with another input (`E_INPUT_KEY_COLLISION`). `exportApi()` returns
-  the prompt and the diagnostics without throwing. Phase 5 adds `validate`.
+  flattened key that collides with another input (`E_INPUT_KEY_COLLISION`), or more Autogrow
+  slots or group rows than exist (`E_TOO_MANY_DYNAMIC_INPUTS`, which the types already prevent).
+  `exportApi()` returns the prompt and the diagnostics without throwing. An output reference
+  nested inside a JSON value (not a whole input, slot or field) throws a `TypeError`. Phase 5
+  adds `validate`.
 - `stringify()` is our own deterministic serializer: keys in JavaScript's enumeration order, as
   `JSON.stringify` and the frontend use (integer-like keys such as node ids `"1"`, `"10"` first in
   numeric order, then insertion order; every object we build has a fixed construction order,
@@ -843,6 +853,8 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | oxfmt layout rules (§9) | Probed on crafted code: `extends` breaks to its own line with one parent per line; type arguments break one per line without a trailing comma; assignments break after `=` when the head of the right side doesn't fit; strings use single quotes only when that needs fewer escapes; Unicode identifier keys are unquoted; CJK and fullwidth characters count as two columns |
 | Exported key order (§7.4) | `graphToPrompt` writes widgets first (`node.widgets` order), then links (`node.inputs` order); assigning an existing key keeps its position. `dynamicWidgets.ts` inserts option widgets after their combo and option sockets after its socket; Autogrow slots after the previous slot. Six hand-written parity prompts (`mocks/workflows/api/`) export byte for byte |
 | Combo defaults (§7.2) | `useComboWidget.ts`: a multi-select starts at `ref([])`; `getDefaultValue` returns `default` if truthy, else `options[0]` |
+| Phase 3 review | An independent review found 15 issues, each reproduced: explicit `null` replaced by defaults, references from another workflow silently mis-wired, sparse arrays, multi-select flags, frontend initial values (IMAGECOMPARE), row and slot maximums missing from the types, async builds, proxy and builder edge cases, doc mismatches. All fixed with tests; it also rebuilt the corpus Anima export through `workflow()` byte for byte |
+| Bounded list types (§6.2, §6.6) | Fixed tuples with optional elements up to the maximum took the 7k-node bench to 0.90 s; `Bounded<open tuple, Length…>` with a shared length alias checks the same bounds in 0.41 s |
 | Input order (§9) | Frontend 1.55.17 `getOrderedInputSpecs` (`nodeDefOrderingUtil.ts`): listed required, listed optional, then remaining inputs in definition order; no `input_order`, definition order |
 | `stringify`/`parse` round trip (§7.5) | `JSON.stringify(2 ** 64 - 2048)` is `"18446744073709550000"`, an integer literal that `parse` reads as a different bigint; `toExponential()` (`1.844674407370955e+19`) round-trips exactly. Found by `defineSchema` on the numbers mock |
 | Non-finite numbers (§7.5) | `/object_info` is served by aiohttp `web.json_response`, whose default `json.dumps` writes `Infinity`/`NaN` (checked with the server's Python). None in the corpus dump today |

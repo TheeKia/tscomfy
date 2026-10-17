@@ -2,7 +2,7 @@
 // Schema sha256:912c3e024d49bfb8813480f3ed4a5428535800d9109209e2aa268eb611ecfa7f, ComfyUI 0.41.0.
 // Regenerate with: bun run generate:fixtures
 
-import type { In, Match, NodeHandle, NodeOptions, Out } from "@tscomfy/core";
+import type { Bounded, In, Match, NodeHandle, NodeOptions, Out } from "@tscomfy/core";
 
 /** Every node of the schema, by class type. Use through a typed schema's builder. */
 export interface Nodes {
@@ -64,7 +64,10 @@ export interface Nodes {
 
 /** Inputs of `MockAutogrowMatchType`. */
 export interface MockAutogrowMatchType$In<TValue extends string> {
-  readonly values: readonly [Out<TValue | "*">, ...Out<Match<NoInfer<TValue>>>[]];
+  readonly values: Bounded<
+    readonly [Out<TValue | "*">, ...Out<Match<NoInfer<TValue>>>[]],
+    Length1To4
+  >;
 }
 
 /** Slots of `MockAutogrowNames › values`. */
@@ -93,25 +96,87 @@ export interface MockAutogrowNames$Out extends MockAutogrowNames$Outputs, NodeHa
 
 /** Inputs of `MockAutogrowOptionalRequired`. */
 export interface MockAutogrowOptionalRequired$In {
-  readonly images: readonly [In<"IMAGE">, ...In<"IMAGE">[]];
+  readonly images: Bounded<readonly [In<"IMAGE">, ...In<"IMAGE">[]], Length1To4>;
 }
 
 /** Inputs of `MockAutogrowOptionalTemplate`. */
 export interface MockAutogrowOptionalTemplate$In {
-  readonly masks?: readonly In<"MASK">[];
+  readonly masks?: Bounded<readonly In<"MASK">[], Length0To8>;
 }
 
 /** Inputs of `MockAutogrowPrefix`. */
 export interface MockAutogrowPrefix$In {
-  readonly images: readonly [In<"IMAGE">, ...In<"IMAGE">[]];
+  readonly images: Bounded<readonly [In<"IMAGE">, ...In<"IMAGE">[]], Length1To50>;
 }
 
 /** Inputs of `MockAutogrowPrefixOptional`. */
 export interface MockAutogrowPrefixOptional$In {
   /** Default: `""`. */
   readonly prompt?: string | In<"STRING">;
-  readonly ref_images?: readonly In<"IMAGE">[];
+  readonly ref_images?: Bounded<readonly In<"IMAGE">[], Length0To4>;
 }
+
+/** Allowed list lengths. */
+export type Length0To4 = 0 | 1 | 2 | 3 | 4;
+
+/** Allowed list lengths. */
+export type Length0To8 = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+/** Allowed list lengths. */
+export type Length1To4 = 1 | 2 | 3 | 4;
+
+/** Allowed list lengths. */
+export type Length1To50 =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20
+  | 21
+  | 22
+  | 23
+  | 24
+  | 25
+  | 26
+  | 27
+  | 28
+  | 29
+  | 30
+  | 31
+  | 32
+  | 33
+  | 34
+  | 35
+  | 36
+  | 37
+  | 38
+  | 39
+  | 40
+  | 41
+  | 42
+  | 43
+  | 44
+  | 45
+  | 46
+  | 47
+  | 48
+  | 49
+  | 50;
 
 /** Socket types. */
 export type ValueTypes = "FLOAT" | "INT";

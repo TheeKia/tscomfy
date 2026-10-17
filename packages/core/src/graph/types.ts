@@ -36,6 +36,12 @@ export type Match<T extends string> = "*" extends T ? string : T | "*";
  */
 export type OptionList = "COMBO (option list)";
 
+/**
+ * A list type of a limited length: `T` with `length` one of `L` (§6.2). Generated types use it
+ * for Autogrow slots and DynamicGroup rows, whose count the backend bounds.
+ */
+export type Bounded<T extends readonly unknown[], L extends number> = T & { readonly length: L };
+
 /** What a node without outputs returns. */
 export interface NodeHandle {
   readonly id: NodeId;

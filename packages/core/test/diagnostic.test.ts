@@ -41,6 +41,16 @@ async function collision(): Promise<readonly Diagnostic[]> {
   return exportApi(built).diagnostics;
 }
 
+/** Exports an Autogrow with more slots than it has. */
+async function tooManySlots(): Promise<readonly Diagnostic[]> {
+  const schema = looseSchema(await readMockObjectInfo("autogrow"));
+  const built = workflow(schema, ({ n, raw }) => {
+    const image = raw("MockImageSource").output(0);
+    n["MockAutogrowOptionalRequired"]?.({ images: Array.from({ length: 5 }, () => image) });
+  });
+  return exportApi(built).diagnostics;
+}
+
 const malformed = async (): Promise<readonly Diagnostic[]> =>
   normalizeObjectInfo(await readMockObjectInfo("malformed")).diagnostics;
 
@@ -86,6 +96,7 @@ const PRODUCERS: Record<CoreCode, Producer> = {
     path: ["MockBadInputSpecs", "input", "required", "unknown_v3_type", 0],
   },
   E_INPUT_KEY_COLLISION: { produce: collision, path: ["5", "inputs", "format.codec"] },
+  E_TOO_MANY_DYNAMIC_INPUTS: { produce: tooManySlots, path: ["2", "inputs", "images"] },
   W_INVALID_INPUT_OPTION: {
     produce: malformed,
     path: ["MockBadInputSpecs", "input", "required", "options_not_object", 1],

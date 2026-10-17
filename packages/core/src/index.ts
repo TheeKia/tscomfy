@@ -33,7 +33,16 @@ export type {
   Workflow,
 } from "./graph/graph.ts";
 export { isOutputRef } from "./graph/output-ref.ts";
-export type { In, Match, NodeHandle, NodeId, NodeOptions, OptionList, Out } from "./graph/types.ts";
+export type {
+  Bounded,
+  In,
+  Match,
+  NodeHandle,
+  NodeId,
+  NodeOptions,
+  OptionList,
+  Out,
+} from "./graph/types.ts";
 export { workflow } from "./graph/workflow.ts";
 export { parse, type ParseResult } from "./json/parse.ts";
 export { stringify } from "./json/stringify.ts";

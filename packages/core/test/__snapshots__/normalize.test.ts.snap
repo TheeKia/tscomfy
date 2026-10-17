@@ -1525,14 +1525,12 @@ exports[`snapshots combos 1`] = `
         "category": "mock/combos",
         "classType": "MockComboMultiselect",
         "deprecated": false,
-        "description": "A multi-select combo: its value is a list, sent wrapped as {"__value__": [...]}.",
+        "description": "Multi-select flags: both (V3, a multi-select widget that starts empty), multiselect alone (the frontend draws a single combo), multi_select alone (the backend validates a single value).",
         "displayName": "Mock Combo Multiselect",
         "experimental": false,
         "inputs": [
           {
-            "default": [
-              "red",
-            ],
+            "default": [],
             "form": "combo",
             "kind": "combo",
             "lazy": false,
@@ -1542,6 +1540,50 @@ exports[`snapshots combos 1`] = `
               "red",
               "green",
               "blue",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
+          {
+            "default": [
+              "a",
+            ],
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": true,
+            "name": "legacy_multi",
+            "options": [
+              "a",
+              "b",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
+          {
+            "default": "x",
+            "form": "combo",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "frontend_multi",
+            "options": [
+              "x",
+              "y",
             ],
             "rawLink": false,
             "remote": false,
@@ -1643,7 +1685,7 @@ exports[`snapshots combos 1`] = `
             "upload": false,
           },
           {
-            "default": 0,
+            "default": "auto",
             "form": "combo",
             "kind": "combo",
             "lazy": false,
@@ -4958,6 +5000,10 @@ exports[`snapshots widget-types 1`] = `
             "widget": "COLORS",
           },
           {
+            "default": [
+              "",
+              "",
+            ],
             "kind": "value",
             "lazy": false,
             "name": "compare",

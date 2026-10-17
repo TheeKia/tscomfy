@@ -2,7 +2,7 @@
 // Schema sha256:9715cc9cd8e84d1c805f28ca8e05d406b6a7219453bcdb4a948bd60b2441175a, ComfyUI 0.41.0.
 // Regenerate with: bun run generate:fixtures
 
-import type { In, NodeOptions, OptionList, Out } from "@tscomfy/core";
+import type { Bounded, In, NodeOptions, OptionList, Out } from "@tscomfy/core";
 
 /** Every node of the schema, by class type. Use through a typed schema's builder. */
 export interface Nodes {
@@ -45,7 +45,10 @@ export interface MockDynamicGroup$Loras$Row {
 export interface MockDynamicGroup$In {
   readonly model: In<"MODEL">;
   /** One row per LoRA. */
-  readonly loras: readonly [MockDynamicGroup$Loras$Row, ...MockDynamicGroup$Loras$Row[]];
+  readonly loras: Bounded<
+    readonly [MockDynamicGroup$Loras$Row, ...MockDynamicGroup$Loras$Row[]],
+    Length1To20
+  >;
 }
 
 /** Inputs of `MockDynamicGroupOptional › replacements`. */
@@ -60,7 +63,7 @@ export interface MockDynamicGroupOptional$Replacements$Row {
 export interface MockDynamicGroupOptional$In {
   /** Default: `""`. */
   readonly text?: string | In<"STRING">;
-  readonly replacements?: readonly MockDynamicGroupOptional$Replacements$Row[];
+  readonly replacements?: Bounded<readonly MockDynamicGroupOptional$Replacements$Row[], Length0To5>;
 }
 
 /** Inputs of `MockDynamicGroupOptionalMin › rows`. */
@@ -71,11 +74,40 @@ export interface MockDynamicGroupOptionalMin$Rows$Row {
 
 /** Inputs of `MockDynamicGroupOptionalMin`. */
 export interface MockDynamicGroupOptionalMin$In {
-  readonly rows: readonly [
-    MockDynamicGroupOptionalMin$Rows$Row,
-    ...MockDynamicGroupOptionalMin$Rows$Row[],
-  ];
+  readonly rows: Bounded<
+    readonly [MockDynamicGroupOptionalMin$Rows$Row, ...MockDynamicGroupOptionalMin$Rows$Row[]],
+    Length1To3
+  >;
 }
+
+/** Allowed list lengths. */
+export type Length0To5 = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Allowed list lengths. */
+export type Length1To20 =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20;
+
+/** Allowed list lengths. */
+export type Length1To3 = 1 | 2 | 3;
 
 /** Combo options. */
 export type LoraName = "lora-a.safetensors" | "lora-b.safetensors";

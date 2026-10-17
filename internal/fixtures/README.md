@@ -24,7 +24,9 @@ mock here (the regression test) before fixing it.
 ## `mocks/workflows/api/`
 
 Each file is the prompt the ComfyUI frontend would send for one graph over a mock schema, written
-by hand from the frontend's rules (docs/plan.md §7.4). The parity tests in
+by hand from the frontend's rules (docs/plan.md §7.4), apart from the differences documented there:
+optional widgets and dynamic combos left out stay out (node 8 of `dynamic-combo.json`), and
+DynamicGroup, which frontend 1.55.17 doesn't handle, follows the backend's keys. The parity tests in
 `packages/codegen/test/parity.test.ts` build the same graph and must export it byte for byte.
 Adding a file means adding its name to `MOCK_API_WORKFLOW_NAMES`; a test enforces this.
 
@@ -48,7 +50,7 @@ Node class names start with `Mock` unless the name itself is the thing being tes
 | `accepts.json` | One input per link rule and one output per output kind, for the `accepts` table run against both `accepts()` and the generated types |
 | `empty.json` | An empty response: no nodes |
 | `basic-pipeline.json` | A txt2img pipeline with realistic fields, and a seed node whose output feeds the sampler's seed widget: legacy combos, widgets with defaults, seed max 2⁶⁴−1, multi-output loader, output node, hidden inputs |
-| `combos.json` | Legacy `[[…]]` and v2 `["COMBO",{options}]` forms, numeric, mixed and boolean options, a default that is not an option, a falsy default (the frontend sends the first option instead), empty lists, upload and remote combos, multiselect with a list default, option-list outputs, a custom widget-like type that is not a COMBO |
+| `combos.json` | Legacy `[[…]]` and v2 `["COMBO",{options}]` forms, numeric, mixed and boolean options, a default that is not an option, a falsy default (the frontend sends the first option instead), empty lists, upload and remote combos, the three multi-select flag combinations, option-list outputs, a custom widget-like type that is not a COMBO |
 | `dynamic-combo.json` | `COMFY_DYNAMICCOMBO_V3`: options without inputs, required and optional option inputs, three levels of nesting (`format.codec.encoding`), a top-level name colliding with a nested one, option keys with spaces and brackets, Autogrow and MatchType inside options, an optional dynamic combo, an option input whose flattened key equals another input's name |
 | `autogrow.json` | `COMFY_AUTOGROW_V3`: prefix form (min 1 and min 0), names form with a comma-union template, an optional Autogrow whose template sits in `optional`, an optional Autogrow with a required template, MatchType slots |
 | `dynamic-group.json` | `COMFY_DYNAMICGROUP_V3`: required group with mixed widget fields, optional group with required and optional fields, optional group with min 1 |

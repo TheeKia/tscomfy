@@ -338,7 +338,8 @@ describe("widgets", () => {
       widget: "COLORS",
       default: [],
     });
-    expect(inputOf(node, "compare")).not.toHaveProperty("default");
+    // IMAGECOMPARE ignores the server default; the frontend starts it at ["", ""].
+    expect(inputOf(node, "compare")).toMatchObject({ default: ["", ""] });
     expect(inputOf(node, "curve")).toMatchObject({
       kind: "socket",
       type: { kind: "named", name: "CURVE" },
@@ -388,7 +389,11 @@ describe("combos", () => {
     expect(inputOf(upload, "upload")).toMatchObject({ upload: true, remote: false });
     expect(inputOf(upload, "remote")).toMatchObject({ upload: true, remote: true, options: [] });
     const multi = await nodeOf("combos", "MockComboMultiselect");
-    expect(inputOf(multi, "tags")).toMatchObject({ multiselect: true, default: ["red"] });
+    // A multi-select widget starts empty; multiselect alone is a single combo in the frontend;
+    // multi_select alone is validated as a single value by the backend.
+    expect(inputOf(multi, "tags")).toMatchObject({ multiselect: true, default: [] });
+    expect(inputOf(multi, "legacy_multi")).toMatchObject({ multiselect: true, default: ["a"] });
+    expect(inputOf(multi, "frontend_multi")).toMatchObject({ multiselect: false, default: "x" });
     const empty = await nodeOf("combos", "MockComboEmpty");
     expect(empty.inputs.map((input) => input.kind === "combo" && input.options.length)).toEqual([
       0, 0,
