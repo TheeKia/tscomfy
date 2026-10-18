@@ -33,8 +33,8 @@ missing class is sent without `class_type`.
 - **Big integers stay exact**, which is better than parity: the frontend's parser rounds them.
 - **`toUi` writes a flat graph**, format 0.4 with tuple links, every slot in the frontend's order,
   controls set to `fixed` so the frontend doesn't change a seed after queueing. Subgraph
-  interiors come back as plain nodes. What the format can't carry is reported
-  (`W_UI_VALUE_LOST`, `W_UNKNOWN_UI_CLASS`, `W_UNSAFE_INTEGER`, `W_QUEUE_TIME_VALUE`). One
+  interiors come back as plain nodes. What the format can't carry is reported (the codes and
+  their cases are in `docs/diagnostics.md`). One
   difference is not reported, since it is what the frontend does for any node added by hand:
   optional widgets left out of the workflow are sent with their initial values.
 - **Layout is a separate package**, `@tscomfy/layout`, so `core` stays small: `toUi` takes

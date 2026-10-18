@@ -2,7 +2,7 @@
 
 Hand-written mock data for tests. Everything here is written by us: no real server dumps, no
 personal data, no text copied from upstream projects. The shapes follow what ComfyUI actually
-serves; the coverage list below comes from analysing real `/object_info` output.
+serves; the coverage list below comes from analyzing real `/object_info` output.
 
 Real data lives in the gitignored `corpus/` directory and is used only by local corpus tests
 (see `corpus/README.md` and docs/plan.md §13).
@@ -45,7 +45,7 @@ UI workflows as the frontend saves them, all over the `basic-pipeline` mock sche
 same name in `ui-api/` the prompt frontend 1.55.17 itself builds for each, captured with
 `scripts/frontend.ts` (below). They are written by us: most started as probes of the frontend's
 behavior, with mock file names in place of real ones. `importUi` must give each prompt byte for
-byte (`packages/core/test/ui.test.ts`), and the transpiled modules in
+byte (`packages/core/test/ui-import.test.ts`), and the transpiled modules in
 `packages/codegen/test/generated/transpiled/ui/` must rebuild it. Adding a file means adding its
 name to `MOCK_UI_WORKFLOW_NAMES`; a test enforces this.
 
@@ -78,12 +78,13 @@ means adding its name to `MOCK_UI_EXTENSION_WORKFLOW_NAMES`.
 
 `mocks/workflows/ui-export/` holds, under the same names, the prompt the frontend builds when it
 loads `toUi`'s export of each import: the oracle for the export. The export is deterministic, so
-a change to `toUi` that fails `ui.test.ts` there means capturing them again with the script below.
+a change to `toUi` that fails `ui-export.test.ts` there means capturing them again with the script below.
 
 ## `scripts/frontend.ts`
 
-`bun internal/fixtures/scripts/frontend.ts [--object-info FILE] [--remote-files JSON] --out DIR
-UI.json…` loads UI workflows into the local server's own frontend in a headless Chromium
+`bun internal/fixtures/scripts/frontend.ts [--server URL] [--object-info FILE] [--remote-files JSON]
+--out DIR UI.json…` loads UI workflows into the server's own frontend (`--server`, by default the
+local one) in a headless Chromium
 (`TSCOMFY_CHROME`, or the one Playwright caches) and writes the prompt `graphToPrompt` builds for
 each, without queueing it: every request but a GET is answered by the script and never reaches
 the server, and so are the server's file lists (`/internal/files/…`, which remote combos fetch:

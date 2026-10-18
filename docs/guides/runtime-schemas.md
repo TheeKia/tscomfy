@@ -55,5 +55,6 @@ to know:
 - The server must allow your page's origin (ComfyUI's `--enable-cors-header`) for `fetch` to
   read `/object_info`.
 - Loading a generated schema module (`defineSchema`) throws on a runtime without `JSON.parse`
-  source-text access, rather than round big integers silently. `parse` and the normalizer still
+  source-text access when the schema holds integers beyond 2^53 (every real one does: seed
+  bounds), rather than round them silently. `parse` and the normalizer still
   work there, and report `W_PRECISION_LOSS` for each integer that may have been rounded.

@@ -82,7 +82,8 @@ tscomfy deliberately fills only explicit schema defaults (plan §7.2).
   4. the first input valid for both;
   5. otherwise drop the input, with a warning.
 
-  Resolution recurses, so an unconnected widget input means the value is dropped. Validity
+  Resolution recurses. When it ends at nothing, a socket input is left out, while a widget input
+  sends its widget's own value (plan §12; `docs/research/ui-format.md`). Validity
   (`LiteGraphGlobal.ts` `isValidConnection`) treats `*`/`""` as wildcards and splits comma types.
   Input index order: socket-only inputs first, then widget-backed sockets.
 - A muted or bypassed SubgraphNode nested inside another subgraph still has its inner nodes

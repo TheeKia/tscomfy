@@ -69,7 +69,8 @@ n.SaveImage({ images }, { title: "Final", id: "save" });
 ```
 
 - `title`: sent as `_meta.title` (otherwise the display name) and shown in the UI.
-- `id`: a node id of your choosing, instead of the next of `"1"`, `"2"`, …. Ids are strings.
+- `id`: a node id of your choosing, instead of the next free one of `"1"`, `"2"`, … Ids are
+  strings.
 - `mode`: `"bypass"` or `"mute"`, see [graph operations](graph-operations.md).
 
 ## Dynamic inputs
@@ -111,7 +112,8 @@ const image = n.ComfySwitchNode({ switch: useRefiner, on_true: refined, on_false
 ## Lists and JSON values
 
 Values are JSON (`string`, `number`, `bigint`, `boolean`, `null`, arrays and objects), plus
-output references as whole inputs, list elements or row fields. A list-valued widget is sent
+output references: as a whole input, a DynamicGroup row's field, or an element of an Autogrow's
+slot list (the only lists that hold links). A list-valued widget is sent
 wrapped as `{"__value__": [...]}`, since the backend reads a bare list as a link; you write the
 plain list. An output reference nested inside a JSON value throws: no input can carry one.
 
@@ -155,8 +157,10 @@ workflow(local, ({ n, raw }) => {
 });
 ```
 
-Its inputs are wire keys, sent exactly as given: no defaults, no flattening. `output(slot)` is an
-`Out<"*">`, which fits any input. Validation still checks raw nodes against the schema, so an
+Its inputs are wire keys, sent as given: no defaults, no flattening. Only an output reference
+(`.output(slot)`, or a node's result) makes a link, as everywhere; a list is a value, sent
+wrapped as `{"__value__": [...]}` (so `["1", 0]` is not a link). `output(slot)` is an `Out<"*">`,
+which fits any input. Validation still checks raw nodes against the schema, so an
 unknown class is an error at export; use `exportApi` (see
 [exporting and validating](export-and-validate.md)) when you mean to send one anyway.
 

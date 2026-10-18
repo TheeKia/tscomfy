@@ -22,5 +22,5 @@ bun run check                            # has the server changed since generate
 
 It uses the first checkpoint and the first two LoRAs the server lists (the second one bypassed),
 and only nodes every ComfyUI install has. Like [txt2img](../txt2img), it runs inside this
-repository and generates with `--import-extension .ts` so Bun and `tsc` run the sources as they
-are; `src/comfy/local` is never committed.
+repository and generates with `--import-extension .ts` so Bun runs the sources and `tsc` checks them
+as they are; `src/comfy/local` is never committed.

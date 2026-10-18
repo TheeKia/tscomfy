@@ -26,8 +26,8 @@ tscomfy generate --url http://127.0.0.1:8188 --out src/comfy/local
 | `--url <server>` | The server. tscomfy sends only `GET /object_info` and `GET /system_stats` (for the ComfyUI version; optional), under the URL's path and with its query. Credentials (`http://user:pw@host`) and the query are sent but never written or shown. |
 | `--from <file>` | A saved `/object_info` response instead of a server, such as the `object_info.json` a previous run wrote. |
 | `--out <dir>` | The directory to write into. Created if needed. |
-| `--name <identifier>` | The exported constant. Default: the directory name, camelCased (`my-server` → `myServer`). Names the transpiled modules need (`workflow`, `Workflow`, `NodesOf`, `n`, `raw`) and reserved words are refused. |
-| `--import-extension .js\|.ts` | How `index.ts` imports `nodes.ts`. `.js` (default) for `tsc` and bundlers; `.ts` to run the sources directly with Bun. |
+| `--name <identifier>` | The exported constant. Default: the directory name, camelCased (`my-server` → `myServer`). Names that aren't ASCII identifiers, reserved words, and the names the generated and transpiled modules declare themselves (`defineSchema`, `TypedSchema`, `Nodes`, `workflow`, `Workflow`, `NodesOf`, `n`, `raw`) are refused. |
+| `--import-extension .js\|.ts` | How `index.ts` imports `nodes.ts`. `.js` (default) for `tsc` and bundlers; `.ts` to run the sources directly with Node or Bun. |
 | `--comfy-version <version>` | With `--from`: the ComfyUI version to record. Default: the one recorded next to a snapshot `generate` wrote. |
 | `--verbose` | List every diagnostic, rather than five per node pack. |
 | `--quiet` | Print only errors, to stderr. |

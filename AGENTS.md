@@ -32,6 +32,7 @@ published on npm. New work starts from a decision in the plan and its ADR.
 | `internal/fixtures` | `@tscomfy/fixtures` (private): mocks, the local corpus, and `scripts/frontend.ts`, which asks the server's own frontend what it would queue for a UI workflow |
 | `internal/bench` | `@tscomfy/bench` (private): `bench:types`, synthetic schemas built from the mocks |
 | `internal/api-report` | `@tscomfy/api-report` (private): writes and checks `docs/api/` from the packages' declarations |
+| `internal/pack-test` | `@tscomfy/pack-test` (private): `test:pack`, the packages packed and installed as a user gets them |
 | `examples/` | Example projects, workspace members outside `tsc -b` and lint; their generated types are gitignored, and their tests generate from the mocks |
 | `CONTRIBUTING.md` | How-to: scripts, data, common changes (a code, a mock, a package), releasing |
 | `.github/workflows/` | CI: `check.yml` (the gate on pushes and PRs), `release.yml` (publishes on a version tag) |
@@ -67,10 +68,10 @@ These come from the project owner. Follow them unless told otherwise.
 Enforced by package boundaries, lint, or review:
 
 - Dependencies point downward: `cli` → `codegen` → `core`, and `layout` → `core`. No package has
-  runtime dependencies.
-- `core`, `codegen` and `layout` are runtime-agnostic: no `node:*`, `bun`, `bun:*` or DOM APIs. oxlint
-  enforces this for `packages/{core,codegen,layout}/src/**`. `types: []` alone is not a guard, because
-  Bun's types pull in `@types/node`.
+  a runtime dependency outside the project (ADR-0005).
+- `core`, `codegen` and `layout` are runtime-agnostic: no `node:*`, `bun`, `bun:*` or DOM APIs.
+  oxlint bans those imports in `packages/{core,codegen,layout}/src/**`, and `lib: ["es2024"]` keeps
+  out the globals. `types: []` alone is not a guard, because Bun's types pull in `@types/node`.
 - Only `cli` does I/O. `codegen` returns `{ path, contents }[]`.
 - Only `packages/core/src/object-info/` knows the raw `/object_info` format. Everything else uses
   the normalized `Schema`.
@@ -86,7 +87,7 @@ Enforced by package boundaries, lint, or review:
 
 ```sh
 bun install
-bun run check     # tsc -b, lint, format check, tests: run before declaring work done
+bun run check     # tsc -b, lint, format check, API reports, tests: run before declaring work done
 bun run test      # tests against source, no build needed (skips corpus tests)
 bun run test:corpus  # corpus tests against your local real data
 bun run generate:fixtures  # after changing codegen: regenerate packages/codegen/test/generated (types and transpiled prompts)

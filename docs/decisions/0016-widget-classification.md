@@ -4,7 +4,7 @@ Status: accepted, 2026-10-17; updated 2026-10-18 (extension widgets, saved and s
 
 ## Context
 
-Whether an input takes a value or only a link decides its generated type and whether the exporter sends a value. `/object_info` doesn't say so directly. The plan modelled five widget kinds (INT, FLOAT, STRING, BOOLEAN, COMBO) and treated every other type as a socket. A real dump showed that this is not enough:
+Whether an input takes a value or only a link decides its generated type and whether the exporter sends a value. `/object_info` doesn't say so directly. The plan modeled five widget kinds (INT, FLOAT, STRING, BOOLEAN, COMBO) and treated every other type as a socket. A real dump showed that this is not enough:
 
 - 25 inputs use other widgets of the frontend's core registry (COLOR, BOUNDING_BOX, COLORS, CURVE, VIDEO_EDIT, …), mostly `socketless`, with object or list defaults. As sockets they could never be set.
 - 12 inputs carry `widgetType`, which separates the widget from the socket type: `frame_rate` is a FLOAT widget on a `FLOAT,INT` socket; Painter's `mask` is a PAINTER widget on a STRING.

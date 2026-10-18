@@ -159,7 +159,7 @@ version may change the API.
 | `packages/` | The published packages |
 | `examples/` | Example projects, typed by your own server |
 | `internal/fixtures` | Test data: hand-written mocks, and the local real-data corpus (never committed) |
-| `internal/bench`, `internal/api-report` | The type-checking budget, and the API-surface reports in `docs/api/` |
+| `internal/bench`, `internal/api-report`, `internal/pack-test` | The type-checking budget, the API-surface reports in `docs/api/`, and the packages tested as a user installs them |
 | `docs/` | Guides, diagnostics, API reports, the design, decisions and research |
 | `AGENTS.md` | Working agreements, architecture rules and conventions, for people and AI agents |
 

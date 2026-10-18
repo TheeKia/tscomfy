@@ -13,7 +13,7 @@ Use `typescript@7.0.x` for type-checking and emit. Fall back to TypeScript 6 onl
 ## Consequences
 
 - About 10x faster checks; the full 1,758-node generated schema type-checks in 0.11 s.
-- No compiler-API tooling (API Extractor and similar). Codegen writes strings, so it needs no compiler API; API-surface checks will snapshot `.d.ts` output instead.
+- No compiler-API tooling (API Extractor and similar). Codegen writes strings, so it needs no compiler API; API-surface checks snapshot `.d.ts` output instead (ADR-0022).
 - oxlint's type-aware mode (tsgolint) is built on the same compiler, so lint and tsc agree.
 
 ## Evidence

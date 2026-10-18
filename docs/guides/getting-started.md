@@ -10,7 +10,8 @@ it. It assumes you know ComfyUI itself; no knowledge of tscomfy's internals is n
   dependencies and use no runtime-specific API, so they work in Bun, Node, Deno, browsers and
   edge runtimes. They need ES2024 and `JSON.parse` source-text access, which keeps seeds and
   bounds beyond 2^53 exact (tested with Bun 1.4 and Node 24 and 26). On a runtime without it,
-  loading a generated schema throws a clear error instead of loading rounded numbers.
+  loading a generated schema that holds such integers (every real one does: seed bounds) throws
+  a clear error instead of loading rounded numbers.
 - **TypeScript 5.9 or later** with `strict` on (tested with 5.9, 6.0 and 7.0), under
   `module: "nodenext"` or `moduleResolution: "bundler"`.
 
@@ -71,15 +72,15 @@ const txt2img = workflow(local, ({ n }) => {
 `workflow(schema, build)` calls `build` once with `n`, which has a function per node class.
 Each call adds a node and returns its outputs: one output is returned as is, several as a tuple
 you can destructure (or read by name: `ckpt.CLIP`). Inputs with a default in the schema
-(`steps`, `cfg`, `denoise`, `batch_size`, `filename_prefix`) are optional and filled in on
-export.
+(`seed`, `steps`, `cfg`, `denoise`, `batch_size`, `filename_prefix`) are optional and filled in
+on export.
 
 Every one of these is a compile error:
 
 ```ts
 n.KSampler({ model: latent /* Out<"LATENT"> is not In<"MODEL"> */, … });
 n.KSampler({ …, sampler_name: "eular" /* not one of your server's samplers */ });
-n.KSampler({ model, positive, negative, latent_image /* missing: seed, sampler_name, scheduler */ });
+n.KSampler({ model, positive, negative, latent_image /* missing: sampler_name, scheduler */ });
 n.CLIPTextEncode({ clip, text: "…", strength: 1 /* no such input */ });
 ```
 

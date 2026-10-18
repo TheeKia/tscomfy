@@ -26,7 +26,9 @@ export const portrait: Workflow<NodesOf<typeof local>> = workflow(local, ({ n })
 });
 ```
 
-Running it and exporting with `toApi` gives the same prompt back. The code is formatted as oxfmt
+Running it and exporting with `toApi` gives the same prompt back, for a prompt the frontend
+wrote: node ids that aren't integers (`40:31`) may come back in another order, and what no
+program can build (a cycle, a link to a missing node) is left out and reported. The code is formatted as oxfmt
 (and Prettier) would format it, nodes come in dependency order, variables are named after the
 outputs they hold (`latent`, `conditioning2`), a node used once is written inline at its use
 (`--no-inline` turns that off), and inputs equal to their default are left out. Ids and titles

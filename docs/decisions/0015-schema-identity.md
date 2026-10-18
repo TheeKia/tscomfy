@@ -20,7 +20,7 @@ Generated files carry a schema hash in their header, and `tscomfy check` needs a
   files, which change with every upload, and the types already take any string there.
 - `normalizeObjectInfo` stays cheap and synchronous for runtime users who never need a hash.
 - The normalizer must build objects in a fixed field order, because `stringify` keeps insertion order.
-- About 60 lines of SHA-256 to maintain, tested against published vectors and `Bun.CryptoHasher`.
+- About 100 lines of SHA-256 to maintain, tested against published vectors and `Bun.CryptoHasher`.
 
 ## Alternatives
 
