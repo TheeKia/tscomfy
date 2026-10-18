@@ -82,7 +82,7 @@ and `E_INVALID_LINK` (the input is left out).
 
 | Code | Meaning | What happens |
 |---|---|---|
-| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. From `importUi`: a linked node of a class the schema doesn't have, or of one the frontend can't create (see `W_UNKNOWN_UI_CLASS`). | The node is kept as a raw node with its wire keys, so it exports as it came. `importUi` keeps the class, the links and the values saved by name; the frontend sends such a node without a class, which the backend rejects. |
+| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, the key of a widget the frontend never sends (display-only, or CameraAngle's optional `view`), which the generated types have no input for. From `importUi`: a linked node of a class the schema doesn't have, or of one the frontend can't create (see `W_UNKNOWN_UI_CLASS`). | The node is kept as a raw node with its wire keys, so it exports as it came. `importUi` keeps the class, the links and the values saved by name; the frontend sends such a node without a class, which the backend rejects. |
 
 ## Importing UI workflows
 

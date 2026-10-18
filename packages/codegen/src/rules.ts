@@ -47,13 +47,11 @@ export function isRequired(input: InputDef): boolean {
       return input.template.required && input.min > 0 && input.slots.length > 0;
     case "dynamicGroup":
       return input.min > 0;
-    case "combo":
-      // A forceInput combo has no widget, so nothing fills its default in.
-      return input.required && (input.default === undefined || input.forceInput === true);
     case "int":
     case "float":
     case "string":
     case "boolean":
+    case "combo":
     case "value":
       return input.required && input.default === undefined;
     case "socket":
@@ -67,12 +65,11 @@ export function isRequired(input: InputDef): boolean {
 /** Whether the exporter sends a value for the input when none is given. */
 export function hasDefault(input: InputDef): boolean {
   switch (input.kind) {
-    case "combo":
-      return input.default !== undefined && input.forceInput !== true;
     case "int":
     case "float":
     case "string":
     case "boolean":
+    case "combo":
     case "value":
       return input.default !== undefined;
     case "socket":

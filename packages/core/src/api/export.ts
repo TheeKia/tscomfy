@@ -19,6 +19,7 @@ import type { InputDef, NodeDef } from "../schema/types.ts";
 import { validateApi } from "../validate/validate-api.ts";
 import { applyModes, type ModalNode } from "./modes.ts";
 import type { ApiNode, ApiPrompt } from "./prompt.ts";
+import { defaultWire, widgetWire } from "./wire.ts";
 
 /** Options for {@link toApi} and {@link exportApi}. */
 export interface ToApiOptions {
@@ -136,70 +137,32 @@ class NodeExport {
       );
     }
     // Inputs the schema doesn't know are passed through after the rest; validation flags them.
-    for (const [name, value] of Object.entries(given)) {
-      if (!known.has(name))
-        this.#add(isOutputRef(value) ? "socket" : "widget", name, encode(value), false);
-    }
+    this.#unknown(given, known, "", false);
     return Object.fromEntries([...this.#widgets, ...this.#sockets, ...this.#optionSockets]);
   }
 
   /** Adds one input at `key`; `inOption` is true inside a dynamic-combo option. */
   #input(input: InputDef, value: InputValue | undefined, key: string, inOption: boolean): void {
     switch (input.kind) {
-      case "socket":
-      case "matchType":
-      case "unknown":
-        if (value !== undefined) {
-          this.#add(isOutputRef(value) ? "socket" : "widget", key, encode(value), inOption);
-        }
-        return;
-      case "combo":
-        // No widget, so no default: sent only as given, among the sockets when it is a link.
-        if (input.forceInput === true) {
-          if (value !== undefined) {
-            this.#add(isOutputRef(value) ? "socket" : "widget", key, encode(value), inOption);
-          }
-          return;
-        }
-        if (!sendsInputValue(input)) {
-          if (value !== undefined) this.#passThrough(key, value, inOption);
-          return;
-        }
-        this.#widget(input, value, key, inOption);
-        return;
       case "int":
       case "float":
       case "string":
       case "boolean":
-        // An optional input whose widget the frontend never sends (CameraAngle's `view`) gets no
-        // default; a value given for it passes through.
-        if (!sendsInputValue(input)) {
+      case "combo":
+      case "value":
+        // No widget (a forceInput combo), or one the frontend never sends (a display-only widget,
+        // CameraAngle's optional `view`): nothing is filled in, and a value given passes through.
+        if ((input.kind === "combo" && input.forceInput === true) || !sendsInputValue(input)) {
           if (value !== undefined) this.#passThrough(key, value, inOption);
           return;
         }
         this.#widget(input, value, key, inOption);
         return;
-      case "value": {
-        // A display-only widget sends nothing; a value given for one passes through, and
-        // validation reports it.
-        if (!sendsInputValue(input)) {
-          if (value !== undefined) this.#passThrough(key, value, inOption);
-          return;
-        }
-        const sent = value === undefined ? input.default : value;
-        if (sent === undefined) return;
-        const encoded = encode(sent);
-        // The frontend marks CURVE values with their type; other objects pass as they are.
-        this.#add(
-          "widget",
-          key,
-          input.widget === "CURVE" && sent !== null && !isOutputRef(sent)
-            ? { __type__: "CURVE", __value__: encodedValue(sent) }
-            : encoded,
-          inOption,
-        );
+      case "socket":
+      case "matchType":
+      case "unknown":
+        if (value !== undefined) this.#passThrough(key, value, inOption);
         return;
-      }
       case "dynamicCombo":
         this.#dynamicCombo(input, value, key, inOption);
         return;
@@ -212,16 +175,19 @@ class NodeExport {
     }
   }
 
-  /** A primitive widget: its value, or its default (the frontend's, §7.2) when none is given. */
-  #widget(
-    input: Extract<InputDef, { kind: "int" | "float" | "string" | "boolean" | "combo" }>,
-    value: InputValue | undefined,
-    key: string,
-    inOption: boolean,
-  ): void {
+  /**
+   * A widget: its value, as the frontend sends it, or its default (§7.2) when none is given. A
+   * linked widget keeps its widget's position.
+   */
+  #widget(input: InputDef, value: InputValue | undefined, key: string, inOption: boolean): void {
     // `null` is a value; only a missing input takes the default.
-    const sent = value === undefined ? input.default : value;
-    if (sent !== undefined) this.#add("widget", key, encode(sent), inOption);
+    const sent =
+      value === undefined
+        ? defaultWire(input)
+        : isOutputRef(value)
+          ? encode(value)
+          : widgetWire(input, encodedValue(value));
+    if (sent !== undefined) this.#add("widget", key, sent, inOption);
   }
 
   #dynamicCombo(
@@ -315,8 +281,8 @@ class NodeExport {
   }
 
   /**
-   * Keys inside a structured value that the schema doesn't know: passed through after the known
-   * ones, as unknown top-level inputs are; validation flags them.
+   * Keys the schema doesn't know, of the node or inside a structured value: passed through after
+   * the known ones; validation flags them.
    */
   #unknown(
     values: { readonly [key: string]: InputValue },
@@ -325,14 +291,7 @@ class NodeExport {
     inOption: boolean,
   ): void {
     for (const [name, value] of Object.entries(values)) {
-      if (!known.has(name)) {
-        this.#add(
-          isOutputRef(value) ? "socket" : "widget",
-          `${prefix}${name}`,
-          encode(value),
-          inOption,
-        );
-      }
+      if (!known.has(name)) this.#passThrough(`${prefix}${name}`, value, inOption);
     }
   }
 

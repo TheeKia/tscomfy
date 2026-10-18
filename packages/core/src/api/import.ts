@@ -12,6 +12,8 @@ import { isJsonArray, isJsonObject, type JsonObject, type JsonValue } from "../j
 import { definitionOf } from "../schema/lookup.ts";
 import type { TypedSchema } from "../schema/typed.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
+import { isWellFormedLink } from "./prompt.ts";
+import { groupKey } from "./wire.ts";
 
 /** What {@link importApi} returns. */
 export interface ApiImportResult<N> {
@@ -152,13 +154,7 @@ export function wireNode(
  * the list. `undefined` for a list that isn't a link.
  */
 function decode(value: JsonValue, link: Link): InputValue | undefined {
-  if (isJsonArray(value)) {
-    const [node, slot] = value;
-    if (value.length !== 2 || typeof node !== "string" || typeof slot !== "number")
-      return undefined;
-    if (!Number.isSafeInteger(slot) || slot < 0) return undefined;
-    return link(node, slot);
-  }
+  if (isJsonArray(value)) return isWellFormedLink(value) ? link(value[0], value[1]) : undefined;
   const wrapped = isJsonObject(value) ? value["__value__"] : undefined;
   if (isJsonObject(value) && Object.keys(value).length === 1 && isJsonArray(wrapped))
     return wrapped;
@@ -222,22 +218,20 @@ function fold(
         const rows = new Map<number, [string, InputValue][]>();
         for (const wireKey of Object.keys(wire)) {
           if (!wireKey.startsWith(prefix)) continue;
-          const rest = wireKey.slice(prefix.length);
-          const dot = rest.indexOf(".");
-          const index = rest.slice(0, dot);
-          const field = definition.fields.find((each) => each.name === rest.slice(dot + 1));
-          if (dot === -1 || !/^(?:0|[1-9][0-9]*)$/.test(index) || field === undefined) {
+          const at = groupKey(wireKey.slice(prefix.length));
+          const field = definition.fields.find((each) => each.name === at?.field);
+          if (at === undefined || field === undefined) {
             problem = `${wireKey} isn't a field of group ${key}`;
             continue;
           }
           // Checked before any list is built: a row past `max` can't be sent anyway.
-          if (Number(index) >= definition.max) {
+          if (at.row >= definition.max) {
             problem = `${wireKey} is in a row past the group's ${String(definition.max)}`;
             continue;
           }
-          const row = rows.get(Number(index)) ?? [];
+          const row = rows.get(at.row) ?? [];
           row.push([field.name, input(field, wireKey) ?? null]);
-          rows.set(Number(index), row);
+          rows.set(at.row, row);
         }
         if (rows.size === 0) return undefined;
         const count = Math.max(...rows.keys()) + 1;
@@ -254,9 +248,10 @@ function fold(
         });
       }
       case "value":
-        // The frontend never sends a display-only widget, so the exporter would drop the key.
+        // The frontend never sends a display-only widget, so the types have no input for it: a
+        // value given for one can only be kept raw.
         if (!sendsInputValue(definition) && Object.hasOwn(wire, key)) {
-          problem = `${key} is a display-only widget, which the exporter doesn't send`;
+          problem = `${key} is a display-only widget, which the frontend never sends and the types have no input for`;
           return undefined;
         }
         return unwrapCurve(definition.widget, take(key));
@@ -265,9 +260,9 @@ function fold(
       case "string":
       case "boolean":
       case "combo":
-        // Nor an optional input on a widget it never sends (CameraAngle's `view`).
+        // Nor for an optional input on a widget it never sends (CameraAngle's `view`).
         if (!sendsInputValue(definition) && Object.hasOwn(wire, key)) {
-          problem = `${key} is a widget the frontend doesn't send, which the exporter leaves out`;
+          problem = `${key} is a widget the frontend doesn't send, which the types have no input for`;
           return undefined;
         }
         return take(key);

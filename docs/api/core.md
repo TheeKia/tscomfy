@@ -246,6 +246,8 @@ export type ApiPrompt = {
 };
 /** Whether a wire value is a link, `[id, slot]` with a string id, as the backend's `is_link` reads it. */
 export declare function isApiLink(value: JsonValue | undefined): value is ApiLink;
+/** Whether a link can name an output: {@link isApiLink}, with a non-negative integer slot. */
+export declare function isWellFormedLink(value: JsonValue | undefined): value is ApiLink;
 ```
 
 ## `diagnostic/validation-error.d.ts`
@@ -826,8 +828,9 @@ export type ComboInput = WidgetBase & {
     /** Server order. May be empty (no model files installed, or a remote combo). */
     readonly options: readonly ComboOption[];
     /**
-     * What the frontend sends when no value is given: `[]` for a multi-select widget, the
-     * first option in place of a falsy default. Absent when the server states none.
+     * What the frontend sends when no value is given: `[]` for a multi-select widget, whatever the
+     * server states; otherwise the server's default, with the first option in place of a falsy one.
+     * Absent when the server states none, and for a `forceInput` combo, which has no widget.
      */
     readonly default?: ComboOption | readonly ComboOption[];
     /** The backend validates a list value element by element. */
@@ -847,7 +850,7 @@ export type ComboInput = WidgetBase & {
     readonly control?: boolean | string;
     /**
      * A legacy combo with `forceInput`: the frontend draws a socket and no widget, so it sends a
-     * link or nothing, and no default is filled in.
+     * link or nothing, and it has no default.
      */
     readonly forceInput?: true;
 };
@@ -969,7 +972,7 @@ export {};
 ## `validate/validate-api.d.ts`
 
 ```ts
-import type { ApiPrompt } from "../api/prompt.ts";
+import { type ApiPrompt } from "../api/prompt.ts";
 import { type Diagnostic } from "../diagnostic/diagnostic.ts";
 import { type JsonValue } from "../json/value.ts";
 import type { Schema } from "../schema/types.ts";

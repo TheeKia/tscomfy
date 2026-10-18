@@ -130,8 +130,9 @@ export type ComboInput = WidgetBase & {
   /** Server order. May be empty (no model files installed, or a remote combo). */
   readonly options: readonly ComboOption[];
   /**
-   * What the frontend sends when no value is given: `[]` for a multi-select widget, the
-   * first option in place of a falsy default. Absent when the server states none.
+   * What the frontend sends when no value is given: `[]` for a multi-select widget, whatever the
+   * server states; otherwise the server's default, with the first option in place of a falsy one.
+   * Absent when the server states none, and for a `forceInput` combo, which has no widget.
    */
   readonly default?: ComboOption | readonly ComboOption[];
   /** The backend validates a list value element by element. */
@@ -151,7 +152,7 @@ export type ComboInput = WidgetBase & {
   readonly control?: boolean | string;
   /**
    * A legacy combo with `forceInput`: the frontend draws a socket and no widget, so it sends a
-   * link or nothing, and no default is filled in.
+   * link or nothing, and it has no default.
    */
   readonly forceInput?: true;
 };

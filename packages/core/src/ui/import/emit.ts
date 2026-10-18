@@ -3,8 +3,9 @@
 // then its resolved links, as the wire carries them.
 
 import type { WireNode } from "../../api/import.ts";
+import { wrapList } from "../../api/wire.ts";
 import { frontendWidgets, SCRIPTED_WIDGETS, uncreatable } from "../../frontend/node.ts";
-import { isJsonArray, type JsonValue } from "../../json/value.ts";
+import type { JsonValue } from "../../json/value.ts";
 import { MODE_BYPASS, MODE_MUTE, nodeModeOf } from "../format.ts";
 import type { Id, UiNode } from "./file.ts";
 import { classOf, type Context, type Graph, type Loaded, nodeKey, VIRTUAL_NODES } from "./graph.ts";
@@ -154,7 +155,7 @@ export function wireOf(
       );
     }
     const named = node.named ?? (isNamedValues(node.values) ? node.values : {});
-    for (const [name, value] of Object.entries(named)) inputs.push([name, wrap(value)]);
+    for (const [name, value] of Object.entries(named)) inputs.push([name, wrapList(value)]);
   } else {
     if (SCRIPTED_WIDGETS.has(node.type)) {
       loaded.report(
@@ -177,7 +178,7 @@ export function wireOf(
       const value = values.get(widget.key);
       // The frontend sends a widget under its own name, which differs from the input's for a
       // name an earlier widget has (`width#1`) or a widget named by its type (`view`).
-      if (value !== undefined) inputs.push([widget.name, wrap(value)]);
+      if (value !== undefined) inputs.push([widget.name, wrapList(value)]);
     }
   }
   const placed = context.graph.placement.into.get(node.id);
@@ -201,7 +202,8 @@ export function wireOf(
       );
       continue;
     }
-    const value = "link" in resolved ? [resolved.link[0], resolved.link[1]] : wrap(resolved.value);
+    const value =
+      "link" in resolved ? [resolved.link[0], resolved.link[1]] : wrapList(resolved.value);
     // A link replaces a widget's value in place: a repeated key keeps its first position.
     inputs.push([slot.name, value]);
   }
@@ -212,11 +214,6 @@ export function wireOf(
 function linked(graph: Graph, id: Id): boolean {
   const { placement } = graph;
   return (placement.into.get(id)?.size ?? 0) > 0 || (placement.outgoing.get(id)?.length ?? 0) > 0;
-}
-
-/** A value for the wire: lists wrapped, since a bare list there is a link. */
-function wrap(value: JsonValue): JsonValue {
-  return isJsonArray(value) ? { __value__: value } : value;
 }
 
 function isArrayIndex(key: string): boolean {

@@ -675,8 +675,8 @@ exporter: dynamic-combo options into `{ option, inputs }` (or the bare key), Aut
 list when they are the first ones in order (else by slot name), DynamicGroup keys into rows,
 `{"__value__": [...]}` into the list and CURVE's `{"__type__", "__value__"}` into its value. A
 node of an unknown class, or one whose keys don't fold back (rows missing in between or at or past
-the group's `max`, keys under a dynamic combo's unknown option, a key two inputs would send, a
-display-only widget's key), is kept as a raw node with its wire keys (`W_IMPORTED_AS_RAW`), so it
+the group's `max`, keys under a dynamic combo's unknown option, a key two inputs would send, the
+key of a widget the frontend never sends, which the types have no input for), is kept as a raw node with its wire keys (`W_IMPORTED_AS_RAW`), so it
 still exports as it came. Hostile input (an empty id, a row index of 2^32) is reported, never
 thrown. Keys the schema doesn't know pass through for validation to
 report. An internal `assembleWorkflow` builds the graph, so links may point forward.

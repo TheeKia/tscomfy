@@ -59,6 +59,10 @@ const schema = looseSchema(
       },
       ["COMBO", "IMAGE"],
     ),
+    // An optional widget the frontend never sends (CameraAngle's view): it has no default to send.
+    Viewed: node({}, [], {
+      input: { optional: { view: ["INT", { default: 3, widgetType: "CAMERA_ANGLE_VIEW" }] } },
+    }),
     // A dynamic combo whose option has a widget before a socket.
     Options: node(
       {
@@ -372,6 +376,20 @@ describe("slots as the frontend has them", () => {
     expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
       "Input seed of node s sends its widget's value instead: it is linked to node m, which is muted.",
       "Input noise of node s is left out: it is linked to node m, which is muted.",
+    ]);
+  });
+
+  test("sends no default for a widget the frontend never sends when its link resolves to nothing", () => {
+    const { prompt, diagnostics } = exportApi(
+      workflow(schema, ({ n }) => {
+        const muted = n["Pass"]!({}, { id: "m", mode: "mute" });
+        n["Viewed"]?.({ view: muted[0] }, { id: "v" });
+      }),
+      { validate: false },
+    );
+    expect(prompt["v"]?.inputs).toEqual({});
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Input view of node v is left out: it is linked to node m, which is muted.",
     ]);
   });
 

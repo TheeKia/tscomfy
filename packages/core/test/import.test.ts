@@ -238,7 +238,7 @@ describe("what doesn't fold back faithfully is kept raw", () => {
     expect(toApi(result.workflow, { validate: false, meta: false })).toEqual(prompt);
   });
 
-  test("a display-only widget's key, which the exporter never sends", async () => {
+  test("a display-only widget's key, which the types have no input for", async () => {
     const prompt = { "1": { inputs: { preview: "x" }, class_type: "MockValueWidgets" } };
     const result = await imported("widget-types", prompt);
     expect(found(result.diagnostics)).toEqual([["W_IMPORTED_AS_RAW", ["1"]]]);

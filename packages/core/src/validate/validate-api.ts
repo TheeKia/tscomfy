@@ -8,8 +8,8 @@
 // the types accept a value the backend still takes (a fractional INT, an upload combo's unlisted
 // file), it is a warning, so whatever compiles passes validation.
 
-import type { ApiPrompt } from "../api/prompt.ts";
-import { unwrapWire } from "../api/wire.ts";
+import { type ApiPrompt, isWellFormedLink } from "../api/prompt.ts";
+import { groupKey, unwrapWire } from "../api/wire.ts";
 import {
   createDiagnostic,
   type Diagnostic,
@@ -263,9 +263,8 @@ class PromptValidator {
 
   /** Where a link points, or what is wrong with it; `undefined` for a node of unknown class. */
   #locate(link: readonly JsonValue[]): Located | LinkProblem | undefined {
+    if (!isWellFormedLink(link)) return "shape";
     const [node, slot] = link;
-    if (link.length !== 2 || typeof node !== "string" || typeof slot !== "number") return "shape";
-    if (!Number.isSafeInteger(slot) || slot < 0) return "shape";
     if (!Object.hasOwn(this.#prompt, node)) return "node";
     const source = this.#expanded.get(node);
     if (source === undefined) return undefined;
@@ -543,11 +542,8 @@ function expand(id: NodeId, definition: NodeDef, inputs: JsonObject): Expanded {
     for (const wire of Object.keys(inputs)) {
       if (!wire.startsWith(prefix)) continue;
       claimed.add(wire);
-      const rest = wire.slice(prefix.length);
-      const dot = rest.indexOf(".");
-      const index = dot === -1 ? "" : rest.slice(0, dot);
-      const field = rest.slice(dot + 1);
-      if (dot === -1 || !/^(?:0|[1-9][0-9]*)$/.test(index) || !fields.has(field)) {
+      const at = groupKey(wire.slice(prefix.length));
+      if (at === undefined || !fields.has(at.field)) {
         found.push(
           createDiagnostic(
             "E_UNKNOWN_INPUT",
@@ -557,13 +553,13 @@ function expand(id: NodeId, definition: NodeDef, inputs: JsonObject): Expanded {
         );
         continue;
       }
-      const row = Number(index);
+      const { row } = at;
       if (row >= input.max) {
         found.push(
           createDiagnostic(
             "E_TOO_MANY_DYNAMIC_INPUTS",
             [id, "inputs", wire],
-            `${where(wire)} is in row ${index}, but group ${key} has at most ${String(input.max)} rows.`,
+            `${where(wire)} is in row ${String(row)}, but group ${key} has at most ${String(input.max)} rows.`,
           ),
         );
         continue;

@@ -23,3 +23,8 @@ export function isApiLink(value: JsonValue | undefined): value is ApiLink {
     typeof value[1] === "number"
   );
 }
+
+/** Whether a link can name an output: {@link isApiLink}, with a non-negative integer slot. */
+export function isWellFormedLink(value: JsonValue | undefined): value is ApiLink {
+  return isApiLink(value) && Number.isSafeInteger(value[1]) && value[1] >= 0;
+}

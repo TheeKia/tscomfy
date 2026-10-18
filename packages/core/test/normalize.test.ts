@@ -306,6 +306,26 @@ describe("widgets", () => {
     });
   });
 
+  test("gives a forceInput legacy combo no default: it has no widget to send one", () => {
+    const { schema, diagnostics } = normalizeObjectInfo(
+      JSON.stringify({
+        MockForced: {
+          input: { required: { sampler: [["a", "b"], { forceInput: true, default: "b" }] } },
+          output: [],
+          name: "MockForced",
+          display_name: "Mock Forced",
+          python_module: "nodes",
+          category: "test",
+          output_node: false,
+        },
+      }),
+    );
+    expect(diagnostics).toEqual([]);
+    const sampler = schema.nodes["MockForced"]?.inputs[0];
+    expect(sampler).toMatchObject({ kind: "combo", form: "legacy", forceInput: true });
+    expect(sampler).not.toHaveProperty("default");
+  });
+
   test("treats TYPE:name as a socket type of its own", async () => {
     const input = inputOf(await nodeOf("numbers", "MockNumbers"), "typed_seed");
     expect(input).toMatchObject({ kind: "socket", type: { kind: "named", name: "INT:seed" } });

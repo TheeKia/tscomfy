@@ -512,11 +512,15 @@ export class SpecReader {
         return multiselect && isJsonArray(raw) && raw.every(isMember) ? raw : undefined;
       },
     );
-    const value = comboInitialValue(
-      read,
-      options,
-      multiselect && frontendMultiselect !== undefined && frontendMultiselect !== false,
-    );
+    // A forceInput combo has no widget, so nothing would ever send its default (§7.2).
+    const value =
+      widgetFields.forceInput === true
+        ? undefined
+        : comboInitialValue(
+            read,
+            options,
+            multiselect && frontendMultiselect !== undefined && frontendMultiselect !== false,
+          );
     const uploads = UPLOAD_FLAGS.filter((flag) => this.flag(flag)).map((flag) => UPLOADS[flag]);
     return {
       kind: "combo",

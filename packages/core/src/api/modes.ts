@@ -16,12 +16,12 @@
 import { createDiagnostic, type Diagnostic } from "../diagnostic/diagnostic.ts";
 import { bypassSlot, commonType } from "../frontend/links.ts";
 import { type FrontendSlot, frontendSlots } from "../frontend/node.ts";
-import { sendsValue } from "../frontend/widgets.ts";
 import type { NodeId, NodeMode } from "../graph/types.ts";
-import { isJsonArray, type JsonValue } from "../json/value.ts";
+import type { JsonValue } from "../json/value.ts";
 import { outputTypeText, typeText } from "../schema/type-text.ts";
-import type { InputDef, NodeDef } from "../schema/types.ts";
+import type { NodeDef } from "../schema/types.ts";
 import { type ApiNode, isApiLink } from "./prompt.ts";
+import { defaultWire } from "./wire.ts";
 
 /** One node of a prompt before modes apply: its wire inputs, definition and mode. */
 export interface ModalNode {
@@ -270,37 +270,9 @@ function toSlot({ name, type, input, widget }: FrontendSlot): Slot {
       ? { template: input.templateId, allowed: typeText(input.allowed) }
       : {};
   const fallback = widget
-    ? { widget: { value: input === undefined ? undefined : widgetValue(input) } }
+    ? { widget: { value: input === undefined ? undefined : defaultWire(input) } }
     : {};
   return { key: name, type, ...template, ...fallback };
-}
-
-/** What the exporter sends for a widget left without a value: its default, encoded. */
-function widgetValue(input: InputDef): JsonValue | undefined {
-  switch (input.kind) {
-    case "int":
-    case "float":
-    case "string":
-    case "boolean":
-    case "combo":
-    case "value": {
-      const value = input.default;
-      if (value === undefined) return undefined;
-      if (input.kind === "value" && !sendsValue(input.widget)) return undefined;
-      if (input.kind === "value" && input.widget === "CURVE" && value !== null) {
-        return { __type__: "CURVE", __value__: value };
-      }
-      return isJsonArray(value) ? { __value__: value } : value;
-    }
-    case "socket":
-    case "matchType":
-    case "unknown":
-    case "autogrow":
-    case "dynamicCombo":
-    case "dynamicGroup":
-      // A dynamic combo's widget has no default: when its link resolves to nothing, it is left out.
-      return undefined;
-  }
 }
 
 function hasOutput(source: ModalNode, slot: number): boolean {
