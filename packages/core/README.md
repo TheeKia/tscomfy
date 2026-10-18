@@ -1,5 +1,7 @@
 # @tscomfy/core
 
+[![npm](https://img.shields.io/npm/v/@tscomfy/core)](https://www.npmjs.com/package/@tscomfy/core)
+
 Type-safe ComfyUI workflows in TypeScript: the `/object_info` normalizer and schema model, the
 workflow builder, API and UI format export and import, validation and graph operations. No
 runtime dependencies; runs in Node, Bun, Deno and browsers.

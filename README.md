@@ -1,5 +1,9 @@
 # tscomfy
 
+[![npm](https://img.shields.io/npm/v/@tscomfy/core)](https://www.npmjs.com/package/@tscomfy/core)
+[![Check](https://github.com/TheeKia/tscomfy/actions/workflows/check.yml/badge.svg)](https://github.com/TheeKia/tscomfy/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/npm/l/@tscomfy/core)](LICENSE)
+
 Type-safe ComfyUI workflows in TypeScript. tscomfy generates types from your ComfyUI server's
 `/object_info`, so wiring a `LATENT` into a `MODEL` input, a misspelled sampler or a missing
 required input fails at compile time, and validates what the types can't express (bounds, unknown

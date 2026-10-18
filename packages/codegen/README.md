@@ -1,5 +1,7 @@
 # @tscomfy/codegen
 
+[![npm](https://img.shields.io/npm/v/@tscomfy/codegen)](https://www.npmjs.com/package/@tscomfy/codegen)
+
 The code generator behind `tscomfy generate` and `tscomfy transpile`: turns a normalized
 tscomfy schema into the generated node types and runtime schema module, and transpiles workflows
 to builder code. Pure: it returns files as data and never touches the filesystem. Most projects

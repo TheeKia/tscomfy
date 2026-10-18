@@ -1,5 +1,7 @@
 # @tscomfy/cli
 
+[![npm](https://img.shields.io/npm/v/@tscomfy/cli)](https://www.npmjs.com/package/@tscomfy/cli)
+
 The `tscomfy` command: generates TypeScript types from a ComfyUI server's `/object_info`, checks
 them for drift, and transpiles API prompts and UI workflows to typed code. It only sends
 `GET` requests; it never queues anything. Runs on Node 24 or later and Bun 1.4 or later.

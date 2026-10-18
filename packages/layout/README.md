@@ -1,5 +1,7 @@
 # @tscomfy/layout
 
+[![npm](https://img.shields.io/npm/v/@tscomfy/layout)](https://www.npmjs.com/package/@tscomfy/layout)
+
 Automatic layout for tscomfy workflows written in the ComfyUI frontend's UI format: positions
 for `toUi`, in columns by dependency depth, left to right. Pure, with no runtime dependencies.
 
