@@ -123,6 +123,17 @@ one LoRA bypassed, two outputs, diagnostics and a UI file.
 Out of scope: running workflows (queueing, websockets, progress), executing nodes, a GUI.
 tscomfy produces JSON; any ComfyUI client can queue it.
 
+## Packages
+
+| Package | What | Install |
+|---|---|---|
+| [`@tscomfy/core`](packages/core) | Build, export, validate and import workflows; the UI format, graph operations, lossless JSON | Always, as a dependency |
+| [`@tscomfy/cli`](packages/cli) | The `tscomfy` command: `generate`, `check`, `transpile` | As a dev dependency |
+| [`@tscomfy/layout`](packages/layout) | Positions for the workflow files `toUi` writes | To write files the frontend opens |
+| [`@tscomfy/codegen`](packages/codegen) | `generate` and `transpile` as functions, returning files as data | Only to run them from your own code; the CLI includes it |
+
+Each package's README lists what it exports.
+
 ## Status
 
 Feature-complete for its scope (the phases in [the design](docs/plan.md#14-phases) are done) and
@@ -142,15 +153,6 @@ version may change the API.
 - [API surface](docs/api/): every public declaration, per package.
 - [Design](docs/plan.md), [decision records](docs/decisions/README.md) and
   [research notes](docs/research/) on how ComfyUI serializes workflows.
-
-## Packages
-
-| Package | What |
-|---|---|
-| [`@tscomfy/core`](packages/core) | The schema model and `/object_info` normalizer, the workflow builder, API and UI export and import, validation, graph operations, lossless JSON |
-| [`@tscomfy/codegen`](packages/codegen) | Generates node types and the runtime schema module; transpiles workflows to code |
-| [`@tscomfy/cli`](packages/cli) | The `tscomfy` command: `generate`, `check`, `transpile` |
-| [`@tscomfy/layout`](packages/layout) | Positions for workflows written in the UI format |
 
 ## Repository layout
 

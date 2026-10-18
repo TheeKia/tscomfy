@@ -17,6 +17,8 @@ For people using tscomfy. In reading order:
 8. [The CLI](cli.md): every command and option of `tscomfy`.
 
 Reference:
+- The packages, each with what it exports: [core](../../packages/core),
+  [cli](../../packages/cli), [layout](../../packages/layout), [codegen](../../packages/codegen).
 - [Diagnostics](../diagnostics.md): every code, what it means and what happens.
 - [API surface](../api/): every declaration of the published packages, with their docs.
 - [Examples](../../examples/): complete projects.
