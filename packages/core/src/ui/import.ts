@@ -13,7 +13,7 @@
 // Real nodes keep their links and modes (bypass, mute), which the exporter then applies, so
 // `toApi(importUi(x))` is the prompt the frontend builds for `x`.
 
-import { type Link, wireNode } from "../api/import.ts";
+import { type Link, type WireNode, wireNode } from "../api/import.ts";
 import { createDiagnostic, type Diagnostic } from "../diagnostic/diagnostic.ts";
 import { SCRIPTED_WIDGETS, uncreatable } from "../frontend/node.ts";
 import type { Workflow } from "../graph/graph.ts";
@@ -114,14 +114,36 @@ function read(
   const text = new TextReplacer(loaded);
   applyPrimitives(loaded, loaded.root, rootOrder, text);
   for (const { graph } of ordered) applyPrimitives(loaded, graph, graph.file.order, text);
-  for (const graph of [loaded.root, ...ordered.map((each) => each.graph)]) {
-    replaceFileNames(graph, loaded.root, text);
-  }
+  replaceFileNames([loaded.root, ...ordered.map((each) => each.graph)], loaded.root, text);
   // 5 and 6. Promoted values, link resolution, and the nodes of the prompt.
   const resolver = new LinkResolver(loaded);
-  return emittedNodes(loaded, rootOrder).map((emitted) =>
-    wireNode(wireOf(loaded, resolver, emitted), schema, link, diagnostics),
-  );
+  const wire = emittedNodes(loaded, rootOrder).map((emitted) => wireOf(loaded, resolver, emitted));
+  return byId(wire, report).map((node) => wireNode(node, schema, link, diagnostics));
+}
+
+/**
+ * The nodes as the frontend's prompt object holds them, by id: a node with the id of an earlier
+ * one (a root node with the id `"40:31"` and node 31 inside instance 40, in an edited file)
+ * replaces it, in its place.
+ */
+function byId(nodes: readonly WireNode[], report: Report): WireNode[] {
+  const kept: WireNode[] = [];
+  const at = new Map<string, number>();
+  for (const node of nodes) {
+    const index = at.get(node.id);
+    if (index === undefined) {
+      at.set(node.id, kept.length);
+      kept.push(node);
+      continue;
+    }
+    report(
+      "W_FRONTEND_QUIRK",
+      [node.id],
+      `Two nodes of the prompt have the id ${node.id}: the frontend keeps the later one, in the earlier one's place, and so does this.`,
+    );
+    kept[index] = node;
+  }
+  return kept;
 }
 
 /** The restored widget values of a graph's nodes of known classes the frontend can create. */

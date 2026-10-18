@@ -20,7 +20,7 @@ carry, each reported:
 
 | Code | What |
 |---|---|
-| `W_UI_VALUE_LOST` | A value with no widget to hold it, or one the frontend wouldn't send: DynamicGroup rows (the frontend has no widgets for them), widgets the frontend doesn't save or send |
+| `W_UI_VALUE_LOST` | A value with no widget to hold it, or one the frontend wouldn't send: DynamicGroup rows (the frontend has no widgets for them), widgets the frontend doesn't save or send, links to a node the workflow doesn't have |
 | `W_UNKNOWN_UI_CLASS` | A node of a class the schema lacks: written with its links and values by name; the frontend shows it as missing |
 | `W_UNSAFE_INTEGER` | An integer beyond 2^53, which the frontend's JSON parser rounds |
 | `W_QUEUE_TIME_VALUE` | A value the frontend computes when it queues: a file name it rewrites (`%date:…%`, `%Node.widget%`), a 3D scene, webcam frame or recording its extensions capture |

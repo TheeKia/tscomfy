@@ -63,20 +63,25 @@ export function applyPrimitives(
   }
 }
 
-/** Save nodes' `filename_prefix`, with `%Node.widget%` replaced as the frontend sends it. */
-export function replaceFileNames(graph: Graph, root: Graph, text: TextReplacer): void {
-  const { file } = graph;
-  for (const id of file.order) {
-    const node = file.nodes.get(id);
-    if (node === undefined || !SAVE_NODES.has(node.type)) continue;
-    const values = graph.values.get(id)?.values;
-    const prefix = values?.get("filename_prefix");
-    if (values === undefined || typeof prefix !== "string" || !prefix.includes("%")) continue;
-    values.set(
-      "filename_prefix",
-      text.replace(prefix, root, [...file.prefix, id, "filename_prefix"]),
-    );
+/**
+ * Save nodes' `filename_prefix`, with `%Node.widget%` replaced as the frontend sends it. The
+ * frontend replaces when it serializes, leaving each widget's value as it is, so a reference to
+ * another save node's `filename_prefix` reads it unreplaced: every replacement is made from the
+ * values as loaded, then written.
+ */
+export function replaceFileNames(graphs: readonly Graph[], root: Graph, text: TextReplacer): void {
+  const replaced: [Map<string, JsonValue>, string][] = [];
+  for (const { file, values: restored } of graphs) {
+    for (const id of file.order) {
+      const node = file.nodes.get(id);
+      if (node === undefined || !SAVE_NODES.has(node.type)) continue;
+      const values = restored.get(id)?.values;
+      const prefix = values?.get("filename_prefix");
+      if (values === undefined || typeof prefix !== "string" || !prefix.includes("%")) continue;
+      replaced.push([values, text.replace(prefix, root, [...file.prefix, id, "filename_prefix"])]);
+    }
   }
+  for (const [values, prefix] of replaced) values.set("filename_prefix", prefix);
 }
 
 /**
@@ -200,7 +205,7 @@ export class TextReplacer {
   }
 }
 
-/** A value as JavaScript's `value + ""` writes it. */
+/** A value as the frontend writes it into text: `(value ?? "") + ""`. */
 function jsString(value: JsonValue): string {
   if (value === null) return "";
   if (isJsonArray(value)) return value.map((each) => jsString(each)).join(",");

@@ -275,15 +275,19 @@ function explicitControl(input: InputDef): boolean {
   }
 }
 
+/**
+ * More positions than any node has widgets: an array-like's positions past this can't land on a
+ * widget, so reading it this long changes nothing but the count a mismatch reports, and a file
+ * claiming a huge `length` costs nothing.
+ */
+const MAX_POSITIONS = 2 ** 16;
+
 /** `widgets_values` as a list: an array, or an object with a numeric `length` (array-like). */
 export function positionalValues(values: JsonValue | undefined): readonly JsonValue[] | undefined {
   if (isJsonArray(values)) return values;
   if (!isJsonObject(values) || typeof values["length"] !== "number") return undefined;
-  const { length } = values;
-  return Array.from(
-    { length: Math.max(0, Math.floor(length)) },
-    (_, at) => values[String(at)] ?? null,
-  );
+  const length = Math.min(Math.max(0, Math.floor(values["length"])), MAX_POSITIONS);
+  return Array.from({ length }, (_, at) => values[String(at)] ?? null);
 }
 
 /** `widgets_values` saved as an object (VHS does), which the frontend reads by name. */

@@ -50,11 +50,26 @@ describe("importUi: the frontend's prompt", () => {
   });
 });
 
+/** The checkpoint loader with its widget values saved as `values`. */
+const saved = (values: object): object => ({ ...ckpt, widgets_values: values });
+
 describe("importUi: reading the file", () => {
   test("links come from the links array, placed on the input that references them", () => {
     // Link 1 says slot 3, but the saved `clip` input references it: the frontend goes by that.
     const text = file([ckpt, encode(2, "a", 1)], [[1, 1, 1, 2, 3, "CLIP"]]);
     expect(queued(text).prompt).toEqual({ "1": ckptPrompt, "2": encodePrompt("a", ["1", 1]) });
+  });
+
+  test("widget values saved array-like are read by position, however long they claim to be", () => {
+    expect(queued(file([saved({ length: 1, 0: "model-a.safetensors" })]))).toEqual({
+      prompt: { "1": ckptPrompt },
+      found: [],
+    });
+    const { prompt, found: codes } = queued(
+      file([saved({ length: 1e10, 0: "model-a.safetensors" })]),
+    );
+    expect(prompt).toEqual({ "1": ckptPrompt });
+    expect(codes).toEqual([["W_WIDGET_VALUES_MISMATCH", ["1", "widgets_values"]]]);
   });
 
   test("a link only on an input, not in the links array, is no link", () => {
@@ -435,6 +450,20 @@ describe("importUi: file names", () => {
     expect(inputsOf(prompt, "8")["filename_prefix"]).toBe("img_20_1024_%x%");
   });
 
+  test("another save node's file name is read as saved, before its own replacement", () => {
+    // The frontend replaces as it serializes, and leaves widget values as they are.
+    const first = { ...save("%Load Checkpoint.ckpt_name%"), id: 1, title: "First" };
+    const ckptNode = { ...ckpt, id: 3 };
+    for (const nodes of [
+      [first, save("%First.filename_prefix%"), ckptNode],
+      [save("%First.filename_prefix%"), first, ckptNode],
+    ]) {
+      const { prompt } = queued(file(nodes));
+      expect(inputsOf(prompt, "1")["filename_prefix"]).toBe("model-a.safetensors");
+      expect(inputsOf(prompt, "8")["filename_prefix"]).toBe("%Load Checkpoint.ckpt_name%");
+    }
+  });
+
   test("%date:…% can't be reproduced and is reported", () => {
     const { prompt, found: codes } = queued(file([save("d_%date:yyyy-MM-dd%")]));
     expect(inputsOf(prompt, "8")["filename_prefix"]).toBe("d_%date:yyyy-MM-dd%");
@@ -536,6 +565,18 @@ describe("importUi: ids the frontend reassigns", () => {
     expect(inputsOf(prompt, "101")["width"]).toBe(768);
     expect(inputsOf(prompt, "102")["width"]).toBe(832);
     expect(inputsOf(prompt, "6")["samples"]).toEqual(["102", 0]);
+  });
+
+  test("a node whose id an expanded subgraph node has replaces it, in its place", () => {
+    const inner = { ...encode(31, "inner", null) };
+    const definition = { id: "sg", name: "S", nodes: [inner], links: [], inputs: [], outputs: [] };
+    const instance = { id: 40, type: "sg", inputs: [], outputs: [] };
+    const root = { ...encode(0, "root", null), id: "40:31" };
+    const { prompt, found: codes } = queued(
+      file([instance, root], [], { definitions: { subgraphs: [definition] } }),
+    );
+    expect(prompt).toEqual({ "40:31": encodePrompt("root") });
+    expect(codes).toEqual([["W_FRONTEND_QUIRK", ["40:31"]]]);
   });
 
   test("a fractional id is an id", () => {

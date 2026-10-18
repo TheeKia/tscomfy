@@ -196,6 +196,9 @@ describe("values", () => {
     ["null", null, ["E_INVALID_VALUE"]],
     ["a boolean", true, ["E_INVALID_VALUE"]],
     ["a wrapped number", { __value__: 5 }, []],
+    // Only a prompt built in memory holds these; against a bigint bound they once threw.
+    ["NaN", Number.NaN, ["E_INVALID_VALUE"]],
+    ["infinity", Number.POSITIVE_INFINITY, ["E_INVALID_VALUE"]],
   ])("checks an INT: %s", async (_name, seed, codes) => {
     const diagnostics = await check({ seed: node("MockSeed", { seed }) });
     expect(diagnostics.map(([code]) => code)).toEqual(codes);
@@ -235,6 +238,19 @@ describe("values", () => {
     };
     const diagnostics = await check(prompt, "dynamic-combo");
     expect(diagnostics.map(([code]) => code)).toEqual(codes);
+  });
+
+  test.each([
+    ["the largest float", BigInt(Number.MAX_VALUE), []],
+    ["an integer float() overflows on", 10n ** 400n, ["E_INVALID_VALUE"]],
+    ["NaN", Number.NaN, ["E_INVALID_VALUE"]],
+  ])("checks an unbounded FLOAT: %s", async (_name, value, codes) => {
+    const diagnostics = await check(
+      { numbers: node("MockNumbers", { no_default_float: value }) },
+      "numbers",
+    );
+    const at = diagnostics.filter(([, path]) => path.at(-1) === "no_default_float");
+    expect(at.map(([code]) => code)).toEqual(codes);
   });
 
   test("checks STRING and BOOLEAN values by type only", async () => {

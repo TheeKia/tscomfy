@@ -49,19 +49,20 @@ export interface ToUiResult {
 }
 
 /**
- * The workflow as a UI workflow the frontend loads, deterministic. Node ids
- * that are integers stay; others (`ckpt`, `40:31`) get the next free numbers, in graph order.
- * Bypassed and muted nodes keep their mode.
+ * The workflow as a UI workflow the frontend loads, deterministic. Node ids that are integers stay;
+ * others (`ckpt`, `40:31`) get the next free numbers, in graph order. Bypassed and muted nodes keep
+ * their mode.
  *
  * Loading the file in the frontend queues what `toApi` builds, apart from what the format can't
  * carry, which is reported: `W_UI_VALUE_LOST` for a value with no widget to hold it (DynamicGroup
- * rows, widgets the frontend doesn't save or send), `W_UNKNOWN_UI_CLASS` for a node of a class the
- * schema doesn't have or the frontend can't create (written with its links and its values by
- * name), `W_EXTENSION_WIDGETS` for a node whose widgets frontend JavaScript builds,
- * `W_UNSAFE_INTEGER` for an integer the frontend's parser would round, and `W_QUEUE_TIME_VALUE`
- * for a file name the frontend rewrites when it queues (`%date:…%`, `%Node.widget%`) or a value it
- * computes then (a 3D scene, a webcam frame, a recording). Optional widgets and dynamic combos
- * left out are sent by the frontend with their initial values, as for a node added by hand.
+ * rows, widgets the frontend doesn't save or send) or a link to a node the workflow doesn't have,
+ * `W_UNKNOWN_UI_CLASS` for a node of a class the schema doesn't have or the frontend can't create
+ * (written with its links and its values by name), `W_EXTENSION_WIDGETS` for a node whose widgets
+ * frontend JavaScript builds, `W_UNSAFE_INTEGER` for an integer the frontend's parser would round,
+ * and `W_QUEUE_TIME_VALUE` for a file name the frontend rewrites when it queues (`%date:…%`,
+ * `%Node.widget%`) or a value it computes then (a 3D scene, a webcam frame, a recording). Optional
+ * widgets and dynamic combos left out are sent by the frontend with their initial values, as for a
+ * node added by hand.
  */
 export function toUi(workflow: Workflow, options: ToUiOptions = {}): ToUiResult {
   return new UiWriter(workflow, options).write();
@@ -215,7 +216,7 @@ class UiWriter {
       );
     }
     const chosen = (key: string): JsonValue | undefined => {
-      const value = inputs[key];
+      const value = Object.hasOwn(inputs, key) ? inputs[key] : undefined;
       return isApiLink(value) ? undefined : value;
     };
     const slots = this.#slots(node, definition, inputs, chosen);
@@ -246,19 +247,19 @@ class UiWriter {
       return input.slots.slice(0, Math.max(last + 2, input.min + 1, 1));
     };
     for (const slot of frontendSlots(definition, { chosen, autogrow })) {
-      const value = inputs[slot.name];
+      const value = Object.hasOwn(inputs, slot.name) ? inputs[slot.name] : undefined;
       slots.push({
         name: slot.name,
         type: slot.type,
         ...(slot.widget ? { widget: { name: slot.name } } : {}),
-        link: this.#link(node, value, slots.length, slot.type),
+        link: this.#link(node, slot.name, value, slots.length, slot.type),
       });
     }
     const listed = new Set(slots.map((slot) => slot["name"]));
     for (const [name, value] of Object.entries(inputs)) {
       if (isApiLink(value) && !listed.has(name)) {
         const type = this.#sourceType(value) ?? "*";
-        slots.push({ name, type, link: this.#link(node, value, slots.length, type) });
+        slots.push({ name, type, link: this.#link(node, name, value, slots.length, type) });
       }
     }
     return slots;
@@ -282,7 +283,10 @@ class UiWriter {
       let value: JsonValue;
       switch (widget.role) {
         case "value": {
-          const given = widget.key === undefined ? undefined : inputs[widget.key];
+          const given =
+            widget.key !== undefined && Object.hasOwn(inputs, widget.key)
+              ? inputs[widget.key]
+              : undefined;
           value = given === undefined || isApiLink(given) ? widget.initial : unwrapWire(given);
           box = value;
           break;
@@ -383,7 +387,7 @@ class UiWriter {
     const named: [string, JsonValue][] = [];
     for (const [name, value] of Object.entries(inputs)) {
       if (isApiLink(value)) {
-        slots.push({ name, type: "*", link: this.#link(node, value, slots.length, "*") });
+        slots.push({ name, type: "*", link: this.#link(node, name, value, slots.length, "*") });
         named.push([name, null]);
         continue;
       }
@@ -404,16 +408,28 @@ class UiWriter {
     };
   }
 
-  /** Writes a link into slot `targetSlot` of `node`, if `value` links a node of the workflow. */
+  /**
+   * Writes a link into slot `targetSlot` of `node`, if `value` links a node of the workflow. A
+   * link to a node the workflow doesn't have (from an imported prompt) has nothing to point at:
+   * reported, since `toApi` sends it and the frontend won't.
+   */
   #link(
     node: GraphNode,
+    key: string,
     value: JsonValue | undefined,
     targetSlot: number,
     type: string,
   ): number | null {
     if (!isApiLink(value)) return null;
     const origin = this.#ids.get(value[0]);
-    if (origin === undefined) return null;
+    if (origin === undefined) {
+      this.#report(
+        "W_UI_VALUE_LOST",
+        [node.id, "inputs", key],
+        `Input ${key} of node ${node.id} links node ${value[0]}, which isn't in the workflow: a UI workflow can't hold the link, so the frontend won't send it.`,
+      );
+      return null;
+    }
     const id = this.#links.length + 1;
     this.#links.push({
       id,

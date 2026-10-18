@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parse, stringify } from "@tscomfy/core";
+import { type JsonValue, parse, stringify } from "@tscomfy/core";
 import { MOCK_OBJECT_INFO_NAMES, readMockObjectInfo } from "@tscomfy/fixtures";
 import { parseWith } from "../src/json/parse.ts";
 import { isJsonObject } from "../src/json/value.ts";
@@ -117,6 +117,15 @@ describe("stringify", () => {
       expect(() => stringify([value])).toThrow(TypeError);
     },
   );
+
+  test("throws for undefined, which code without exactOptionalPropertyTypes can pass", () => {
+    const record: { [key: string]: JsonValue } = { a: 1 };
+    Reflect.set(record, "b", undefined);
+    expect(() => stringify(record)).toThrow(TypeError);
+    const holey: JsonValue[] = [1];
+    holey.length = 2;
+    expect(() => stringify(holey)).toThrow(TypeError);
+  });
 
   test.each(MOCK_OBJECT_INFO_NAMES)("round-trips the %s mock without loss", async (name) => {
     const { value, diagnostics } = parse(await readMockObjectInfo(name));

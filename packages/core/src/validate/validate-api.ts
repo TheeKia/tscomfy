@@ -213,6 +213,12 @@ class PromptValidator {
             `${where} takes an integer, not ${describeValue(value)}.`,
           );
         }
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          return report(
+            "E_INVALID_VALUE",
+            `${where} is ${String(value)}, which no JSON number can be.`,
+          );
+        }
         // The backend's int() applies to inputs typed exactly INT; it truncates, then checks
         // the bounds. Other types (an INT widget on a custom type) are compared as they are.
         if (!isNamed(input.type, "INT") || typeof value === "bigint" || Number.isInteger(value)) {
@@ -228,9 +234,18 @@ class PromptValidator {
         ];
       }
       case "float":
-        // A bigint is an integer literal beyond 2^53, which float() reads.
+        // A bigint is an integer literal beyond 2^53, which float() reads, unless it rounds to
+        // infinity (an OverflowError in Python, which rounds as JavaScript does).
         if (typeof value !== "number" && typeof value !== "bigint") {
           return report("E_INVALID_VALUE", `${where} takes a number, not ${describeValue(value)}.`);
+        }
+        if (!Number.isFinite(Number(value))) {
+          return report(
+            "E_INVALID_VALUE",
+            typeof value === "bigint"
+              ? `${where} is an integer too large for a float, which the backend can't read.`
+              : `${where} is ${String(value)}, which no JSON number can be.`,
+          );
         }
         return range(value, input.min, input.max, report, where);
       case "string":

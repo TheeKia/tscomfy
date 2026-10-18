@@ -499,8 +499,9 @@ import { type JsonValue } from "./value.ts";
  * it round-trips as the same `number`, and Python reads it as a float too.
  * The output for a given value is the same in every runtime.
  *
- * Throws a `TypeError` for a non-finite number, which has no JSON form: passing one is a
- * programmer error.
+ * Throws a `TypeError` for what has no JSON form: a non-finite number, and `undefined` (a member
+ * set to it, an array hole), which the types rule out but code without
+ * `exactOptionalPropertyTypes` can still pass. Passing one is a programmer error.
  */
 export declare function stringify(value: JsonValue): string;
 ```
@@ -1010,19 +1011,20 @@ export interface ToUiResult {
     readonly diagnostics: readonly Diagnostic[];
 }
 /**
- * The workflow as a UI workflow the frontend loads, deterministic. Node ids
- * that are integers stay; others (`ckpt`, `40:31`) get the next free numbers, in graph order.
- * Bypassed and muted nodes keep their mode.
+ * The workflow as a UI workflow the frontend loads, deterministic. Node ids that are integers stay;
+ * others (`ckpt`, `40:31`) get the next free numbers, in graph order. Bypassed and muted nodes keep
+ * their mode.
  *
  * Loading the file in the frontend queues what `toApi` builds, apart from what the format can't
  * carry, which is reported: `W_UI_VALUE_LOST` for a value with no widget to hold it (DynamicGroup
- * rows, widgets the frontend doesn't save or send), `W_UNKNOWN_UI_CLASS` for a node of a class the
- * schema doesn't have or the frontend can't create (written with its links and its values by
- * name), `W_EXTENSION_WIDGETS` for a node whose widgets frontend JavaScript builds,
- * `W_UNSAFE_INTEGER` for an integer the frontend's parser would round, and `W_QUEUE_TIME_VALUE`
- * for a file name the frontend rewrites when it queues (`%date:…%`, `%Node.widget%`) or a value it
- * computes then (a 3D scene, a webcam frame, a recording). Optional widgets and dynamic combos
- * left out are sent by the frontend with their initial values, as for a node added by hand.
+ * rows, widgets the frontend doesn't save or send) or a link to a node the workflow doesn't have,
+ * `W_UNKNOWN_UI_CLASS` for a node of a class the schema doesn't have or the frontend can't create
+ * (written with its links and its values by name), `W_EXTENSION_WIDGETS` for a node whose widgets
+ * frontend JavaScript builds, `W_UNSAFE_INTEGER` for an integer the frontend's parser would round,
+ * and `W_QUEUE_TIME_VALUE` for a file name the frontend rewrites when it queues (`%date:…%`,
+ * `%Node.widget%`) or a value it computes then (a 3D scene, a webcam frame, a recording). Optional
+ * widgets and dynamic combos left out are sent by the frontend with their initial values, as for a
+ * node added by hand.
  */
 export declare function toUi(workflow: Workflow, options?: ToUiOptions): ToUiResult;
 /**

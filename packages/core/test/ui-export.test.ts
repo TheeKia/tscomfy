@@ -418,3 +418,51 @@ describe("toUi: widgets the frontend doesn't send", () => {
     expect(found(toUi(built).diagnostics)).toEqual([["W_UI_VALUE_LOST", ["3", "inputs", "view"]]]);
   });
 });
+
+describe("toUi: inputs named like Object.prototype members", () => {
+  test("are written as given, and the file loads back to the same prompt", () => {
+    const proto = looseSchema(
+      JSON.stringify({
+        Proto: {
+          input: {
+            required: { a: ["INT", { default: 3 }] },
+            optional: { valueOf: ["INT", {}], constructor: ["STRING", {}] },
+          },
+          output: [],
+          output_is_list: [],
+          output_name: [],
+          name: "Proto",
+          display_name: "Proto",
+          category: "test",
+          python_module: "nodes",
+          output_node: true,
+        },
+      }),
+    );
+    const given = workflow(proto, ({ n }) => {
+      n["Proto"]?.({ valueOf: 4, constructor: "c" }, { id: "1" });
+    });
+    const loaded = importUi(stringify(toUi(given).workflow), proto);
+    expect(found(loaded.diagnostics)).toEqual([]);
+    expect(toApi(loaded.workflow, { validate: false })).toEqual(toApi(given, { validate: false }));
+
+    // Left out, they hold the frontend's initial values, as any optional widget does.
+    const left = workflow(proto, ({ n }) => {
+      n["Proto"]?.({}, { id: "1" });
+    });
+    const [node] = objects(toUi(left).workflow["nodes"]);
+    expect(node?.["widgets_values"]).toEqual([3, 0, ""]);
+    expect(node?.["widgets_values_named"]).toEqual({ a: 3, valueOf: 0, constructor: "" });
+  });
+});
+
+describe("toUi: links to nodes the workflow doesn't have", () => {
+  test("are reported: toApi sends them and the frontend won't", async () => {
+    const basic = looseSchema(await readMockObjectInfo("basic-pipeline"));
+    const prompt = { "2": { class_type: "CLIPTextEncode", inputs: { text: "a", clip: ["9", 1] } } };
+    const imported = importApi(JSON.stringify(prompt), basic);
+    expect(found(toUi(imported.workflow).diagnostics)).toEqual([
+      ["W_UI_VALUE_LOST", ["2", "inputs", "clip"]],
+    ]);
+  });
+});

@@ -10,21 +10,36 @@ import { isJsonArray, type JsonValue } from "./value.ts";
  * it round-trips as the same `number`, and Python reads it as a float too.
  * The output for a given value is the same in every runtime.
  *
- * Throws a `TypeError` for a non-finite number, which has no JSON form: passing one is a
- * programmer error.
+ * Throws a `TypeError` for what has no JSON form: a non-finite number, and `undefined` (a member
+ * set to it, an array hole), which the types rule out but code without
+ * `exactOptionalPropertyTypes` can still pass. Passing one is a programmer error.
  */
 export function stringify(value: JsonValue): string {
-  if (typeof value === "bigint") return value.toString();
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new TypeError(`stringify: ${String(value)} is not a JSON number`);
+  switch (typeof value) {
+    case "bigint":
+      return value.toString();
+    case "number":
+      if (!Number.isFinite(value)) {
+        throw new TypeError(`stringify: ${String(value)} is not a JSON number`);
+      }
+      return Number.isInteger(value) && !Number.isSafeInteger(value)
+        ? value.toExponential()
+        : JSON.stringify(value);
+    case "string":
+    case "boolean":
+      return JSON.stringify(value);
+    case "object": {
+      if (value === null) return "null";
+      // Array.from visits holes, which map skips.
+      if (isJsonArray(value)) return `[${Array.from(value, stringify).join(",")}]`;
+      const members = Object.entries(value).map(
+        ([key, item]) => `${JSON.stringify(key)}:${stringify(item)}`,
+      );
+      return `{${members.join(",")}}`;
     }
-    if (Number.isInteger(value) && !Number.isSafeInteger(value)) return value.toExponential();
+    case "undefined":
+    case "function":
+    case "symbol":
+      throw new TypeError(`stringify: ${typeof value} is not a JSON value`);
   }
-  if (typeof value !== "object" || value === null) return JSON.stringify(value);
-  if (isJsonArray(value)) return `[${value.map(stringify).join(",")}]`;
-  const members = Object.entries(value).map(
-    ([key, item]) => `${JSON.stringify(key)}:${stringify(item)}`,
-  );
-  return `{${members.join(",")}}`;
 }
