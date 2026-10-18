@@ -1,0 +1,65 @@
+# Publishes every package when a `v<version>` tag is pushed. npm trusted publishing (OIDC): no
+# token is stored, and npm attaches provenance. Each package's trusted publisher names this file.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      # In dependency order, so no package is published before what it depends on.
+      PACKAGES: core codegen layout cli
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+
+      - name: The tag matches every package's version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for name in $PACKAGES; do
+            actual="$(jq -r .version "packages/$name/package.json")"
+            if [ "$actual" != "$version" ]; then
+              echo "::error::@tscomfy/$name is $actual, the tag says $version"
+              exit 1
+            fi
+          done
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - run: bun run check
+      # Cleans and builds dist/, then checks the packed packages as a user installs them.
+      - run: bun run test:pack
+
+      # `bun pm pack` rewrites `workspace:` ranges; npm publishes the tarballs over OIDC. A
+      # version already on npm is skipped, so a release that failed halfway can be re-run.
+      - name: Publish
+        run: |
+          out="$RUNNER_TEMP/release"
+          mkdir -p "$out"
+          for name in $PACKAGES; do
+            (cd "packages/$name" && bun pm pack --quiet --destination "$out")
+          done
+          for name in $PACKAGES; do
+            if npm view "@tscomfy/$name@$VERSION" version > /dev/null 2>&1; then
+              echo "@tscomfy/$name@$VERSION is already published"
+            else
+              npm publish "$out/tscomfy-$name-$VERSION.tgz"
+            fi
+          done

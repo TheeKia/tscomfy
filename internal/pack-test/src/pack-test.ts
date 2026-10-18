@@ -26,6 +26,10 @@ import {
 /** The publishable packages, in dependency order, by folder under `packages/`. */
 const PACKAGES = ["core", "codegen", "layout", "cli"] as const;
 type Package = (typeof PACKAGES)[number];
+/** The version every package shares, released together: core's. */
+const VERSION = String(
+  Reflect.get(await Bun.file(join(REPO_DIR, "packages", "core", "package.json")).json(), "version"),
+);
 
 const NODES = (process.env["TEST_PACK_NODES"] ?? "node").split(":").filter((each) => each !== "");
 const OBJECT_INFO = join(MOCK_OBJECT_INFO_DIR, "basic-pipeline.json");
@@ -128,14 +132,15 @@ async function checkPacked(name: Package, packed: Packed): Promise<void> {
     if (manifest[field] === undefined) fail(`${name}'s package.json has no ${field}`);
   }
   if (manifest["license"] !== "MIT") fail(`${name}'s license isn't MIT`);
+  if (manifest["version"] !== VERSION) fail(`${name} isn't version ${VERSION}, as core is`);
   const dependencies = record(manifest["dependencies"] ?? {}, `${name}'s dependencies`);
   const peers = record(manifest["peerDependencies"] ?? {}, `${name}'s peerDependencies`);
   // One core per project: isOutputRef is an instanceof check.
   if (dependencies["@tscomfy/core"] !== undefined) {
     fail(`${name} depends on @tscomfy/core rather than taking it as a peer`);
   }
-  if (name !== "core" && peers["@tscomfy/core"] !== "^0.0.0") {
-    fail(`${name} doesn't take @tscomfy/core ^0.0.0 as a peer`);
+  if (name !== "core" && peers["@tscomfy/core"] !== `^${VERSION}`) {
+    fail(`${name} doesn't take @tscomfy/core ^${VERSION} as a peer`);
   }
   const external = Object.keys(dependencies).filter((each) => !each.startsWith("@tscomfy/"));
   if (external.length > 0) fail(`${name} has runtime dependencies: ${external.join(", ")}`);
@@ -270,7 +275,7 @@ async function main(): Promise<void> {
         });
       // oxlint-disable-next-line no-await-in-loop -- one runtime at a time
       const version = await cli(["--version"]);
-      if (version.stdout !== "0.0.0\n") fail(`tscomfy --version printed ${version.stdout}`);
+      if (version.stdout !== `${VERSION}\n`) fail(`tscomfy --version printed ${version.stdout}`);
       // oxlint-disable-next-line no-await-in-loop
       await cli(["generate", "--from", OBJECT_INFO, "--out", "src/comfy", "--quiet"]);
       // oxlint-disable-next-line no-await-in-loop
@@ -337,7 +342,7 @@ async function main(): Promise<void> {
       );
       const built = lines.get("built") ?? "";
       const checks: [string, boolean][] = [
-        ["versions", lines.get("versions") === "0.0.0 0.0.0"],
+        ["versions", lines.get("versions") === `${VERSION} ${VERSION}`],
         [
           "built",
           built.includes('"seed":18446744073709551615') && built.includes('"title":"Result"'),

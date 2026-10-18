@@ -1,7 +1,7 @@
 # tscomfy: design and plan
 
 > Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`), `@tscomfy/layout`. MIT.
-> Status: revision 7, 2026-10-18. **Phases 0–9 complete**; the packages are publish-ready but not published.
+> Status: revision 7, 2026-10-18. **Phases 0–9 complete**; 0.1.0 is published on npm, from CI (D12).
 > This is the design reference: what was decided and why (§3, with an ADR per decision in
 > `docs/decisions/`), how it is built (§4–§13), how it got there (§14) and the evidence (§16).
 > User documentation is in `docs/guides/`. Every claim marked **[verified]** was checked
@@ -62,7 +62,7 @@ differences in §7.4.
 | D9 | **Refs are frozen `OutputRef` instances typed as a branded, covariant `Out<T>`** | Lists are meaningful values (they get wrapped as `__value__`, §7.4), so refs can't be tuples. **[verified]** |
 | D10 | **Lossless integers.** INT accepts `number \| bigint`. Our own small deterministic serializer writes bigint as a JSON number. The parser reads big ints via `JSON.parse` source-text access. The normalizer and the importer take **raw text**, never an already-parsed value | Seeds go up to 2⁶⁴−1, and 134 bounds in the real dump are integer literals beyond 2⁵³ (102 of them INT `max`). A parsed value has already lost them. **[verified]** in Bun 1.4.3 and Node 26. |
 | D11 | **oxfmt formats, oxlint lints** (`--type-aware` via tsgolint, built on TS 7) | One toolchain. oxlint's type-aware rules are as accurate as tsc and catch cross-package cases Biome's linter misses. oxfmt is 0.x, so it is pinned exactly. **[verified]** |
-| D12 | **No CI for now.** `bun run check` is the single local gate | The owner's choice. Adding CI later means running the same script. |
+| D12 | **CI runs the local gate and releases.** GitHub Actions runs `bun run check`, and `test:pack` under Node 24 and 26, on pushes and PRs; a `v<version>` tag publishes every package with npm trusted publishing (OIDC, provenance). `bun run check` stays the local gate | The owner's choice (2026-10-18, revising "no CI" once the packages were published). CI runs the same scripts as local work, so it adds no second definition of "passing"; releasing only from CI means no npm token exists anywhere. **[verified]** |
 | D13 | **The generated runtime schema is a `.ts` module holding the schema as one string literal**, loaded by `defineSchema`, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check; a string literal is nearly free, needs no copy step and no `resolveJsonModule`. `defineSchema` parses it with the lossless `parse`, because a plain `JSON.parse` would round the 134 big bounds; on a runtime without source-text access (such as Node 20) it throws a clear error rather than load imprecise bounds. **[verified]** |
 | D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
 | D15 | **Schema identity.** `Schema.nodes` is built in code-unit order of class type (JavaScript still lists integer-like keys first). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
@@ -1087,7 +1087,7 @@ rather than by hand.
 **Phase 9: polish** (done)
 - README and guides (`docs/guides/`), examples (`examples/txt2img`, `examples/hires-fix`), an
   API-surface snapshot (`docs/api/`, D22), CONTRIBUTING, and packages ready to publish under the
-  `@tscomfy` npm org (publishing itself stays optional).
+  `@tscomfy` npm org. 0.1.0 was published 2026-10-18, with CI and release workflows (D12).
 - Four independent audits (core API, core UI and normalizer, codegen, CLI and packaging, docs);
   every finding reproduced before it was fixed (§16).
 
@@ -1162,3 +1162,4 @@ Checked from 2026-10-17 to 2026-10-18 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and
 | Consumers of the packages | A project over the built packages and generated mock types type-checks with TypeScript 5.9.3, 6.0.3 and 7.0.2 under `nodenext` and `bundler`, `strict` and `skipLibCheck: false`, and runs under Node 24.22.0, Node 26.11.1 and Bun 1.4.3. `test:pack` checks the same from packed tarballs installed offline, the `tscomfy` bin included |
 | Guides | Every snippet in `docs/guides/` type-checks against types generated from the corpus server (1,758 classes), the four compile errors getting-started promises included; the runtime-schema snippet validates with one expected warning |
 | Frontend 1.55.18 | The server updated its frontend from 1.55.17 to 1.55.18 during Phase 9. Captured again on 1.55.18, every committed mock prompt (`ui-api/`, `ui-export/`) is identical. The `ui-extensions` captures were made on 1.55.18, with the mock's definitions registered in the page and the server's file lists answered by the probe (a remote combo's saved file listed), so no capture holds the server's files. The frontend queues exactly `toApi`'s prompt for `examples/hires-fix`'s UI workflow, its bypassed LoRA included |
+| Publishing (D12) | Packed with `bun pm pack` (Bun 1.4.3): tarballs `tscomfy-<name>-<version>.tgz`, `workspace:*` rewritten to the exact version and `workspace:^` to `^<version>`. A fresh npm project installing them, generating from the `basic-pipeline` mock with `--import-extension .ts` and the README's `tsconfig.json`, type-checks the README's opening example with TypeScript 5.9, rejects `"eular"` (TS2820), runs under Node 26.11.1 and Bun 1.4.3 with no build step, and transpiles a UI workflow that type-checks. npm's trusted publishing needs npm 11.5.1+ and Node 22.14+, `id-token: write`, a `repository.url` matching the repository, and a package that already exists (`npm help trust`, npm 12.2.1) |

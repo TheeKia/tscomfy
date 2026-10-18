@@ -8,9 +8,9 @@ would send for the same graph, byte for byte.
 
 ```ts
 import { stringify, toApi, workflow } from "@tscomfy/core";
-import { local } from "./comfy/local/index.js"; // generated from your server
+import { comfy } from "./comfy/index.ts"; // generated from your server
 
-const txt2img = workflow(local, ({ n }) => {
+const txt2img = workflow(comfy, ({ n }) => {
   const [model, clip, vae] = n.CheckpointLoaderSimple({ ckpt_name: "sd_xl_base_1.0.safetensors" });
   const latent = n.KSampler({
     model,
@@ -24,33 +24,46 @@ const txt2img = workflow(local, ({ n }) => {
   n.SaveImage({ images: n.VAEDecode({ samples: latent, vae }) });
 });
 
-const body = stringify({ prompt: toApi(txt2img) }); // POST it to /prompt
+const body = stringify({ prompt: toApi(txt2img) });
+await fetch("http://127.0.0.1:8188/prompt", { method: "POST", body });
 ```
 
 ## Quick start
 
-tscomfy isn't on npm yet, so start from the example project in this repository. You need Bun 1.4
-and a ComfyUI server at `http://127.0.0.1:8188` with at least one checkpoint.
+You need Node 24 or later (or Bun 1.4) and a ComfyUI server at `http://127.0.0.1:8188`.
 
 ```sh
-git clone https://github.com/TheeKia/tscomfy.git && cd tscomfy && bun install
-cd examples/txt2img
-bun run generate                            # types from your server, into src/comfy/local
-bun run start "a cat in a hat" > prompt.json
-curl -H 'Content-Type: application/json' -d @prompt.json http://127.0.0.1:8188/prompt
+npm init -y && npm pkg set type=module
+npm install @tscomfy/core
+npm install --save-dev @tscomfy/cli typescript
+npx tscomfy generate --url http://127.0.0.1:8188 --out comfy --import-extension .ts
 ```
 
-The image lands in ComfyUI's `output/`. Now edit [`src/txt2img.ts`](examples/txt2img/src/txt2img.ts):
-your editor completes your server's node classes, checkpoints and samplers, and `bun run
-typecheck` rejects anything the server wouldn't accept. After installing models or node packs,
-run `bun run generate` again.
+`comfy/` now holds the types of every node, model and sampler your server has. Add a
+`tsconfig.json` so your editor and `tsc` check against them:
+
+```json
+{ "compilerOptions": { "module": "nodenext", "strict": true, "noEmit": true, "allowImportingTsExtensions": true } }
+```
+
+Save the code above as `txt2img.ts`, with a checkpoint your server lists (your editor completes
+it), then:
+
+```sh
+npx tsc            # wrong wiring, a misspelled sampler, a missing input: all errors here
+node txt2img.ts    # queues it; the image lands in ComfyUI's output/
+```
+
+Node and Bun run TypeScript as is, which is what `--import-extension .ts` is for. After installing
+models or node packs, run `generate` again; `npx tscomfy check --url … --out comfy` tells you
+when you need to.
 
 ## Recipes
 
 Short versions of everyday tasks; [the guides](docs/guides/README.md) cover each in full.
 
 **Render a batch.** A workflow is a function, so its parameters are plain arguments. With
-`txt2img` from the example:
+`txt2img` written as one, as in [`examples/txt2img`](examples/txt2img/src/txt2img.ts):
 
 ```ts
 for (const prompt of ["a lighthouse at dusk", "a fox in the snow"]) {
@@ -65,7 +78,7 @@ for (const prompt of ["a lighthouse at dusk", "a fox in the snow"]) {
 that builds the same prompt, and replace the values you want to vary with parameters:
 
 ```sh
-tscomfy transpile --workflow portrait.json --schema src/comfy/local --out src/portrait.ts
+npx tscomfy transpile --workflow portrait.json --schema comfy --out portrait.ts
 ```
 
 **Check values from outside.** Types can't see a width typed into a form. `exportApi` reports
@@ -109,8 +122,8 @@ tscomfy produces JSON; any ComfyUI client can queue it.
 ## Status
 
 Feature-complete for its scope (the phases in [the design](docs/plan.md#14-phases) are done) and
-tested against the frontend and backend of ComfyUI 0.41. Not on npm yet; see
-[the quick start](#quick-start).
+tested against the frontend and backend of ComfyUI 0.41. Published on npm; before 1.0, a minor
+version may change the API.
 
 ## Documentation
 

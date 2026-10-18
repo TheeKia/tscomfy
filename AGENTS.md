@@ -15,8 +15,8 @@ GUIs, MCP servers. Don't add these.
 **Status:** all phases (0–9 in `docs/plan.md` §14) are done: the normalizer and schema model,
 the type emitter, the builder and API export, the CLI (`generate`, `check`, `transpile`),
 validation, API import and the transpiler, bypass, mute and graph operations, the UI format and
-`@tscomfy/layout`, and the polish phase (guides, examples, API reports, packaging). Nothing is
-published. New work starts from a decision in the plan and its ADR.
+`@tscomfy/layout`, and the polish phase (guides, examples, API reports, packaging). 0.1.0 is
+published on npm. New work starts from a decision in the plan and its ADR.
 
 ## Where things are
 
@@ -33,7 +33,8 @@ published. New work starts from a decision in the plan and its ADR.
 | `internal/bench` | `@tscomfy/bench` (private): `bench:types`, synthetic schemas built from the mocks |
 | `internal/api-report` | `@tscomfy/api-report` (private): writes and checks `docs/api/` from the packages' declarations |
 | `examples/` | Example projects, workspace members outside `tsc -b` and lint; their generated types are gitignored, and their tests generate from the mocks |
-| `CONTRIBUTING.md` | How-to: scripts, data, common changes (a code, a mock, a package) |
+| `CONTRIBUTING.md` | How-to: scripts, data, common changes (a code, a mock, a package), releasing |
+| `.github/workflows/` | CI: `check.yml` (the gate on pushes and PRs), `release.yml` (publishes on a version tag) |
 
 ## Working agreements
 
@@ -46,9 +47,12 @@ These come from the project owner. Follow them unless told otherwise.
   ADR. When a decision changes, update the plan and the ADR in the same change.
 - **Modern tooling:** Bun 1.4 and TypeScript 7 (fall back to TS 6 only if TS 7 truly blocks
   something). oxfmt formats, oxlint lints. Prefer the newest stable tools, verified to work.
-- **No CI for now.** Don't add or propose CI pipelines. `bun run check` is the gate; a phase
-  also needs `bun run test:corpus` to pass before it closes.
-- **Publishing is not a priority.** Packages live under the owner's npm org `@tscomfy`.
+- **CI runs the local gate.** GitHub Actions runs `bun run check` and `test:pack` on pushes and
+  PRs (ADR-0012); it never replaces running `bun run check` locally. A phase also needs
+  `bun run test:corpus` to pass before it closes, which only runs locally.
+- **Releases come from CI.** Packages live under the owner's npm org `@tscomfy` and share one
+  version; pushing a `v<version>` tag publishes them (CONTRIBUTING, "Releasing"). Don't publish
+  from a machine; only a new package's first version is, because npm needs it to exist first.
 - **Never commit real ComfyUI data.** `/object_info` dumps and workflows from a real server go in
   `internal/fixtures/corpus/` (gitignored). Committed tests use hand-written mocks. When a corpus
   run finds something no mock covers, distill it into a new mock first (see

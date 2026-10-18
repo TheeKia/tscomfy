@@ -14,9 +14,14 @@ it. It assumes you know ComfyUI itself; no knowledge of tscomfy's internals is n
 - **TypeScript 5.9 or later** with `strict` on (tested with 5.9, 6.0 and 7.0), under
   `module: "nodenext"` or `moduleResolution: "bundler"`.
 
-The packages aren't on npm yet. Until they are, work inside this repository: `bun install`, then
-copy [`examples/txt2img`](../../examples/txt2img), which is a workspace project. Once published,
-a project needs `@tscomfy/core` as a dependency and `@tscomfy/cli` as a dev dependency.
+A project needs `@tscomfy/core` as a dependency and `@tscomfy/cli` as a dev dependency:
+
+```sh
+npm install @tscomfy/core
+npm install --save-dev @tscomfy/cli
+```
+
+[`examples/`](../../examples) has complete projects to start from.
 
 ## 1. Generate types from your server
 

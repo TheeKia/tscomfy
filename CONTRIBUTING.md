@@ -27,7 +27,7 @@ Everything runs from source: tests and the CLI resolve the packages to `src/` th
 | `bun run generate:fixtures` | Regenerate `packages/codegen/test/generated/` (types and transpiled mock workflows) after changing codegen |
 | `bun run api:update` | Rewrite the API reports in `docs/api/` after an intended API change |
 | `bun run bench:types` | Check the type-checking budget of generated types |
-| `bun run test:pack` | Pack every package, install the tarballs offline into a scratch project, run the CLI under Node and Bun and type-check a consumer. Run it before publishing; publish with `bun publish`, which rewrites `workspace:` ranges (npm doesn't) |
+| `bun run test:pack` | Pack every package, install the tarballs offline into a scratch project, run the CLI under Node and Bun and type-check a consumer. CI runs it on every push, under Node 24 and 26 |
 | `bun run tscomfy …` | The CLI, from source |
 | `bun run clean` | Remove build output; `tsc` never deletes stale files |
 
@@ -69,6 +69,25 @@ needs JSDoc and an explicit type.
 
 **A decision.** When a decision changes, update `docs/plan.md` and its ADR in
 `docs/decisions/` in the same change, with the evidence in plan §16.
+
+## Releasing
+
+The four packages share one version and are released together, from CI only:
+
+1. Set the new version in each `packages/*/package.json` and in `CODEGEN_VERSION`
+   (`packages/codegen/src/generate.ts`) and `CLI_VERSION` (`packages/cli/src/run.ts`); tests
+   check that these agree. Then `bun install`, `bun run generate:fixtures` (generated headers name
+   the version) and `bun run api:update`.
+2. `bun run check`, `bun run test:corpus` and `bun run test:pack`; commit.
+3. `git tag v<version> && git push origin main v<version>`.
+
+`.github/workflows/release.yml` checks that the tag matches every package, runs `check` and
+`test:pack`, packs each package with `bun pm pack` (which rewrites `workspace:` ranges; npm
+doesn't) and publishes the tarballs with npm trusted publishing: no token is stored, and npm adds
+provenance. Versions already on npm are skipped, so a failed release can be re-run. Each
+package's trusted publisher on npmjs.com names `TheeKia/tscomfy` and `release.yml`; a new
+package needs one, which npm only allows once the package exists, so its first version is
+published by hand.
 
 ## Reviews
 

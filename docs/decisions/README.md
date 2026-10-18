@@ -5,7 +5,7 @@ changed later says so in its status line.
 
 | ADR | Decision |
 |---|---|
-| [0001](0001-bun.md) | Bun as package manager, workspace tool, test runner and script runner (updated 2026-10-18: the CLI runs on Node too) |
+| [0001](0001-bun.md) | Bun as package manager, workspace tool, test runner and script runner (updated 2026-10-18: the CLI runs on Node too; releases publish with npm) |
 | [0002](0002-typescript-7.md) | TypeScript 7 (native compiler) |
 | [0003](0003-runtime-agnostic-libraries.md) | Runtime-agnostic library packages |
 | [0004](0004-esm-unbundled-build.md) | ESM-only, unbundled build with source-first development |
@@ -16,7 +16,7 @@ changed later says so in its status line.
 | [0009](0009-branded-output-refs.md) | Output references are branded, covariant, frozen objects |
 | [0010](0010-lossless-integers.md) | Lossless integers |
 | [0011](0011-oxfmt-format-oxlint-lint.md) | oxfmt formats, oxlint lints |
-| [0012](0012-no-ci.md) | No CI for now |
+| [0012](0012-ci.md) | CI runs the local gate and publishes releases (2026-10-18; was "no CI") |
 | [0013](0013-generated-schema-module.md) | Generated runtime schema is a string-literal module |
 | [0014](0014-diagnostic-model.md) | One diagnostic model |
 | [0015](0015-schema-identity.md) | Schema identity: sorted nodes and an on-demand SHA-256 |
