@@ -492,6 +492,20 @@ const save = (prefix: string): object => ({
 });
 
 describe("importUi: file names", () => {
+  test("controls and frontend-only nodes are found, by their default titles too", () => {
+    const primitive = { id: 12, type: "PrimitiveNode", widgets_values: [640, "fixed"] };
+    const { prompt } = queued(
+      file([
+        samplerNode([]),
+        primitive,
+        save(
+          "a_%KSampler.control_after_generate%_%KSampler.seed%_%Primitive.value%_%PrimitiveNode.value%",
+        ),
+      ]),
+    );
+    expect(inputsOf(prompt, "8")["filename_prefix"]).toBe("a_fixed_5_640_%PrimitiveNode.value%");
+  });
+
   test("%Node.widget% is replaced, by search name or title (applyTextReplacements)", () => {
     const { prompt } = queued(
       file([samplerNode([]), latent, save("img_%KSampler.steps%_%Empty Latent Image.width%_%x%")]),
@@ -584,7 +598,58 @@ describe("importUi: what the frontend refuses or can't express", () => {
   });
 });
 
+describe("importUi: ids the frontend reassigns", () => {
+  test("a node whose id an earlier remint took is reminted in turn, and its links follow", () => {
+    const latents = [640, 768, 832].map((width, at) => ({
+      id: at === 2 ? 101 : 4,
+      type: "EmptyLatentImage",
+      widgets_values: [width, 512, 1],
+    }));
+    const decode = {
+      id: 6,
+      type: "VAEDecode",
+      inputs: [{ name: "samples", type: "LATENT", link: 9 }],
+    };
+    const { prompt } = queued(file([...latents, decode], [[9, 101, 0, 6, 0, "LATENT"]]));
+    expect(inputsOf(prompt, "101")["width"]).toBe(768);
+    expect(inputsOf(prompt, "102")["width"]).toBe(832);
+    expect(inputsOf(prompt, "6")["samples"]).toEqual(["102", 0]);
+  });
+
+  test("a fractional id is an id", () => {
+    const fractional = { id: 4.5, type: "EmptyLatentImage", widgets_values: [640, 512, 1] };
+    expect(inputsOf(queued(file([fractional])).prompt, "4.5")["width"]).toBe(640);
+  });
+});
+
 describe("importUi: size", () => {
+  test("many file names and many links into one node import in linear time", () => {
+    const count = 20_000;
+    const nodes: object[] = [];
+    for (let id = 1; id <= count; id++) {
+      nodes.push({ id, type: "EmptyLatentImage", widgets_values: [64, 64, 1] });
+      nodes.push(patched(object(save("x_%EmptyLatentImage.width%_%Nope.w%")), { id: count + id }));
+    }
+    const wide = {
+      id: 3 * count,
+      type: "PackWide",
+      inputs: Array.from({ length: count }, (_, at) => ({ name: `in${String(at)}`, link: at + 1 })),
+    };
+    const links = Array.from({ length: count }, (_, at) => [
+      at + 1,
+      1,
+      0,
+      3 * count,
+      count - 1 - at,
+      "*",
+    ]);
+    const started = performance.now();
+    const { prompt } = queued(file([...nodes, wide], links, { last_node_id: 3 * count }));
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(inputsOf(prompt, String(2 * count))["filename_prefix"]).toBe("x_64_%Nope.w%");
+    expect(inputsOf(prompt, String(3 * count))["in0"]).toEqual(["1", 0]);
+  });
+
   test("a long Reroute chain into many consumers imports in linear time, without recursion", () => {
     const count = 50_000;
     const nodes: object[] = [{ id: 1, type: "EmptyLatentImage", widgets_values: [512, 512, 1] }];

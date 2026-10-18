@@ -40,9 +40,12 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
   among several names the current slot if it is one, else the first; a move onto a slot another
   link keeps is skipped. An input naming another node's link moves nothing; a link past the
   node's slots still moves by name. **[V]**
-- **Node ids** are strings internally (`toNodeId`), so `4` and `"4"` are one node. A repeated id
-  at the root gets the next free number when the node is added, its links staying with the
-  first; inside a definition the later node is dropped (`dropSameOwnerDuplicates`). **[V][S]**
+- **Node ids** are strings internally (`toNodeId`), so `4` and `"4"` are one node; a fractional
+  id too. At the root, nodes are added in file order, and one whose id is already in the graph
+  gets the next free number after the counter, so a later node whose id that took is reminted in
+  turn; links follow a reminted node only when no other node asked for that id
+  (`recordUnambiguousRemint`). Inside a definition the later node is dropped
+  (`dropSameOwnerDuplicates`). **[V][S]**
 - **A node is created from its definition, then the saved node is merged in**
   (`ComfyNode.configure`): inputs by name, with saved inputs the definition lacks kept after the
   others; outputs by index. **[V]**
@@ -102,9 +105,10 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
 - **Note** and **MarkdownNote** are never sent. **[V]**
 - **File names** (`saveImageExtraOutput.ts`, `searchAndReplace.ts`): the core save nodes'
   `filename_prefix` goes through `%…%` replacement when the prompt is built: `%Node.widget%`
-  becomes that widget's value (node found by its `Node name for S&R` property, which every node of
-  a server class but the save nodes gets at creation, else by title; interiors before their
-  instance), with path-unsafe characters replaced by `_`; `%date:…%` becomes the time. A
+  becomes that widget's value, controls included (node found by its `Node name for S&R` property,
+  which every node of a server class but the save nodes gets at creation, else by title, its
+  default being `Primitive`, `Reroute`, `Note` or `Markdown Note` for the frontend's own nodes;
+  interiors before their instance), with path-unsafe characters replaced by `_`; `%date:…%` becomes the time. A
   PrimitiveNode with `Run widget replace on values` replaces its value the same way. **[V]**
 
 ## Subgraphs

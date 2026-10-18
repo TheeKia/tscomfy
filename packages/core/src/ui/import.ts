@@ -117,6 +117,8 @@ interface UiGraph {
   readonly outgoing: Map<Id, UiLink[]>;
   /** Restored widget values by node and wire key; the same for every instance of a definition. */
   readonly values: Map<Id, Map<string, JsonValue>>;
+  /** Saved values of widgets no input owns (controls, buttons), by node and widget name. */
+  readonly extras: Map<Id, Map<string, JsonValue>>;
   /** Slots of each node once loaded, in order, with their types. */
   readonly layouts: Map<Id, readonly { readonly name: string; readonly type: string }[]>;
 }
@@ -194,6 +196,12 @@ type ResolveStep =
       readonly via: UiLink;
     };
 
+/** A node and the graph it is in. */
+interface NodeIn {
+  readonly graph: UiGraph;
+  readonly node: UiNode;
+}
+
 /** A promoted input of a definition: the value its interior widget starts from. */
 type Promotion = { readonly value: JsonValue | undefined } | undefined;
 
@@ -203,6 +211,13 @@ const SUBGRAPH_INPUT = "-10";
 /** Frontend-only nodes: resolved through, or dropped. */
 const VIRTUAL: ReadonlySet<string> = new Set(["Reroute", "PrimitiveNode", "Note", "MarkdownNote"]);
 const REPLACE_PROPERTY = "Run widget replace on values";
+/** The titles the frontend gives its own nodes (`rerouteNode.ts`, `widgetInputs.ts`, `noteNode.ts`). */
+const FRONTEND_TITLES: ReadonlyMap<string, string> = new Map([
+  ["Reroute", "Reroute"],
+  ["PrimitiveNode", "Primitive"],
+  ["Note", "Note"],
+  ["MarkdownNote", "Markdown Note"],
+]);
 const SEARCH_NAME = "Node name for S&R";
 
 class UiReader {
@@ -214,6 +229,10 @@ class UiReader {
   #ordered: readonly Definition[] = [];
   readonly #promotions = new Map<Definition, readonly Promotion[]>();
   readonly #memo = new Map<string, Memo>();
+  readonly #lookups = new Map<
+    UiGraph,
+    { readonly search: ReadonlyMap<string, NodeIn>; readonly title: ReadonlyMap<string, NodeIn> }
+  >();
   /** The node ids taken, as numbers, and the frontend's id counter (`state.lastNodeId`). */
   readonly #used = new Set<number>();
   #counter = 0;
@@ -292,6 +311,14 @@ class UiReader {
   ): UiGraph {
     const nodes = new Map<Id, UiNode>();
     const order: Id[] = [];
+    // At the root a node whose id is taken by one added before gets the next free one; links
+    // follow it when no other node asked for that id (`recordUnambiguousRemint`).
+    const requested = new Map<Id, number>();
+    for (const raw of list(source["nodes"])) {
+      const id = isJsonObject(raw) ? nodeIdOf(raw["id"]) : undefined;
+      if (id !== undefined) requested.set(id, (requested.get(id) ?? 0) + 1);
+    }
+    const reminted = new Map<Id, Id>();
     for (const [index, raw] of list(source["nodes"]).entries()) {
       const read = readUiNode(raw);
       if (read === undefined) {
@@ -305,7 +332,9 @@ class UiReader {
       let node: UiNode = { ...read, id: renames.get(read.id) ?? read.id };
       if (nodes.has(node.id)) {
         if (repeated === "drop") continue;
-        node = { ...node, id: String(this.#mint()) };
+        const fresh = String(this.#next((id) => nodes.has(String(id))));
+        if (requested.get(node.id) === 1) reminted.set(node.id, fresh);
+        node = { ...node, id: fresh };
       } else if (repeated === "remint") {
         this.#observe(node.id);
       }
@@ -334,8 +363,8 @@ class UiReader {
       if (links.has(read.id)) continue;
       links.set(read.id, {
         ...read,
-        originId: renames.get(read.originId) ?? read.originId,
-        targetId: renames.get(read.targetId) ?? read.targetId,
+        originId: renames.get(read.originId) ?? reminted.get(read.originId) ?? read.originId,
+        targetId: renames.get(read.targetId) ?? reminted.get(read.targetId) ?? read.targetId,
       });
     }
     return {
@@ -350,6 +379,7 @@ class UiReader {
       names: new Map(),
       outgoing: new Map(),
       values: new Map(),
+      extras: new Map(),
       layouts: new Map(),
     };
   }
@@ -363,7 +393,8 @@ class UiReader {
       if (nodeId === undefined || seen.has(nodeId)) continue;
       seen.add(nodeId);
       if (used.has(nodeId)) {
-        const fresh = String(this.#mint());
+        const fresh = String(this.#next((taken) => this.#used.has(taken)));
+        this.#used.add(Number(fresh));
         renames.set(nodeId, fresh);
         used.add(fresh);
       } else {
@@ -395,11 +426,10 @@ class UiReader {
     };
   }
 
-  /** The next free id after the counter (`mintNodeId`, sequential). */
-  #mint(): number {
+  /** The next id after the counter that isn't taken (`mintNodeId`, sequential). */
+  #next(taken: (id: number) => boolean): number {
     let id = this.#counter + 1;
-    while (this.#used.has(id)) id++;
-    this.#used.add(id);
+    while (taken(id)) id++;
     this.#counter = id;
     return id;
   }
@@ -558,13 +588,21 @@ class UiReader {
     } else {
       restored =
         named === undefined
-          ? settle(definition, () => new Map())
+          ? settle(definition, () => ({ values: new Map(), extras: new Map() }))
           : settle(definition, (widgets) => byNameOf(widgets, named));
     }
-    const { values } = restored;
+    const { values, extras } = restored;
+    graph.extras.set(node.id, extras);
     for (const widget of restored.widgets) {
       const { input, key } = widget;
-      if (input === undefined || key === undefined) continue;
+      if (input === undefined || key === undefined) {
+        // KSampler controls saved as booleans.
+        const control = extras.get(widget.name);
+        if (typeof control === "boolean" && definition.classType.startsWith("KSampler")) {
+          extras.set(widget.name, control ? "randomize" : "fixed");
+        }
+        continue;
+      }
       // A widget without a saved value keeps the one it was created with.
       if (!values.has(key)) values.set(key, widget.initial);
       const value = values.get(key);
@@ -650,8 +688,9 @@ class UiReader {
       for (const [link, name] of onto) if (removable.has(name)) onto.delete(link);
       realign(onto, loaded, node, (id) => graph.alive.get(ref(id)));
       const placed = new Map<string, UiLink>();
+      const byName = new Map([...onto].map(([link, name]) => [name, link]));
       for (const name of loaded) {
-        const link = [...onto].find(([, each]) => each === name)?.[0];
+        const link = byName.get(name);
         if (link === undefined) continue;
         placed.set(name, link);
         graph.names.set(link.id, name);
@@ -776,10 +815,8 @@ class UiReader {
         return match;
       }
       const [name = "", widget = ""] = split;
-      const nodes = this.#allNodes(scope);
-      const found =
-        nodes.find(({ node }) => this.#searchName(node) === name) ??
-        nodes.find(({ node }) => this.#title(node) === name);
+      const lookup = this.#lookup(scope);
+      const found = lookup.search.get(name) ?? lookup.title.get(name);
       if (found === undefined) return match;
       const value = this.#widgetValue(found.graph, found.node, widget);
       return value === undefined ? match : jsString(value).replaceAll(unsafe, "_");
@@ -792,6 +829,26 @@ class UiReader {
       );
     }
     return replaced;
+  }
+
+  /** The first node under a graph by search name and by title, built once per graph. */
+  #lookup(scope: UiGraph): {
+    readonly search: ReadonlyMap<string, NodeIn>;
+    readonly title: ReadonlyMap<string, NodeIn>;
+  } {
+    const known = this.#lookups.get(scope);
+    if (known !== undefined) return known;
+    const search = new Map<string, NodeIn>();
+    const title = new Map<string, NodeIn>();
+    for (const entry of this.#allNodes(scope)) {
+      const name = this.#searchName(entry.node);
+      if (name !== undefined && !search.has(name)) search.set(name, entry);
+      const shown = this.#title(entry.node);
+      if (!title.has(shown)) title.set(shown, entry);
+    }
+    const built = { search, title };
+    this.#lookups.set(scope, built);
+    return built;
   }
 
   /** Every node under a graph, interiors before their instance (`mapAllNodes`). */
@@ -831,6 +888,7 @@ class UiReader {
     return (
       this.#definitionOf(node.type)?.displayName ??
       this.#definitions.get(node.type)?.name ??
+      FRONTEND_TITLES.get(node.type) ??
       node.type
     );
   }
@@ -838,9 +896,9 @@ class UiReader {
   /** A widget's value by its name, for `%Node.widget%`. */
   #widgetValue(graph: UiGraph, node: UiNode, name: string): JsonValue | undefined {
     if (node.type === "PrimitiveNode") {
-      return name === "value"
-        ? (positionalValues(node.values)?.[0] ?? node.named?.["value"] ?? null)
-        : undefined;
+      const at = ["value", "control_after_generate"].indexOf(name);
+      if (at === -1) return undefined;
+      return positionalValues(node.values)?.[at] ?? node.named?.[name] ?? null;
     }
     const definition = this.#definitionOf(node.type);
     const values = graph.values.get(node.id);
@@ -848,7 +906,10 @@ class UiReader {
     const widget = frontendWidgets(definition, (key) => values.get(key)).find(
       (each) => each.name === name,
     );
-    return widget?.key === undefined ? undefined : (values.get(widget.key) ?? null);
+    if (widget === undefined) return undefined;
+    // A control or a button: its saved value, else the one it was created with.
+    if (widget.key === undefined) return graph.extras.get(node.id)?.get(name) ?? widget.initial;
+    return values.get(widget.key) ?? null;
   }
 
   /** The promoted inputs of a definition (`SubgraphNode`), its nested ones decided first. */
@@ -954,9 +1015,8 @@ class UiReader {
       }
       const value =
         "link" in resolved ? [resolved.link[0], resolved.link[1]] : wrap(resolved.value);
-      const index = inputs.findIndex(([key]) => key === slot.name);
-      if (index === -1) inputs.push([slot.name, value]);
-      else inputs[index] = [slot.name, value];
+      // A link replaces a widget's value in place: a repeated key keeps its first position.
+      inputs.push([slot.name, value]);
     }
     return { ...base, inputs: Object.fromEntries(inputs) };
   }
@@ -1149,11 +1209,16 @@ class UiReader {
 }
 
 /** A node's widgets and values once its dynamic combos settle on the restored choices. */
-interface Settled {
+interface Settled extends Assigned {
   readonly widgets: readonly FrontendWidget[];
-  readonly values: Map<string, JsonValue>;
   /** How many of the widgets are saved. */
   readonly persisted: number;
+}
+
+/** Restored values: by wire key, and those of widgets no input owns, by widget name. */
+interface Assigned {
+  readonly values: Map<string, JsonValue>;
+  readonly extras: Map<string, JsonValue>;
 }
 
 /**
@@ -1162,45 +1227,46 @@ interface Settled {
  */
 function settle(
   definition: NodeDef,
-  assign: (widgets: readonly FrontendWidget[]) => Map<string, JsonValue>,
+  assign: (widgets: readonly FrontendWidget[]) => Assigned,
 ): Settled {
-  let values = new Map<string, JsonValue>();
+  let assigned: Assigned = { values: new Map(), extras: new Map() };
   let widgets: FrontendWidget[] = [];
   let layout = "";
   for (let pass = 0; pass < 8; pass++) {
-    const previous = values;
+    const previous = assigned.values;
     widgets = frontendWidgets(definition, (key) => previous.get(key));
-    values = assign(widgets);
+    assigned = assign(widgets);
     const next = widgets.map((widget) => widget.name).join("\u0000");
     if (next === layout) break;
     layout = next;
   }
-  return { widgets, values, persisted: widgets.filter((widget) => widget.persisted).length };
+  return { widgets, ...assigned, persisted: widgets.filter((widget) => widget.persisted).length };
 }
 
 /** Values by position over the saved widgets, as the frontend restores them. */
-function byPositionOf(
-  widgets: readonly FrontendWidget[],
-  saved: readonly JsonValue[],
-): Map<string, JsonValue> {
-  const values = new Map<string, JsonValue>();
+function byPositionOf(widgets: readonly FrontendWidget[], saved: readonly JsonValue[]): Assigned {
+  const assigned: Assigned = { values: new Map(), extras: new Map() };
   let position = 0;
   for (const widget of widgets) {
     if (!widget.persisted) continue;
     const value = saved[position++];
-    if (widget.key !== undefined && value !== undefined) values.set(widget.key, value);
+    if (value === undefined) continue;
+    if (widget.key === undefined) assigned.extras.set(widget.name, value);
+    else assigned.values.set(widget.key, value);
   }
-  return values;
+  return assigned;
 }
 
 /** Values by widget name. */
-function byNameOf(widgets: readonly FrontendWidget[], named: JsonObject): Map<string, JsonValue> {
-  const values = new Map<string, JsonValue>();
+function byNameOf(widgets: readonly FrontendWidget[], named: JsonObject): Assigned {
+  const assigned: Assigned = { values: new Map(), extras: new Map() };
   for (const widget of widgets) {
-    if (widget.key === undefined || !widget.persisted) continue;
-    if (Object.hasOwn(named, widget.name)) values.set(widget.key, named[widget.name] ?? null);
+    if (!widget.persisted || !Object.hasOwn(named, widget.name)) continue;
+    const value = named[widget.name] ?? null;
+    if (widget.key === undefined) assigned.extras.set(widget.name, value);
+    else assigned.values.set(widget.key, value);
   }
-  return values;
+  return assigned;
 }
 
 /** Whether values by name disagree with the ones restored by position. */
@@ -1298,7 +1364,9 @@ function realign(
     const moved: { readonly link: UiLink; readonly name: string }[] = [];
     for (const [link, names] of referenced) {
       if (skipped.has(link) || !onto.has(link)) continue;
-      const slots = layout.filter((name) => names.includes(name));
+      const slots = names
+        .filter((name) => index.has(name))
+        .toSorted((a, b) => (index.get(a) ?? 0) - (index.get(b) ?? 0));
       const first = slots[0];
       if (first === undefined) continue;
       const current = onto.get(link) ?? "";
@@ -1422,7 +1490,7 @@ function isArrayIndex(key: string): boolean {
 
 /** A node id as the frontend reads it: an integer or a non-empty string, as a string. */
 function nodeIdOf(value: JsonValue | undefined): Id | undefined {
-  if (typeof value === "number") return Number.isInteger(value) ? String(value) : undefined;
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : undefined;
   if (typeof value === "bigint") return String(value);
   return typeof value === "string" && value !== "" ? value : undefined;
 }
