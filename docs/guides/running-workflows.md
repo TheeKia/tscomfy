@@ -126,8 +126,13 @@ The outcome is data. The promise doesn't reject because the job went wrong:
   connection was closed, or the server answered in a way the protocol doesn't allow.
 
 **How the outcome is decided.** It comes from the server's record of the job
-(`/api/jobs/{id}`), not from the websocket. If the socket drops, the client reconnects, reads the
-record and carries on, so a dropped connection costs some progress events, never the result.
+(`/api/jobs/{id}`), not from the websocket. The client reads the record when the run ends, and
+also every 30 s while a job is open.
+
+**If the socket drops,** the client reconnects with a fresh client id: ComfyUI loses track of a
+reused one. Jobs that were running carry on and settle from their record, but their remaining
+progress and previews are lost. Jobs submitted afterwards get all their events. A dropped
+connection costs some events, never a result.
 
 ## Cancelling and timeouts
 

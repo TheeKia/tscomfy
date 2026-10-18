@@ -87,9 +87,10 @@ export function submit(
   const channel = channelOf(connection);
   if (channel.closed) throw new TypeError("submit: the connection is closed");
   const prompt = isWorkflow(input) ? toApi(input) : input;
-  const body = requestBody(channel.clientId, prompt, options);
-  const run = new JobRun(channel, body.id, Object.keys(prompt), options.signal);
-  run.start(body.text);
+  const id = randomUuid();
+  const body = requestBody(id, prompt, options);
+  const run = new JobRun(channel, id, Object.keys(prompt), options.signal);
+  run.start(body);
   return run.job;
 }
 
@@ -109,12 +110,15 @@ function isWorkflow(input: Workflow | ApiPrompt): input is Workflow {
 const PREVIEW_METHODS: ReadonlySet<unknown> = new Set(["auto", "latent2rgb", "taesd", "none"]);
 const RESERVED_EXTRA_DATA = ["client_id", "preview_method"];
 
-/** The body of `POST /prompt`, serialized losslessly, and the prompt id it carries. */
+/**
+ * The body of `POST /prompt` for a client id, serialized losslessly. Built when the request is
+ * sent, since the client id is the current socket's. Checks the options first, when called.
+ */
 function requestBody(
-  clientId: string,
+  id: string,
   prompt: ApiPrompt,
   options: SubmitOptions,
-): { readonly id: string; readonly text: string } {
+): (clientId: string) => string {
   if (options.previews !== undefined && !PREVIEW_METHODS.has(options.previews)) {
     throw new TypeError(`submit: unknown preview method ${options.previews}`);
   }
@@ -122,25 +126,28 @@ function requestBody(
   for (const key of RESERVED_EXTRA_DATA) {
     if (Object.hasOwn(extra, key)) throw new TypeError(`submit: extraData can't set ${key}`);
   }
-  const id = randomUuid();
-  const body: JsonObject = {
-    client_id: clientId,
-    prompt_id: id,
-    prompt,
-    extra_data: {
-      ...extra,
-      ...(options.previews === undefined ? {} : { preview_method: options.previews }),
-    },
-    ...(options.front === true ? { front: true } : {}),
-    ...(options.targets === undefined
-      ? {}
-      : { partial_execution_targets: options.targets.map(nodeIdOf) }),
-  };
-  return { id, text: stringify(body) };
+  return (clientId) =>
+    stringify({
+      client_id: clientId,
+      prompt_id: id,
+      prompt,
+      extra_data: {
+        ...extra,
+        ...(options.previews === undefined ? {} : { preview_method: options.previews }),
+      },
+      ...(options.front === true ? { front: true } : {}),
+      ...(options.targets === undefined
+        ? {}
+        : { partial_execution_targets: options.targets.map(nodeIdOf) }),
+    });
 }
 
-/** How often to poll the job record after a reconnect, when events may be lost for good. */
-const POLL_MS = [1000, 2000, 5000, 10_000];
+/**
+ * How often to read the job record: after a reconnect, when the job's events are gone for good,
+ * and, slowly, always, so no outcome depends on the websocket alone. The last delay repeats.
+ */
+const POLL_AFTER_RECONNECT_MS = [1000, 2000, 5000, 10_000];
+const POLL_MS = [30_000];
 /** At most one record read per this many milliseconds on queue changes. */
 const QUEUE_CHECK_MS = 1000;
 /** Retries of a record read that couldn't reach the server. */
@@ -203,7 +210,7 @@ class JobRun implements JobListener {
     });
   }
 
-  start(body: string): void {
+  start(body: (clientId: string) => string): void {
     if (this.#signal?.aborted === true) {
       this.#abandon(this.#signal.reason);
       return;
@@ -212,7 +219,7 @@ class JobRun implements JobListener {
     void this.#post(body);
   }
 
-  async #post(body: string): Promise<void> {
+  async #post(body: (clientId: string) => string): Promise<void> {
     try {
       await this.#channel.ready(this.#signal);
       if (this.#settled) {
@@ -222,10 +229,15 @@ class JobRun implements JobListener {
       this.#channel.register(this);
       // Not abortable: once sent, the prompt may be queued, and only its answer says so. An
       // abort meanwhile cancels the job after the answer (`#abandon`).
-      const response = await send(this.#channel.server, { method: "POST", path: "prompt", body });
+      const response = await send(this.#channel.server, {
+        method: "POST",
+        path: "prompt",
+        body: body(this.#channel.clientId),
+      });
       if (response.status === 200) {
         // Queued: from here on the job can be cancelled, whatever the body says.
         this.#accept(true);
+        this.#watch(POLL_MS);
         const answer = await readObject(response).catch(() => undefined);
         const id = answer?.["prompt_id"];
         if (typeof id === "string" && id !== this.id) {
@@ -317,10 +329,9 @@ class JobRun implements JobListener {
   }
 
   reconnected(): void {
-    // Events sent while the socket was down are gone, and a reconnect can leave the server
-    // sending none (two sockets with one id): poll the record until the job settles.
+    // The job's events went to the old socket's client id: poll the record until it settles.
     this.#read();
-    if (this.#poll === undefined) this.#schedulePoll(0);
+    this.#watch(POLL_AFTER_RECONNECT_MS);
   }
 
   fail(error: unknown): void {
@@ -492,13 +503,14 @@ class JobRun implements JobListener {
     this.#events.end();
   }
 
-  #schedulePoll(step: number): void {
+  /** Reads the record after each delay in turn, the last one repeating, until the job settles. */
+  #watch(delays: readonly number[], step = 0): void {
     if (this.#poll !== undefined) clearTimeout(this.#poll);
     if (this.#settled) return;
-    const delay = POLL_MS[Math.min(step, POLL_MS.length - 1)] ?? 10_000;
+    const delay = delays[Math.min(step, delays.length - 1)] ?? 10_000;
     this.#poll = setTimeout(() => {
       this.#read();
-      this.#schedulePoll(step + 1);
+      this.#watch(delays, step + 1);
     }, delay);
   }
 

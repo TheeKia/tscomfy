@@ -424,14 +424,19 @@ describe("cancelling", () => {
 });
 
 describe("a dropped websocket", () => {
-  test("reconnects with the same client id and settles from the record", async () => {
+  test("reconnects with a fresh client id and settles from the record", async () => {
     const run = runOf(await trace("success"));
     const prompt = await promptOf("success");
+    const before = comfy.clientId;
     fake.expect(run, { dropSocketBefore: 6, gapMs: 5 });
     const job = submit(comfy, prompt);
     const outcome = expectStatus(await job.outcome, "success");
     expect(outcome.outputs.size).toBe(2);
     expect(fake.connections).toBe(2);
+    const ids = fake.sockets.map((query) => new URLSearchParams(query).get("clientId"));
+    expect(new Set(ids).size).toBe(2);
+    expect(comfy.clientId).not.toBe(before);
+    expect(comfy.clientId).toBe(ids.at(-1) ?? "");
   });
 
   test("settles even when the server stops sending to the new socket (same-id hazard)", async () => {

@@ -42,7 +42,12 @@ results over HTTP. Seven facts decide the design:
    (server.py:337-345, 388-390). If the old socket closes after the new one registered, the new
    one stays open but receives no targeted events and loses its feature flags. **[probed]**:
    with two sockets on one id, closing the first left the second without a reply to its
-   feature-flag message; a lone socket gets one.
+   feature-flag message; a lone socket gets one. **[probed]**, 2026-10-19: after a network cut
+   the server noticed two seconds late (a TCP proxy holding its side open), the client's new
+   socket on the same id received nothing more, and the next job on it hung. A late close can
+   come much later in practice: the server never pings, so it notices a dead peer only when a
+   send fails, and it sends nothing to a socket no longer registered. Hence a fresh id for
+   every socket (ADR-0024 §7).
 6. **The job record is the authority.** `GET /api/jobs/{id}` (since 0.6.0) gives the status
    (`pending`, `in_progress`, `completed`, `failed`, `cancelled`), the outputs and the
    `execution_error` (comfy_execution/jobs.py). A job cancelled while pending has no record

@@ -2,7 +2,6 @@ import type { JsonObject } from "@tscomfy/core";
 import { attach, Channel } from "./channel.ts";
 import type { Server } from "./server.ts";
 import { baseUrl } from "./url.ts";
-import { randomUuid } from "./uuid.ts";
 
 /**
  * An open connection to a server: a {@link Server} with a websocket that delivers the events of
@@ -10,9 +9,12 @@ import { randomUuid } from "./uuid.ts";
  * keeps a Node or Bun process running.
  */
 export interface Connection extends Server {
-  /** The id the server sends this connection's events to; fresh for every connection. */
+  /**
+   * The id the server sends this connection's events to. A new one for every websocket, so it
+   * changes when the connection reconnects.
+   */
   readonly clientId: string;
-  /** The server's feature flags, as it answered them when the connection opened. */
+  /** The server's feature flags, as it answered them on the current websocket. */
   readonly features: JsonObject;
   /**
    * Closes the websocket. Jobs still open reject their outcome with a {@link ClientError}; they
@@ -37,7 +39,7 @@ export interface ConnectOptions {
  */
 export async function connect(server: Server, options: ConnectOptions = {}): Promise<Connection> {
   baseUrl(server);
-  const channel = new Channel(server, randomUuid());
+  const channel = new Channel(server);
   try {
     await channel.ready(options.signal);
     await channel.checkServer(options.signal);
@@ -50,8 +52,12 @@ export async function connect(server: Server, options: ConnectOptions = {}): Pro
     ...(server.headers === undefined ? {} : { headers: server.headers }),
     ...(server.fetch === undefined ? {} : { fetch: server.fetch }),
     ...(server.webSocket === undefined ? {} : { webSocket: server.webSocket }),
-    clientId: channel.clientId,
-    features: channel.features,
+    get clientId(): string {
+      return channel.clientId;
+    },
+    get features(): JsonObject {
+      return channel.features;
+    },
     close: () => channel.close(),
   });
   attach(connection, channel);

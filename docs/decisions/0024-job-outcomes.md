@@ -1,6 +1,6 @@
 # ADR-0024: The job record decides the outcome; events are a view
 
-Status: accepted, 2026-10-18
+Status: accepted, 2026-10-18; updated 2026-10-19 (a fresh client id per socket, and a slow poll)
 
 ## Context
 
@@ -31,6 +31,7 @@ issue trackers of the surveyed clients are full of both (docs/research/comfyui-e
    - when the socket reports the run's end (`executing` with `node: null`);
    - after every reconnect, then polled (1 s growing to 10 s) until the job settles;
    - after `job.cancel()`;
+   - every 30 s while the job is open, so no outcome depends on the socket alone;
    - when the queue changes while the job hasn't started, throttled, because a job cancelled
      while pending sends no event.
 
@@ -58,8 +59,15 @@ issue trackers of the surveyed clients are full of both (docs/research/comfyui-e
    server lost the record of a job that had started, or the server sent an answer the protocol
    doesn't allow. They aren't results of the job.
 7. **The socket reconnects carefully.** It reconnects only while a job needs it, with jittered
-   exponential backoff. It reuses its client id only after the old socket has closed, and
-   re-sends the feature flags first. The client never runs two sockets with one id.
+   exponential backoff, and re-sends the feature flags first. Every socket gets a fresh client
+   id. Jobs that were running keep the old id, so their remaining events are lost; they settle
+   from the record, polled after the reconnect.
+
+   The first version reused the id, to keep in-flight jobs' events. A network cut that the
+   server notices late defeats that: when the server finally closes the old socket, it
+   unregisters whatever has the id, so the new socket stays open but deaf. Every later job on
+   the connection then gets no events and no final signal. `reconnect.live.test.ts` reproduced
+   this on ComfyUI 0.41 with a TCP proxy that holds the server's side of a cut connection.
 
 ## Consequences
 

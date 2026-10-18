@@ -55,9 +55,12 @@ import type { Server } from "./server.ts";
  * keeps a Node or Bun process running.
  */
 export interface Connection extends Server {
-    /** The id the server sends this connection's events to; fresh for every connection. */
+    /**
+     * The id the server sends this connection's events to. A new one for every websocket, so it
+     * changes when the connection reconnects.
+     */
     readonly clientId: string;
-    /** The server's feature flags, as it answered them when the connection opened. */
+    /** The server's feature flags, as it answered them on the current websocket. */
     readonly features: JsonObject;
     /**
      * Closes the websocket. Jobs still open reject their outcome with a {@link ClientError}; they

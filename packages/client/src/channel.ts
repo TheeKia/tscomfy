@@ -6,6 +6,7 @@ import { isObject, readObject, send } from "./http.ts";
 import type { Server } from "./server.ts";
 import { abortable, sleep } from "./timers.ts";
 import { baseUrl, endpoint, shownUrl } from "./url.ts";
+import { randomUuid } from "./uuid.ts";
 
 /** Connections and the channels behind them. */
 const channels = new WeakMap<Connection, Channel>();
@@ -61,14 +62,16 @@ const closedError = (): ClientError => new ClientError("The connection is closed
 
 /**
  * One websocket and the jobs listening on it. Opens one socket at a time, shared by every
- * caller; reconnects only while jobs are open, after the old socket has closed (two live sockets
- * with one client id lose events on the server), and re-sends the feature flags first. `close()`
- * stops everything it started: sockets, handshakes, backoff waits.
+ * caller, each with a fresh client id; reconnects only while jobs are open, and re-sends the
+ * feature flags first. Jobs that were running keep their old client id, so their events are
+ * gone; they poll their record instead. `close()` stops everything it started: sockets,
+ * handshakes, backoff waits.
  */
 export class Channel {
   readonly server: Server;
-  readonly clientId: string;
   features: JsonObject = {};
+  /** The client id of the socket open now; every socket gets its own. */
+  #clientId: string = randomUuid();
   readonly #jobs = new Map<string, JobListener>();
   /** Every socket this channel opened and that hasn't closed yet. */
   readonly #sockets = new Set<WebSocket>();
@@ -81,9 +84,13 @@ export class Channel {
   /** The job whose prompt the server is running, for progress text without a prompt id. */
   #running: JobListener | undefined;
 
-  constructor(server: Server, clientId: string) {
+  constructor(server: Server) {
     this.server = server;
-    this.clientId = clientId;
+  }
+
+  /** The client id the server sends this channel's events to now. */
+  get clientId(): string {
+    return this.#clientId;
   }
 
   /** Whether `close()` was called. */
@@ -173,7 +180,11 @@ export class Channel {
 
   /** Opens a socket and negotiates the feature flags; the socket becomes the channel's. */
   async #open(): Promise<void> {
-    const url = endpoint(baseUrl(this.server), "ws", { clientId: this.clientId });
+    // A fresh id for every socket: when the server closes an old socket late (a connection it
+    // hadn't noticed was dead), it unregisters whatever has that socket's id. A reused id would
+    // leave the new socket open but deaf.
+    const clientId = randomUuid();
+    const url = endpoint(baseUrl(this.server), "ws", { clientId });
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const shown = shownUrl(url);
     const life = this.#life.signal;
@@ -221,6 +232,7 @@ export class Channel {
             negotiated = true;
             done();
             this.features = message.data;
+            this.#clientId = clientId;
             this.#socket = socket;
             resolve();
             return;
