@@ -1,5 +1,6 @@
 // Graph operations (docs/plan.md §12): free functions from a workflow to new workflows.
 
+import { definitionOf } from "../schema/lookup.ts";
 import type { GraphNode, InputValue, Workflow } from "./graph.ts";
 import { isOutputRef } from "./output-ref.ts";
 import type { NodeId, Out } from "./types.ts";
@@ -28,9 +29,7 @@ export function splitOutputs<N>(workflow: Workflow<N>): readonly Workflow<N>[] {
 function outputNodes(workflow: Workflow): GraphNode[] {
   return [...workflow.graph.nodes.values()].filter(
     (node) =>
-      node.mode === undefined &&
-      Object.hasOwn(workflow.schema.nodes, node.classType) &&
-      workflow.schema.nodes[node.classType]?.outputNode === true,
+      node.mode === undefined && definitionOf(workflow.schema, node.classType)?.outputNode === true,
   );
 }
 

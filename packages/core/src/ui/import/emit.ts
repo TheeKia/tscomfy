@@ -6,9 +6,10 @@ import type { WireNode } from "../../api/import.ts";
 import { wrapList } from "../../api/wire.ts";
 import { frontendWidgets, SCRIPTED_WIDGETS, uncreatable } from "../../frontend/node.ts";
 import type { JsonValue } from "../../json/value.ts";
+import { definitionOf } from "../../schema/lookup.ts";
 import { MODE_BYPASS, MODE_MUTE, nodeModeOf } from "../format.ts";
 import type { Id, UiNode } from "./file.ts";
-import { classOf, type Context, type Graph, type Loaded, nodeKey, VIRTUAL_NODES } from "./graph.ts";
+import { type Context, type Graph, type Loaded, nodeKey, VIRTUAL_NODES } from "./graph.ts";
 import { type LinkResolver, problemMessage } from "./resolve.ts";
 import { isNamedValues } from "./widget-values.ts";
 
@@ -96,7 +97,7 @@ export function emittedNodes(loaded: Loaded, rootOrder: readonly Id[]): Emitted[
     }
     if (VIRTUAL_NODES.has(node.type)) continue;
     if (
-      classOf(loaded, node.type) === undefined &&
+      definitionOf(loaded.schema, node.type) === undefined &&
       !loaded.groupNode(node.type) &&
       !linked(context.graph, node.id)
     ) {
@@ -122,7 +123,7 @@ export function wireOf(
   { context, node }: Emitted,
 ): WireNode {
   const id = nodeKey(context, node.id);
-  const definition = classOf(loaded, node.type);
+  const definition = definitionOf(loaded.schema, node.type);
   const mode = nodeModeOf(node.mode);
   const base = {
     id,

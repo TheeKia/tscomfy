@@ -12,7 +12,6 @@ const REPORTS = join(REPO, "docs/api");
 
 interface Manifest {
   readonly name: string;
-  readonly private?: boolean;
   readonly exports: { readonly ".": { readonly types: string } };
 }
 
@@ -33,12 +32,7 @@ async function readManifest(path: string): Promise<Manifest> {
     "types" in value.exports["."] &&
     typeof value.exports["."].types === "string"
   ) {
-    const isPrivate = "private" in value && value.private === true;
-    return {
-      name: value.name,
-      private: isPrivate,
-      exports: { ".": { types: value.exports["."].types } },
-    };
+    return { name: value.name, exports: { ".": { types: value.exports["."].types } } };
   }
   throw new Error(`${path}: expected a package with a \`types\` entry for "."`);
 }
@@ -84,11 +78,10 @@ async function report(directory: string, manifest: Manifest): Promise<string> {
 /** The report path and contents for each published package, in package-name order. */
 async function reports(): Promise<readonly { readonly path: string; readonly contents: string }[]> {
   const names = (await readdir(PACKAGES)).toSorted();
-  const all = await Promise.all(
+  return Promise.all(
     names.map(async (name) => {
       const directory = join(PACKAGES, name);
       const manifest = await readManifest(join(directory, "package.json"));
-      if (manifest.private === true) return undefined;
       const contents = await report(directory, manifest).catch((error: unknown) => {
         throw new Error(`${manifest.name}: no declarations; run \`tsc -b\` first`, {
           cause: error,
@@ -97,7 +90,6 @@ async function reports(): Promise<readonly { readonly path: string; readonly con
       return { path: join(REPORTS, `${name}.md`), contents };
     }),
   );
-  return all.filter((each) => each !== undefined);
 }
 
 const check = process.argv.includes("--check");

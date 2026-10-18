@@ -3,9 +3,9 @@
 
 import type { DiagnosticPath } from "../diagnostic/diagnostic.ts";
 import { isPrimitiveWidget, isValueWidget } from "../frontend/widgets.ts";
-import { isJsonArray, type JsonObject, type JsonValue } from "../json/value.ts";
+import { isJsonArray, isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
 import type { InputDef } from "../schema/types.ts";
-import { type Context, describe, isObject, readOptional, report } from "./context.ts";
+import { type Context, describe, readOptional, report } from "./context.ts";
 import {
   AUTOGROW,
   DYNAMIC_COMBO,
@@ -28,7 +28,7 @@ export function readNodeInputs(
   path: DiagnosticPath,
 ): InputDef[] | undefined {
   const input = node["input"];
-  if (input === undefined || !isObject(input)) {
+  if (!isJsonObject(input)) {
     report(
       context,
       "E_INVALID_NODE",
@@ -38,7 +38,7 @@ export function readNodeInputs(
     return undefined;
   }
   const required = input["required"] ?? {};
-  if (!isObject(required)) {
+  if (!isJsonObject(required)) {
     report(
       context,
       "E_INVALID_NODE",
@@ -48,7 +48,7 @@ export function readNodeInputs(
     return undefined;
   }
   let optional = input["optional"] ?? {};
-  if (!isObject(optional)) {
+  if (!isJsonObject(optional)) {
     report(
       context,
       "E_INVALID_INPUT_SECTION",
@@ -107,7 +107,7 @@ function orderInputs(
     path,
     "W_INVALID_NODE_FIELD",
     "an object",
-    isObject,
+    isJsonObject,
   );
   if (order === undefined) return all;
   const listed = (section: Section, names: readonly string[]) => {
@@ -170,7 +170,7 @@ function readInput(
   path: DiagnosticPath,
   forceSocket: boolean,
 ): InputDef {
-  if (spec === undefined || !isJsonArray(spec) || spec.length === 0) {
+  if (!isJsonArray(spec) || spec.length === 0) {
     return unknown(
       context,
       name,
@@ -184,7 +184,7 @@ function readInput(
   const optionsPath = [...path, 1];
   let options: JsonObject = {};
   if (rawOptions !== undefined && rawOptions !== null) {
-    if (isObject(rawOptions)) options = rawOptions;
+    if (isJsonObject(rawOptions)) options = rawOptions;
     else
       report(
         context,
@@ -199,7 +199,7 @@ function readInput(
   // forces to a socket): their links only match an identical option list (§5.2), which a COMBO
   // socket would not express. They record the flag, since the frontend then draws a socket and
   // no widget.
-  if (head !== undefined && isJsonArray(head)) {
+  if (isJsonArray(head)) {
     return (
       reader.legacyCombo(head, [...path, 0], forceSocket) ??
       unknown(context, name, required, spec, path)

@@ -35,7 +35,7 @@ export function bypassSlot(
  * LiteGraph's `isValidConnection`: `*` and the empty type match anything; otherwise the types
  * match ignoring case, or, for comma lists, when any member of one matches any of the other.
  */
-export function validConnection(a: string, b: string): boolean {
+function validConnection(a: string, b: string): boolean {
   if (a === "" || a === "*" || b === "" || b === "*" || a === b) return true;
   const x = a.toLowerCase();
   const y = b.toLowerCase();

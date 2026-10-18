@@ -1,17 +1,10 @@
 import type { Diagnostic, DiagnosticPath } from "../diagnostic/diagnostic.ts";
 import { parse } from "../json/parse.ts";
+import { isJsonObject } from "../json/value.ts";
 import type { JsonObject, JsonValue } from "../json/value.ts";
 import { freezeSchema } from "../schema/freeze.ts";
 import type { NodeDef, Schema } from "../schema/types.ts";
-import {
-  type Context,
-  describe,
-  isBoolean,
-  isObject,
-  isString,
-  readOptional,
-  report,
-} from "./context.ts";
+import { type Context, describe, isBoolean, isString, readOptional, report } from "./context.ts";
 import { readNodeInputs } from "./inputs.ts";
 import { readOutputs } from "./outputs.ts";
 
@@ -47,7 +40,7 @@ export function normalizeObjectInfo(text: string, options: NormalizeOptions = {}
   const entries: [string, NodeDef][] = [];
   const root = parsed.value;
   if (root !== undefined) {
-    if (isObject(root)) {
+    if (isJsonObject(root)) {
       // No comparator: code-unit order, the same in every runtime and locale (D15).
       for (const classType of Object.keys(root).toSorted()) {
         const node = readNode(context, classType, root[classType]);
@@ -76,7 +69,7 @@ function readNode(
   value: JsonValue | undefined,
 ): NodeDef | undefined {
   const path: DiagnosticPath = [classType];
-  if (value === undefined || !isObject(value)) {
+  if (!isJsonObject(value)) {
     report(
       context,
       "E_INVALID_NODE",

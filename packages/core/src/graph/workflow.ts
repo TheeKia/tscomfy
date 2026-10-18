@@ -1,4 +1,5 @@
 import { namedOutputs } from "../schema/frontend.ts";
+import { definitionOf } from "../schema/lookup.ts";
 import type { TypedSchema } from "../schema/typed.ts";
 import type { NodeDef } from "../schema/types.ts";
 import type { BuildContext, Graph, GraphNode, InputValue, RawNode, Workflow } from "./graph.ts";
@@ -137,8 +138,7 @@ class GraphBuilder<N> {
   #function(classType: string): ((inputs?: unknown, options?: unknown) => unknown) | undefined {
     const existing = this.#functions.get(classType);
     if (existing !== undefined) return existing;
-    if (!Object.hasOwn(this.#schema.nodes, classType)) return undefined;
-    const definition = this.#schema.nodes[classType];
+    const definition = definitionOf(this.#schema, classType);
     if (definition === undefined) return undefined;
     const created = (inputs?: unknown, options?: unknown): unknown =>
       result(this, definition, this.#add(classType, inputs, options, false));

@@ -5,7 +5,7 @@ import {
   type DiagnosticPath,
 } from "../diagnostic/diagnostic.ts";
 import { stringify } from "../json/stringify.ts";
-import { isJsonArray, isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
+import { isJsonArray, type JsonObject, type JsonValue } from "../json/value.ts";
 
 /** Collects the diagnostics of one normalizer run. */
 export interface Context {
@@ -61,11 +61,6 @@ export function isString(value: JsonValue): value is string {
 /** Type guard for booleans. */
 export function isBoolean(value: JsonValue): value is boolean {
   return typeof value === "boolean";
-}
-
-/** Type guard for JSON objects. */
-export function isObject(value: JsonValue): value is JsonObject {
-  return isJsonObject(value);
 }
 
 const PREVIEW_LENGTH = 60;

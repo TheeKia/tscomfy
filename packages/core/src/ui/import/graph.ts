@@ -1,8 +1,7 @@
 // The graphs of a UI file once loaded: what the file holds, the widget values restored, and where
 // the links landed. The steps of `importUi` (`../import.ts`) build these in order.
 
-import { definitionOf } from "../../schema/lookup.ts";
-import type { NodeDef, Schema } from "../../schema/types.ts";
+import type { Schema } from "../../schema/types.ts";
 import type { Boundary, GraphFile, Id, UiNode } from "./file.ts";
 import type { Placement } from "./placement.ts";
 import type { Report } from "./report.ts";
@@ -59,11 +58,6 @@ export interface Context {
 export interface NodeIn {
   readonly graph: Graph;
   readonly node: UiNode;
-}
-
-/** The schema's definition of a node's class, if it has one. */
-export function classOf(loaded: Loaded, type: string): NodeDef | undefined {
-  return definitionOf(loaded.schema, type);
 }
 
 /** A node's id in the prompt: its instance path and its own id, joined with `:`. */

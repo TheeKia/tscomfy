@@ -7,10 +7,10 @@ import { bypassSlot } from "../../frontend/links.ts";
 import { frontendWidgets } from "../../frontend/node.ts";
 import type { NodeId } from "../../graph/types.ts";
 import type { JsonValue } from "../../json/value.ts";
+import { definitionOf } from "../../schema/lookup.ts";
 import { MODE_BYPASS, MODE_MUTE } from "../format.ts";
 import type { Boundary, Id, UiLink, UiNode } from "./file.ts";
 import {
-  classOf,
   type Context,
   type Loaded,
   nodeKey,
@@ -267,7 +267,7 @@ export class LinkResolver {
           if (value !== undefined) return value;
           continue;
         }
-        const own = classOf(this.#loaded, target.type);
+        const own = definitionOf(this.#loaded.schema, target.type);
         const restored = values.get(target.id)?.values;
         if (own === undefined || restored === undefined) continue;
         const widget = frontendWidgets(own, (key) => restored.get(key)).some(

@@ -17,7 +17,7 @@ export function readOutputs(
   path: DiagnosticPath,
 ): OutputDef[] | undefined {
   const types = node["output"];
-  if (types === undefined || !isJsonArray(types)) {
+  if (!isJsonArray(types)) {
     report(
       context,
       "E_INVALID_NODE",

@@ -15,6 +15,7 @@ import type { GraphNode, InputValue, Workflow } from "../graph/graph.ts";
 import { isOutputRef } from "../graph/output-ref.ts";
 import type { NodeId } from "../graph/types.ts";
 import type { JsonValue } from "../json/value.ts";
+import { definitionOf } from "../schema/lookup.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
 import { validateApi } from "../validate/validate-api.ts";
 import { applyModes, type ModalNode } from "./modes.ts";
@@ -73,9 +74,7 @@ export function exportApi(workflow: Workflow, options: ToApiOptions = {}): ApiEx
   const entries: [NodeId, ApiNode][] = [];
   const modal: ModalNode[] = [];
   for (const node of workflow.graph.nodes.values()) {
-    const definition = Object.hasOwn(workflow.schema.nodes, node.classType)
-      ? workflow.schema.nodes[node.classType]
-      : undefined;
+    const definition = definitionOf(workflow.schema, node.classType);
     const inputs =
       node.raw || definition === undefined
         ? rawInputs(node)

@@ -392,7 +392,7 @@ function linkOf(
 }
 
 /** A value as a list: itself when it is one, else empty. */
-export function list(value: JsonValue | undefined): readonly JsonValue[] {
+function list(value: JsonValue | undefined): readonly JsonValue[] {
   return isJsonArray(value) ? value : [];
 }
 

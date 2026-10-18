@@ -1,4 +1,5 @@
 import { stringify } from "../json/stringify.ts";
+import { definitionOf } from "./lookup.ts";
 import type { ComboOption, InputDef, NodeDef, Schema } from "./types.ts";
 
 /** How one input differs between two schemas. */
@@ -53,8 +54,8 @@ export function diffSchemas(before: Schema, after: Schema): SchemaDiff {
   const removed: string[] = [];
   const changed: NodeChange[] = [];
   for (const classType of classTypes) {
-    const old = Object.hasOwn(before.nodes, classType) ? before.nodes[classType] : undefined;
-    const now = Object.hasOwn(after.nodes, classType) ? after.nodes[classType] : undefined;
+    const old = definitionOf(before, classType);
+    const now = definitionOf(after, classType);
     if (old === undefined && now !== undefined) added.push(classType);
     else if (old !== undefined && now === undefined) removed.push(classType);
     else if (old !== undefined && now !== undefined && stringify(old) !== stringify(now)) {

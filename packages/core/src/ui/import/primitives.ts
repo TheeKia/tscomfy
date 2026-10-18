@@ -5,9 +5,10 @@
 import { frontendWidgets } from "../../frontend/node.ts";
 import { fileNameSafe, replaceText, SAVE_NODES } from "../../frontend/text.ts";
 import { isJsonArray, type JsonValue } from "../../json/value.ts";
+import { definitionOf } from "../../schema/lookup.ts";
 import { SEARCH_NAME_PROPERTY } from "../format.ts";
 import type { Id, UiNode } from "./file.ts";
-import { classOf, type Graph, type Loaded, type NodeIn } from "./graph.ts";
+import type { Graph, Loaded, NodeIn } from "./graph.ts";
 import { fixedUp, positionalValues } from "./widget-values.ts";
 
 const REPLACE_PROPERTY = "Run widget replace on values";
@@ -168,7 +169,7 @@ export class TextReplacer {
     const given = node.properties[SEARCH_NAME_PROPERTY];
     if (typeof given === "string") return given;
     // Added at creation to every node of a server class but the save nodes.
-    return classOf(this.#loaded, node.type) !== undefined && !SAVE_NODES.has(node.type)
+    return definitionOf(this.#loaded.schema, node.type) !== undefined && !SAVE_NODES.has(node.type)
       ? node.type
       : undefined;
   }
@@ -176,7 +177,7 @@ export class TextReplacer {
   #title(node: UiNode): string {
     if (node.title !== undefined) return node.title;
     return (
-      classOf(this.#loaded, node.type)?.displayName ??
+      definitionOf(this.#loaded.schema, node.type)?.displayName ??
       this.#loaded.subgraphs.get(node.type)?.name ??
       FRONTEND_TITLES.get(node.type) ??
       node.type
@@ -192,7 +193,7 @@ export class TextReplacer {
       if (value === undefined) return null;
       return at === 0 ? value : fixedUp(node.type, { name, role: "control" }, value);
     }
-    const definition = classOf(this.#loaded, node.type);
+    const definition = definitionOf(this.#loaded.schema, node.type);
     const restored = graph.values.get(node.id);
     if (definition === undefined || restored === undefined) return undefined;
     const widget = frontendWidgets(definition, (key) => restored.values.get(key)).find(

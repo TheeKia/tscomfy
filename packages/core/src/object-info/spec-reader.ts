@@ -5,7 +5,7 @@
 
 import type { DiagnosticPath } from "../diagnostic/diagnostic.ts";
 import { type PrimitiveWidget, sendsValue } from "../frontend/widgets.ts";
-import { isJsonArray, type JsonObject, type JsonValue } from "../json/value.ts";
+import { isJsonArray, isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
 import { isComboOption } from "../schema/combo.ts";
 import type {
   AutogrowInput,
@@ -24,7 +24,6 @@ import {
   type Context,
   describe,
   isBoolean,
-  isObject,
   isString,
   preview,
   readOptional,
@@ -63,24 +62,17 @@ const GROUP_FIELD_KINDS: ReadonlySet<InputDef["kind"]> = new Set([
   "value",
 ]);
 
-/** Upload flags, and the kind of upload each names. */
-const UPLOADS: Readonly<Record<(typeof UPLOAD_FLAGS)[number], ComboUpload>> = {
-  image_upload: "image",
-  video_upload: "video",
-  animated_image_upload: "animated_image",
-  audio_upload: "audio",
-  file_upload: "file",
-};
-const UPLOAD_FLAGS = [
-  "image_upload",
-  "video_upload",
-  "animated_image_upload",
-  "audio_upload",
-  "file_upload",
-] as const;
+/** Upload flags, and the kind of upload each names, in the order uploads are listed. */
+const UPLOADS: readonly (readonly [string, ComboUpload])[] = [
+  ["image_upload", "image"],
+  ["video_upload", "video"],
+  ["animated_image_upload", "animated_image"],
+  ["audio_upload", "audio"],
+  ["file_upload", "file"],
+];
 
 /** Reads `{ required?, optional? }` sections nested in a dynamic input. */
-export function readNestedSections(
+function readNestedSections(
   context: Context,
   sections: JsonObject,
   path: DiagnosticPath,
@@ -90,7 +82,7 @@ export function readNestedSections(
   for (const section of ["required", "optional"] as const) {
     const specs = sections[section];
     if (specs === undefined || specs === null) continue;
-    if (!isObject(specs)) {
+    if (!isJsonObject(specs)) {
       report(
         context,
         "W_INVALID_INPUT_OPTION",
@@ -252,7 +244,7 @@ export class SpecReader {
         optionsPath,
       );
     }
-    return this.#combo("legacy", [...rawOptions].filter(isComboOption), {
+    return this.#combo("legacy", rawOptions.filter(isComboOption), {
       type: { kind: "named", name: "COMBO" },
       socketless: this.flag("socketless"),
       ...(forceSocket || this.flag("forceInput") ? { forceInput: true } : {}),
@@ -275,14 +267,14 @@ export class SpecReader {
     const template = this.#object("template");
     const templatePath = [...this.#path, "template"];
     const input = template === undefined ? undefined : template["input"];
-    if (template === undefined || input === undefined || !isObject(input)) {
+    if (template === undefined || !isJsonObject(input)) {
       return this.#invalid("Autogrow needs a template with an input.");
     }
     // The backend takes the first input of the first non-empty section, in key order.
     const first = Object.entries(input)
       .filter(([section]) => section === "required" || section === "optional")
       .flatMap(([section, specs]) =>
-        isObject(specs)
+        isJsonObject(specs)
           ? Object.entries(specs).map(([name, value]) => ({ section, name, value }))
           : [],
       )[0];
@@ -332,14 +324,14 @@ export class SpecReader {
 
   dynamicCombo(): DynamicComboInput | undefined {
     const rawOptions = this.#options["options"];
-    if (rawOptions === undefined || !isJsonArray(rawOptions)) {
+    if (!isJsonArray(rawOptions)) {
       return this.#invalid("A dynamic combo needs a list of options.");
     }
     const options: DynamicComboOption[] = [];
     rawOptions.forEach((option, index) => {
       const optionPath = [...this.#path, "options", index];
-      const key = isObject(option) ? option["key"] : undefined;
-      if (!isObject(option) || typeof key !== "string") {
+      const key = isJsonObject(option) ? option["key"] : undefined;
+      if (!isJsonObject(option) || typeof key !== "string") {
         report(
           this.#context,
           "W_INVALID_INPUT_OPTION",
@@ -359,7 +351,7 @@ export class SpecReader {
       }
       const inputs = option["inputs"];
       let children: InputDef[] = [];
-      if (inputs !== undefined && isObject(inputs)) {
+      if (isJsonObject(inputs)) {
         children = readNestedSections(
           this.#context,
           inputs,
@@ -528,7 +520,7 @@ export class SpecReader {
             options,
             multiselect && frontendMultiselect !== undefined && frontendMultiselect !== false,
           );
-    const uploads = UPLOAD_FLAGS.filter((flag) => this.flag(flag)).map((flag) => UPLOADS[flag]);
+    const uploads = UPLOADS.filter(([flag]) => this.flag(flag)).map(([, upload]) => upload);
     return {
       kind: "combo",
       ...this.base(),
@@ -619,7 +611,7 @@ export class SpecReader {
       this.#path,
       "W_INVALID_INPUT_OPTION",
       "an object",
-      isObject,
+      isJsonObject,
     );
   }
 

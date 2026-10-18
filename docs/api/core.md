@@ -593,7 +593,10 @@ export declare function socketAccepts(input: SocketType, output: OutputType): bo
 
 ```ts
 import type { OutputDef } from "./types.ts";
-/** Whether the exporter sends a value for an input; see `frontend/widgets.ts`. */
+/**
+ * Whether the exporter sends a value for an input; see `frontend/widgets.ts`. Re-exported here so
+ * the public API reaches it without the rest of `frontend/`, which the API report would list.
+ */
 export { sendsInputValue } from "../frontend/widgets.ts";
 /**
  * The outputs of a multi-output node that are also reachable by name, as name → slot. A name is
