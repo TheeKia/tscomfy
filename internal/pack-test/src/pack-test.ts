@@ -58,7 +58,7 @@ async function run(
   return result;
 }
 
-/** `[name, value]` of the JSON object at `path` in `value`, or fails. */
+/** `value` as a record, or a failure naming `what`. */
 function record(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     fail(`${what} is not an object`);
