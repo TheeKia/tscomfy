@@ -185,6 +185,20 @@ describe("the graph", () => {
     });
   });
 
+  test.each([
+    ["options that aren't an object", ["X", {}, "title"], /options must be an object/],
+    ["an id that isn't a string", ["X", {}, { id: 1 }], /options.id must be a string/],
+    ["a title that isn't a string", ["X", {}, { title: 1 }], /options.title must be a string/],
+    ["a mode the frontend doesn't have", ["X", {}, { mode: "never" }], /options.mode/],
+    ["inputs that aren't a plain object", ["X", [1]], /inputs must be a plain object/],
+  ])("throws for %s", (_name, args, message) => {
+    expect(() =>
+      workflow(basic, ({ raw }) => {
+        Reflect.apply(raw, undefined, args);
+      }),
+    ).toThrow(message);
+  });
+
   test.each([-1, 1.5, Number.NaN])("rejects raw output slot %p", (slot) => {
     workflow(basic, ({ raw }) => {
       expect(() => raw("X").output(slot)).toThrow(TypeError);

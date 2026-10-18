@@ -28,6 +28,10 @@ describe("registry", () => {
     expect(code).toMatch(/^[EW]_[A-Z0-9_]+$/);
   });
 
+  test("is frozen", () => {
+    expect(Object.isFrozen(DIAGNOSTIC_CODES)).toBeTrue();
+  });
+
   test("docs/diagnostics.md documents exactly the registered codes", async () => {
     const doc = await Bun.file(join(import.meta.dir, "../../../docs/diagnostics.md")).text();
     const documented = [...doc.matchAll(/^\| `([EW]_[A-Z0-9_]+)` \|/gm)].map(
@@ -204,6 +208,16 @@ const PRODUCERS: Record<CoreCode, Producer> = {
         looseSchema(await readMockObjectInfo("basic-pipeline")),
       ).diagnostics,
     path: ["4"],
+  },
+  W_EXTENSION_WIDGETS: {
+    produce: async () => {
+      const schema = looseSchema(await readMockObjectInfo("ui-extensions"));
+      const built = workflow(schema, ({ n }) => {
+        n["CustomCombo"]?.({ choice: "a" }, { id: "6" });
+      });
+      return toUi(built).diagnostics;
+    },
+    path: ["6"],
   },
   W_UNKNOWN_UI_CLASS: {
     produce: async () => {

@@ -7,7 +7,7 @@ declare const nodesType: unique symbol;
 
 /**
  * A schema together with the generated `Nodes` interface that types its node functions. The
- * brand exists only at compile time; `defineSchema` is the one place that applies it.
+ * brand exists only at compile time; {@link defineSchema} and {@link typedSchema} apply it.
  */
 export type TypedSchema<N> = Schema & { readonly [nodesType]: N };
 
@@ -18,7 +18,7 @@ export type TypedSchema<N> = Schema & { readonly [nodesType]: N };
 export type NodesOf<S> = S extends TypedSchema<infer N> ? N : never;
 
 /**
- * Loads the schema a generated `index.ts` embeds (docs/plan.md §6.1, D13). `text` is
+ * Loads the schema a generated `index.ts` embeds. `text` is
  * `stringify(schema)` as codegen wrote it; it is parsed losslessly, so big integers stay exact.
  *
  * Throws when the text isn't such a schema: generated files are tscomfy's own output, so a
@@ -26,6 +26,22 @@ export type NodesOf<S> = S extends TypedSchema<infer N> ? N : never;
  */
 export function defineSchema<N>(text: string): TypedSchema<N> {
   return schemaFromParse(parse(text));
+}
+
+/**
+ * A schema as a typed schema, to build and import workflows over a schema read at runtime (from
+ * `normalizeObjectInfo`) rather than generated. With `N` left `unknown`, `n` has no node
+ * functions, and nodes are added with `raw`; `importApi` and `importUi` work as with generated
+ * types. The schema is frozen, as the normalizer returns it.
+ */
+export function typedSchema<N = unknown>(schema: Schema): TypedSchema<N> {
+  return brand(
+    freezeSchema({
+      formatVersion: schema.formatVersion,
+      ...(schema.comfyVersion === undefined ? {} : { comfyVersion: schema.comfyVersion }),
+      nodes: Object.fromEntries(Object.entries(schema.nodes)),
+    }),
+  );
 }
 
 /** {@link defineSchema} from a parse result. Exported for tests; not part of the public API. */
@@ -38,13 +54,7 @@ export function schemaFromParse<N>({ value, diagnostics }: ParseResult): TypedSc
   if (value === undefined || diagnostics.length > 0 || !isSchemaShaped(value)) {
     throw new TypeError("defineSchema: the text is not a schema written by tscomfy codegen");
   }
-  return brand(
-    freezeSchema({
-      formatVersion: value.formatVersion,
-      ...(value.comfyVersion === undefined ? {} : { comfyVersion: value.comfyVersion }),
-      nodes: Object.fromEntries(Object.entries(value.nodes)),
-    }),
-  );
+  return typedSchema(value);
 }
 
 /** Applies the compile-time `Nodes` brand: a branding helper, the one documented cast. */

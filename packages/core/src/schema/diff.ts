@@ -5,11 +5,14 @@ import type { ComboOption, InputDef, NodeDef, Schema } from "./types.ts";
 export interface InputChange {
   /** The input's name (a top-level input; nested changes count as `specChanged`). */
   readonly name: string;
-  /** For combos on both sides: the options only one side has. Empty for other changes. */
+  /** For combos on both sides: the options only the new side has. Empty for other changes. */
   readonly optionsAdded: readonly ComboOption[];
   /** Options the old side has and the new one doesn't. */
   readonly optionsRemoved: readonly ComboOption[];
-  /** Something besides the options changed: the kind, a bound, a default, nested inputs, …. */
+  /**
+   * Something besides added or removed options changed: the kind, a bound, a default, nested
+   * inputs, or the order of the options both sides have.
+   */
   readonly specChanged: boolean;
 }
 
@@ -39,7 +42,7 @@ export interface SchemaDiff {
 }
 
 /**
- * The differences between two schemas (docs/plan.md §9 `check`): nodes added, removed and
+ * The differences between two schemas: nodes added, removed and
  * changed, and per changed node its inputs, combo options and outputs. Empty when both hash
  * the same.
  */

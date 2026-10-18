@@ -1,36 +1,43 @@
-import { basename, join } from "node:path";
-import { CODEGEN_VERSION, generate, isExportName } from "@tscomfy/codegen";
-import { type Diagnostic, hashSchema, normalizeObjectInfo, type Schema } from "@tscomfy/core";
-import { type Flags, parseFlags, value } from "./args.ts";
+import { basename, dirname, join } from "node:path";
+import { CODEGEN_VERSION, exportNameProblem, generate } from "@tscomfy/codegen";
+import { hashSchema } from "@tscomfy/core";
+import { type Flags, HELP, parseFlags, required, value } from "./args.ts";
 import { CliError, type Io } from "./io.ts";
-import { contentHash, formatManifest, MANIFEST, type Manifest } from "./manifest.ts";
+import {
+  contentHash,
+  formatManifest,
+  MANIFEST,
+  type Manifest,
+  readManifest,
+  SNAPSHOT,
+} from "./manifest.ts";
 import { count, formatDiagnostic, reportDiagnostics, size } from "./report.ts";
-import { readSource, type Source } from "./source.ts";
-import { shellQuote } from "./util.ts";
-
-/** The raw snapshot written next to the generated files, for `--from` and `check`. */
-export const SNAPSHOT = "object_info.json";
+import { loadSchema, readSource, type Source } from "./source.ts";
+import { camelName, flagWords } from "./util.ts";
 
 /** `tscomfy generate --help`. */
 export const GENERATE_USAGE: string = `Usage: tscomfy generate (--url <server> | --from <object_info.json>) --out <dir> [options]
 
 Writes <dir>/nodes.ts (types), <dir>/index.ts (the typed schema), <dir>/${SNAPSHOT}
 (the raw response, for regenerating offline and for \`tscomfy check\`) and <dir>/${MANIFEST}
-(what was generated, for \`tscomfy check\`).
+(what was generated, for \`tscomfy check\` and \`tscomfy transpile\`).
 
 Options:
   --url <server>             A ComfyUI server, e.g. http://127.0.0.1:8188. Only GET requests.
                              Credentials and the query are sent, never written or shown.
   --from <file>              A saved /object_info response instead of a server.
   --out <dir>                The directory to write into.
-  --name <identifier>        The exported schema constant. Default: from the directory name.
+  --name <identifier>        The exported schema constant. Default: from the directory name,
+                             camelCased (my-server → myServer).
   --import-extension <ext>   How index.ts imports nodes.ts: .js (default) or .ts.
-  --comfy-version <version>  The ComfyUI version to record, with --from.
+  --comfy-version <version>  The ComfyUI version to record, with --from. Default: the one
+                             recorded next to <file> when it is a snapshot generate wrote.
   --verbose                  List every diagnostic.
   --quiet                    Print errors only.
+  -h, --help                 Show this help.
 
 The headers record the command that regenerates the files, for a POSIX shell in the directory
-generate ran in.
+generate ran in. A value that starts with - is written --flag=<value>.
 `;
 
 const FLAGS = [
@@ -42,7 +49,7 @@ const FLAGS = [
   { name: "comfy-version", takesValue: true },
   { name: "verbose", takesValue: false },
   { name: "quiet", takesValue: false },
-  { name: "help", takesValue: false },
+  HELP,
 ] as const;
 
 /** `tscomfy generate`. */
@@ -52,18 +59,17 @@ export async function generateCommand(io: Io, args: readonly string[]): Promise<
     io.out(GENERATE_USAGE);
     return 0;
   }
-  const out = path(flags, "out");
-  if (flags.has("from")) path(flags, "from");
+  const out = required(flags, "out");
   const exportName = readName(flags, out);
   const importExtension = readExtension(flags);
   if (flags.has("comfy-version") && !flags.has("from")) {
     throw new CliError("--comfy-version goes with --from; with --url it comes from the server.", 2);
   }
-  if (flags.has("comfy-version")) path(flags, "comfy-version");
   if (flags.has("verbose") && flags.has("quiet")) {
     throw new CliError("--verbose and --quiet don't go together.", 2);
   }
-  const source = await readSource(io, flags);
+  const read = await readSource(io, flags);
+  const source = await withSnapshotVersion(io, flags, read);
   const schema = loadSchema(source);
 
   const command = regenerateCommand({
@@ -71,6 +77,7 @@ export async function generateCommand(io: Io, args: readonly string[]): Promise<
     out,
     exportName,
     importExtension,
+    // With --url, the server says again.
     ...(flags.has("from") && source.comfyVersion !== undefined
       ? { comfyVersion: source.comfyVersion }
       : {}),
@@ -84,9 +91,7 @@ export async function generateCommand(io: Io, args: readonly string[]): Promise<
     schema: hashSchema(schema.schema),
     exportName,
     importExtension,
-    ...(flags.has("from") && source.comfyVersion !== undefined
-      ? { comfyVersion: source.comfyVersion }
-      : {}),
+    ...(source.comfyVersion === undefined ? {} : { comfyVersion: source.comfyVersion }),
     files: Object.fromEntries(files.map((file) => [file.path, contentHash(file.contents)])),
   };
   await io.writeText(join(out, MANIFEST), formatManifest(manifest));
@@ -108,30 +113,27 @@ export async function generateCommand(io: Io, args: readonly string[]): Promise<
 }
 
 /**
- * The normalized schema of a source. A response that holds no usable node at all (not JSON, not
- * an object, or an error body such as `{"detail": "Not authenticated"}`) is fatal, so it can't
- * replace good types; anything less is reported and the rest generated.
+ * `--from` a snapshot generate wrote, without `--comfy-version`: the version its manifest
+ * records, when the file is exactly the one recorded. Regenerating offline then keeps the
+ * version a `--url` run fetched. Anything else (another file, an edited snapshot, no manifest,
+ * or one that isn't ours) leaves the version unknown, as for any saved response.
  */
-export function loadSchema(source: Source): {
-  readonly schema: Schema;
-  readonly diagnostics: readonly Diagnostic[];
-} {
-  const result = normalizeObjectInfo(
-    source.text,
-    source.comfyVersion === undefined ? {} : { comfyVersion: source.comfyVersion },
-  );
-  if (Object.keys(result.schema.nodes).length === 0) {
-    const error = result.diagnostics.find((diagnostic) => diagnostic.severity === "error");
-    throw new CliError(
-      `${source.label} doesn't hold node definitions${error === undefined ? "" : `: ${error.message}`}`,
-    );
+async function withSnapshotVersion(io: Io, flags: Flags, source: Source): Promise<Source> {
+  const from = value(flags, "from");
+  if (from === undefined || source.comfyVersion !== undefined || basename(from) !== SNAPSHOT) {
+    return source;
   }
-  return result;
+  const manifest = await readManifest(io, dirname(from)).catch(() => undefined);
+  const recorded = manifest?.comfyVersion;
+  if (recorded === undefined || manifest?.files[SNAPSHOT] !== contentHash(source.text)) {
+    return source;
+  }
+  return { ...source, comfyVersion: recorded };
 }
 
 /** What regenerates a directory: the recorded options, from a given source. */
 export interface Regenerate {
-  /** `--url <server>` or `--from <file>`, quoted. */
+  /** `--url <server>` or `--from <file>`, as shell words. */
   readonly flag: string;
   readonly out: string;
   readonly exportName: string;
@@ -144,43 +146,21 @@ export function regenerateCommand(options: Regenerate): string {
   return [
     "tscomfy generate",
     options.flag,
-    `--out ${shellQuote(options.out)}`,
+    flagWords("out", options.out),
     ...(options.exportName === defaultName(options.out)
       ? []
-      : [`--name ${shellQuote(options.exportName)}`]),
+      : [flagWords("name", options.exportName)]),
     ...(options.importExtension === ".js" ? [] : [`--import-extension ${options.importExtension}`]),
     ...(options.comfyVersion === undefined
       ? []
-      : [`--comfy-version ${shellQuote(options.comfyVersion)}`]),
+      : [flagWords("comfy-version", options.comfyVersion)]),
   ].join(" ");
 }
 
-/**
- * A flag's value that the regenerate command records (a path, a version), required; refused
- * when it has control characters a header can't keep.
- */
-export function path(flags: Flags, name: string): string {
-  const given = value(flags, name);
-  if (given === undefined) throw new CliError(`--${name} is required.`, 2);
-  // oxlint-disable-next-line no-control-regex -- control characters are what this looks for
-  if (/[\u0000-\u001f\u007f]/.test(given)) {
-    throw new CliError(
-      `--${name} has a control character, which a regenerate command can't keep.`,
-      2,
-    );
-  }
-  return given;
-}
-
-/** The export name from the output directory: `src/comfy/local` → `local`, `my-server` → `myServer`. */
+/** The export name from the output directory (see {@link camelName}), if it can be one. */
 function defaultName(out: string): string | undefined {
-  const words = basename(out)
-    .split(/[^A-Za-z0-9_$]+/)
-    .filter((word) => word !== "");
-  const name = words
-    .map((word, index) => (index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)))
-    .join("");
-  return isExportName(name) ? name : undefined;
+  const name = camelName(basename(out));
+  return exportNameProblem(name) === undefined ? name : undefined;
 }
 
 function readName(flags: Flags, out: string): string {
@@ -188,15 +168,19 @@ function readName(flags: Flags, out: string): string {
   if (given === undefined) {
     const derived = defaultName(out);
     if (derived === undefined) {
-      throw new CliError(`Can't make an export name from ${JSON.stringify(out)}; pass --name.`, 2);
+      const name = camelName(basename(out));
+      const why =
+        name === "" ? "" : `: ${JSON.stringify(name)} won't do, ${exportNameProblem(name) ?? ""}`;
+      throw new CliError(
+        `Can't make an export name from ${JSON.stringify(out)}${why}; pass --name.`,
+        2,
+      );
     }
     return derived;
   }
-  if (!isExportName(given)) {
-    throw new CliError(
-      `--name ${JSON.stringify(given)} isn't usable: it must be an identifier, not a reserved word.`,
-      2,
-    );
+  const problem = exportNameProblem(given);
+  if (problem !== undefined) {
+    throw new CliError(`--name ${JSON.stringify(given)} isn't usable: ${problem}.`, 2);
   }
   return given;
 }

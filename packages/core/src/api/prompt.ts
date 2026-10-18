@@ -1,5 +1,5 @@
 import type { NodeId } from "../graph/types.ts";
-import type { JsonValue } from "../json/value.ts";
+import { isJsonArray, type JsonValue } from "../json/value.ts";
 
 /** A link in a prompt: the source node's id and output slot. */
 export type ApiLink = readonly [NodeId, number];
@@ -13,3 +13,13 @@ export type ApiNode = {
 
 /** An API-format prompt: what `POST /prompt` takes as `prompt`. May hold bigint; see `stringify`. */
 export type ApiPrompt = { readonly [id: NodeId]: ApiNode };
+
+/** Whether a wire value is a link, `[id, slot]` with a string id, as the backend's `is_link` reads it. */
+export function isApiLink(value: JsonValue | undefined): value is ApiLink {
+  return (
+    isJsonArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === "string" &&
+    typeof value[1] === "number"
+  );
+}

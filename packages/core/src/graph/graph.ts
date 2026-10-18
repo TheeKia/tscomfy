@@ -2,7 +2,7 @@ import type { TypedSchema } from "../schema/typed.ts";
 import type { NodeHandle, NodeId, NodeMode, NodeOptions, Out } from "./types.ts";
 
 /**
- * A value in a node's inputs, as the builder records it (docs/plan.md §5.3): structured, with
+ * A value in a node's inputs, as the builder records it: structured, with
  * dynamic inputs nested (`{ option, inputs }`, slot lists, group rows) rather than flattened to
  * wire keys. Flattening is the exporter's job.
  */
@@ -24,13 +24,16 @@ export interface GraphNode {
   readonly inputs: { readonly [name: string]: InputValue };
   /** Sent as `_meta.title` instead of the display name. */
   readonly title?: string;
-  /** Added with `raw`: inputs are wire keys, exported as given, without schema rules. */
+  /**
+   * Added with `raw`, or imported as raw (`W_IMPORTED_AS_RAW`): inputs are wire keys, exported as
+   * given, without schema rules.
+   */
   readonly raw: boolean;
-  /** Bypassed or muted (§12); absent for a node that runs. */
+  /** Bypassed or muted; absent for a node that runs. */
   readonly mode?: NodeMode;
 }
 
-/** The nodes of a workflow, in creation order. */
+/** The nodes of a workflow, in creation order: build order, or the order an importer read them. */
 export interface Graph {
   readonly nodes: ReadonlyMap<NodeId, GraphNode>;
 }
@@ -49,7 +52,7 @@ export interface RawNode extends NodeHandle {
 
 /**
  * Adds a node without types: any class type, inputs keyed by their wire names. The escape hatch
- * for nodes the schema doesn't know or the types can't express (§7.1).
+ * for nodes the schema doesn't know or the types can't express.
  */
 export type RawBuilder = (
   classType: string,

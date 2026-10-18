@@ -1,10 +1,27 @@
 {
   "name": "@tscomfy/core",
   "version": "0.0.0",
-  "description": "Type-safe ComfyUI workflow generation: schema model, graph builder, API-format export and validation.",
+  "description": "Type-safe ComfyUI workflows: the /object_info normalizer and schema model, the workflow builder, API and UI format export and import, validation and graph operations.",
+  "keywords": [
+    "api",
+    "comfyui",
+    "stable-diffusion",
+    "types",
+    "typescript",
+    "workflow"
+  ],
+  "homepage": "https://github.com/TheeKia/tscomfy/tree/main/packages/core#readme",
+  "bugs": "https://github.com/TheeKia/tscomfy/issues",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheeKia/tscomfy.git",
+    "directory": "packages/core"
+  },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.tsbuildinfo",
+    "src"
   ],
   "type": "module",
   "sideEffects": false,
@@ -15,7 +32,14 @@
       "default": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@tscomfy/fixtures": "workspace:*"
+  },
+  "engines": {
+    "bun": ">=1.4",
+    "node": ">=24"
   }
 }

@@ -41,10 +41,55 @@ describe("tscomfy", () => {
     );
   });
 
-  test.each(["generate", "check"])("%s --help prints the command's usage", async (command) => {
+  test.each(["-h", "--help"])("%s is listed in every usage", async (flag) => {
+    for (const command of [[], ["generate"], ["check"], ["transpile"]]) {
+      const io = memoryIo();
+      // oxlint-disable-next-line no-await-in-loop -- one command at a time
+      expect(await run([...command, flag], io)).toBe(0);
+      expect(io.stdout()).toContain("  -h, --help ");
+    }
+  });
+
+  test.each(["-v", "--version"])(
+    "%s prints the version and is listed in the usage",
+    async (flag) => {
+      const io = memoryIo();
+      expect(await run([flag], io)).toBe(0);
+      expect(io.stdout()).toBe(`${CLI_VERSION}\n`);
+      const usage = memoryIo();
+      expect(await run(["--help"], usage)).toBe(0);
+      expect(usage.stdout()).toContain("  -v, --version ");
+    },
+  );
+
+  test.each([
+    ["generate", "Usage: tscomfy generate (--url <server> | --from"],
+    ["check", "Usage: tscomfy check (--url <server> | --from"],
+    ["transpile", "Usage: tscomfy transpile (--prompt <prompt.json> | --workflow"],
+  ])("%s's usage, by --help, -h or help %s", async (command, usage) => {
+    for (const args of [
+      [command, "--help", "--out", "x"],
+      [command, "-h"],
+      ["help", command],
+    ]) {
+      const io = memoryIo();
+      // oxlint-disable-next-line no-await-in-loop -- one command at a time
+      expect(await run(args, io)).toBe(0);
+      expect(io.stdout()).toStartWith(usage);
+      expect(io.stderr()).toBe("");
+    }
+  });
+
+  test.each([
+    [["help", "generat"], 'Unknown command "generat".'],
+    [["help", "generate", "check"], 'Unexpected argument "check".'],
+    [["--version", "x"], 'Unexpected argument "x".'],
+    [["-h", "generate"], 'Unexpected argument "generate".'],
+    [["-x"], 'Unknown command "-x".'],
+  ])("%p is a usage error", async (args, message) => {
     const io = memoryIo();
-    expect(await run([command, "--help", "--out", "x"], io)).toBe(0);
-    expect(io.stdout()).toStartWith(`Usage: tscomfy ${command} (--url <server> | --from`);
+    expect(await run(args, io)).toBe(2);
+    expect(io.stderr()).toStartWith(`tscomfy: ${message}\n\nUsage: tscomfy <command>`);
   });
 });
 
@@ -54,7 +99,10 @@ describe("usage errors exit with 2 and show the command's usage", () => {
     [["--out", "gen", "--colour"], "Unknown option --colour."],
     [["--out", "gen", "--out=other"], "--out is given twice."],
     [["--out"], "--out needs a value."],
-    [["--out", "--from", "x.json"], "--out needs a value."],
+    [["--out", "--from", "x.json"], "--out needs a value; for one that starts with -, write"],
+    [["--out", "-x", "--from", "x.json"], "--out needs a value; for one that starts with -, write"],
+    [["--out", "gen", "-x"], "Unknown option -x."],
+    [["--out", "gen", "-h", "--help"], "--help is given twice."],
     [["--out="], "--out needs a value."],
     [["--out", "gen", "--quiet=yes"], "--quiet takes no value."],
     [["--from", "x.json"], "--out is required."],
@@ -69,11 +117,23 @@ describe("usage errors exit with 2 and show the command's usage", () => {
     [["--out", "gen", "--from", "x", "--comfy-version", "1\n2"], "--comfy-version has a control"],
     [["--out", "gen", "--from", "x", "--name", "foo-bar"], '--name "foo-bar" isn\'t usable'],
     [["--out", "gen", "--from", "x", "--name", "new"], '--name "new" isn\'t usable'],
+    [
+      ["--out", "gen", "--from", "x", "--name", "raw"],
+      '--name "raw" isn\'t usable: the generated modules declare it themselves (defineSchema,',
+    ],
     [["--out", "src/default", "--from", "x"], 'Can\'t make an export name from "src/default"'],
+    [
+      ["--out", "src/workflow", "--from", "x"],
+      'Can\'t make an export name from "src/workflow": "workflow" won\'t do, the generated modules',
+    ],
     [["--out", "gen", "--from", "x", "--verbose", "--quiet"], "--verbose and --quiet don't go"],
     [["--out", "gen", "--from", "x", "--import-extension", "mjs"], "--import-extension is .js"],
     [["--out", "gen", "--url", SERVER, "--comfy-version", "1"], "--comfy-version goes with"],
-    [["--out", "123", "--from", "x"], 'Can\'t make an export name from "123"; pass --name.'],
+    [
+      ["--out", "123", "--from", "x"],
+      'Can\'t make an export name from "123": "123" won\'t do, it isn\'t an identifier',
+    ],
+    [["--out=---", "--from", "x"], 'Can\'t make an export name from "---"; pass --name.'],
   ])("generate %p", async (args, message) => {
     const io = memoryIo();
     expect(await run(["generate", ...args], io)).toBe(2);
@@ -104,7 +164,7 @@ describe("generate", () => {
     const manifest: unknown = JSON.parse(io.files.get("src/my-server/tscomfy.json") ?? "");
     expect(manifest).toEqual({
       codegen: "0.0.0",
-      schema: "sha256:ab29f52b84343ba44b273cc27844b755c9decd3babc988dc155af74170510552",
+      schema: "sha256:98d52ff4d986ea41c24120212abb64697b7b584893c439020b621e5085bb5bec",
       exportName: "myServer",
       importExtension: ".js",
       files: {
@@ -124,7 +184,7 @@ describe("generate", () => {
       "// Generated by @tscomfy/codegen 0.0.0. Do not edit: regenerate instead.\n// Schema sha256:",
     );
     expect(io.stdout()).toMatch(
-      /^Generated 8 node types from info\.json into src\/my-server:\n {2}nodes\.ts \d+\.\d KB · index\.ts \d+\.\d KB · object_info\.json \d+\.\d KB\n$/,
+      /^Generated 11 node types from info\.json into src\/my-server:\n {2}nodes\.ts \d+\.\d KB · index\.ts \d+\.\d KB · object_info\.json \d+\.\d KB\n$/,
     );
     expect(io.stderr()).toBe("");
   });
@@ -136,7 +196,7 @@ describe("generate", () => {
     expect(await run(["generate", ...args, ...options], io)).toBe(0);
     const index = io.files.get("it's/index.ts") ?? "";
     expect(index).toContain(
-      "// Schema sha256:ab29f52b84343ba44b273cc27844b755c9decd3babc988dc155af74170510552, ComfyUI 0.41.0.\n" +
+      "// Schema sha256:98d52ff4d986ea41c24120212abb64697b7b584893c439020b621e5085bb5bec, ComfyUI 0.41.0.\n" +
         `// Regenerate with: tscomfy generate --from 'my info.json' --out 'it'\\''s' --name comfy --import-extension .ts --comfy-version 0.41.0\n`,
     );
     expect(index).toContain('from "./nodes.ts";');
@@ -158,7 +218,7 @@ describe("generate", () => {
       "http://user:secret@comfy.local:8188/api/system_stats",
     ]);
     expect(io.stdout()).toStartWith(
-      "Generated 8 node types from http://comfy.local:8188/api (ComfyUI 0.41.0) into gen:\n",
+      "Generated 11 node types from http://comfy.local:8188/api (ComfyUI 0.41.0) into gen:\n",
     );
     const written = [...io.files.values()].join("\n");
     expect(written).not.toContain("secret");
@@ -180,8 +240,8 @@ describe("generate", () => {
       },
     );
     expect(await run(["generate", "--url", SERVER, "--out", "gen"], io)).toBe(0);
-    expect(io.stdout()).toStartWith(`Generated 8 node types from ${SERVER} into gen:\n`);
-    expect(io.files.get("gen/nodes.ts")).toContain("552.\n");
+    expect(io.stdout()).toStartWith(`Generated 11 node types from ${SERVER} into gen:\n`);
+    expect(io.files.get("gen/nodes.ts")).toContain("5bec.\n");
   });
 
   test("fails with exit 1 when the server can't be reached or the file is missing", async () => {
@@ -214,7 +274,6 @@ describe("generate", () => {
   test.each([
     ["not JSON", "{", "E_INVALID_JSON"],
     ["not node definitions", "[1, 2]", "Expected /object_info to be an object"],
-    ["an error body", '{"detail": "Not authenticated"}', "Expected a node definition object"],
     ["empty", "{}", ""],
   ])("fails with exit 1, writing nothing, for a response that is %s", async (_name, text, why) => {
     const io = memoryIo({ "info.json": text });
@@ -223,6 +282,120 @@ describe("generate", () => {
     if (why.startsWith("E_")) expect(io.stderr()).not.toContain(why);
     else expect(io.stderr()).toContain(why);
     expect(io.files.size).toBe(1);
+  });
+
+  test.each([
+    ['{"detail": "Not authenticated"}', '"Not authenticated"'],
+    ['{"error": {"type": "auth", "message": "no"}}', '{"type":"auth","message":"no"}'],
+    ['{"message": "Forbidden"}', '"Forbidden"'],
+    // Control characters are escaped, and a long message is cut.
+    [
+      JSON.stringify({ detail: `\u001b[31mred\u009b${"x".repeat(300)}` }),
+      String.raw`"\u001b[31mred\u009b`,
+    ],
+  ])("names an error body as one: %s", async (text, shown) => {
+    const io = memoryIo({ "info.json": text });
+    expect(await run(["generate", "--from", "info.json", "--out", "gen"], io)).toBe(1);
+    expect(io.stderr()).toStartWith(
+      `tscomfy: info.json is an error response, not node definitions: ${shown}`,
+    );
+    expect(io.stderr()).not.toContain("\u001b");
+    expect(io.stderr()).not.toContain("\u009b");
+    expect(io.stderr().length).toBeLessThan(300);
+    expect(io.files.size).toBe(1);
+  });
+
+  test("names an error body a server answers with 200 as one", async () => {
+    const io = memoryIo(
+      {},
+      {
+        [`${SERVER}/object_info`]: '{"detail": "Not authenticated"}',
+        [`${SERVER}/system_stats`]: "{}",
+      },
+    );
+    expect(await run(["generate", "--url", SERVER, "--out", "gen"], io)).toBe(1);
+    expect(io.stderr()).toBe(
+      `tscomfy: ${SERVER} is an error response, not node definitions: "Not authenticated".\n`,
+    );
+  });
+
+  test("takes a node class named error or detail for a node, not an error body", async () => {
+    const io = memoryIo({ "info.json": JSON.stringify({ error: rawNode("error", {}) }) });
+    expect(await run(["generate", "--from", "info.json", "--out", "gen", "--quiet"], io)).toBe(0);
+  });
+
+  test("names the export after --out, camelCased like transpile's", async () => {
+    for (const [out, name] of [
+      ["src/My_Server", "myServer"],
+      ["LOCAL", "local"],
+      ["comfy-UI.v2", "comfyUiV2"],
+    ] as const) {
+      const io = memoryIo({ "info.json": basic });
+      // oxlint-disable-next-line no-await-in-loop -- one run at a time
+      expect(await run(["generate", "--from", "info.json", "--out", out, "--quiet"], io)).toBe(0);
+      expect(io.files.get(`${out}/index.ts`)).toContain(`export const ${name}: TypedSchema<Nodes>`);
+    }
+  });
+
+  test("records the server's version, and keeps it when regenerating from the snapshot", async () => {
+    const io = memoryIo(
+      {},
+      { [`${SERVER}/object_info`]: basic, [`${SERVER}/system_stats`]: SYSTEM_STATS },
+    );
+    expect(await run(["generate", "--url", SERVER, "--out", "gen", "--quiet"], io)).toBe(0);
+    expect(JSON.parse(io.files.get("gen/tscomfy.json") ?? "")).toMatchObject({
+      comfyVersion: "0.41.0",
+    });
+    // The server says again: not part of the command.
+    expect(io.files.get("gen/index.ts")).toContain(
+      `// Regenerate with: tscomfy generate --url ${SERVER} --out gen\n`,
+    );
+
+    expect(await run(["generate", "--from", "gen/object_info.json", "--out", "copy"], io)).toBe(0);
+    expect(io.stdout()).toStartWith(
+      "Generated 11 node types from gen/object_info.json (ComfyUI 0.41.0) into copy:\n",
+    );
+    expect(io.files.get("copy/index.ts")).toContain(
+      "// Regenerate with: tscomfy generate --from gen/object_info.json --out copy --comfy-version 0.41.0\n",
+    );
+    expect(JSON.parse(io.files.get("copy/tscomfy.json") ?? "")).toMatchObject({
+      comfyVersion: "0.41.0",
+    });
+
+    // Not the recorded snapshot (edited, or another file): the version is unknown.
+    for (const [file, text] of [
+      ["gen/object_info.json", `${basic} `],
+      ["other/object_info.json", basic],
+      ["gen/info.json", basic],
+    ] as const) {
+      const other = memoryIo({ ...Object.fromEntries(io.files), [file]: text });
+      // oxlint-disable-next-line no-await-in-loop -- one run at a time
+      expect(await run(["generate", "--from", file, "--out", "x", "--quiet"], other)).toBe(0);
+      expect(JSON.parse(other.files.get("x/tscomfy.json") ?? "")).not.toHaveProperty(
+        "comfyVersion",
+      );
+    }
+
+    // A --comfy-version given wins.
+    const given = ["--from", "gen/object_info.json", "--out", "y", "--comfy-version", "0.42.0"];
+    expect(await run(["generate", ...given, "--quiet"], io)).toBe(0);
+    expect(JSON.parse(io.files.get("y/tscomfy.json") ?? "")).toMatchObject({
+      comfyVersion: "0.42.0",
+    });
+  });
+
+  test("records values that start with - as --flag=value, and the command runs again", async () => {
+    const io = memoryIo({ "-info.json": basic });
+    const args = ["generate", "--from=-info.json", "--out=--weird", "--comfy-version=-1"];
+    expect(await run([...args, "--name", "flow"], io)).toBe(0);
+    const index = io.files.get("--weird/index.ts") ?? "";
+    const recorded =
+      "tscomfy generate --from=-info.json --out=--weird --name flow --comfy-version=-1";
+    expect(index).toContain(`// Regenerate with: ${recorded}\n`);
+    const again = memoryIo({ "-info.json": basic });
+    // No word needs quotes, so splitting at spaces is what a shell does.
+    expect(await run(recorded.split(" ").slice(1), again)).toBe(0);
+    expect(again.files).toEqual(io.files);
   });
 
   test("reports diagnostics grouped by pack, a few per pack unless verbose", async () => {
@@ -272,6 +445,25 @@ async function generated(text: string, extra: readonly string[] = []): Promise<M
   expect(io.stdout() + io.stderr()).toBe("");
   return io;
 }
+
+/** `Prefix00`, `Prefix01`, …: `count` names that sort in order. */
+const names = (prefix: string, count: number): string[] =>
+  Array.from({ length: count }, (_, index) => `${prefix}${String(index).padStart(2, "0")}`);
+
+/** Raw nodes of the given classes, each with INT inputs of the given names. */
+const nodesWith = (classes: readonly string[], inputs: readonly string[]): string =>
+  JSON.stringify(
+    Object.fromEntries(
+      classes.map((name) => [
+        name,
+        rawNode(name, Object.fromEntries(inputs.map((input) => [input, ["INT", {}]]))),
+      ]),
+    ),
+  );
+
+/** A raw loader whose upload combo lists `files`. */
+const uploadNode = (name: string, files: readonly string[]): Record<string, unknown> =>
+  rawNode(name, { image: [files, { image_upload: true }] });
 
 describe("check", () => {
   test("reports up to date when the schemas match, ignoring fields the schema drops", async () => {
@@ -329,7 +521,7 @@ describe("check", () => {
         "      inputs added: new",
         "      inputs removed: old",
         '      mode: + "c"; - "a"',
-        '      many: + "beta", "gamma", "delta", "epsilon", "zeta", … 1 more',
+        '      many: + "beta", "gamma", "delta", "epsilon", "zeta", … and 1 more (--verbose shows all)',
         "      kept: spec changed",
         "      outputs changed",
         "      details changed (name, category, description, flags or order)",
@@ -384,6 +576,27 @@ describe("check", () => {
     expect(await run(["check", "--from", "before.json", "--out", "gen"], io)).toBe(1);
     expect(io.stdout()).toStartWith(
       "gen was generated by another version of tscomfy, which read the snapshot differently.\n",
+    );
+  });
+
+  test("suggests the server's recorded version with --from, not with --url", async () => {
+    const io = memoryIo(
+      {},
+      { [`${SERVER}/object_info`]: basic, [`${SERVER}/system_stats`]: SYSTEM_STATS },
+    );
+    expect(await run(["generate", "--url", SERVER, "--out", "gen", "--quiet"], io)).toBe(0);
+    io.files.set("gen/nodes.ts", "");
+    expect(await run(["check", "--from", "gen/object_info.json", "--out", "gen"], io)).toBe(1);
+    expect(io.stdout()).toEndWith(
+      "Run tscomfy generate --from gen/object_info.json --out gen --comfy-version 0.41.0 to update.\n",
+    );
+    const server = memoryIo(Object.fromEntries(io.files), {
+      [`${SERVER}/object_info`]: basic,
+      [`${SERVER}/system_stats`]: SYSTEM_STATS,
+    });
+    expect(await run(["check", "--url", SERVER, "--out", "gen"], server)).toBe(1);
+    expect(server.stdout()).toEndWith(
+      `Run tscomfy generate --url ${SERVER} --out gen to update.\n`,
     );
   });
 
@@ -447,7 +660,71 @@ describe("check", () => {
     const io = await generated(basic);
     io.files.set("after.json", '{"detail": "Not authenticated"}');
     expect(await run(["check", "--from", "after.json", "--out", "gen"], io)).toBe(1);
-    expect(io.stderr()).toStartWith("tscomfy: after.json doesn't hold node definitions");
+    expect(io.stderr()).toBe(
+      'tscomfy: after.json is an error response, not node definitions: "Not authenticated".\n',
+    );
+    const array = memoryIo({ ...Object.fromEntries(io.files), "after.json": "[]" });
+    expect(await run(["check", "--from", "after.json", "--out", "gen"], array)).toBe(1);
+    expect(array.stderr()).toStartWith(
+      "tscomfy: after.json doesn't hold node definitions: Expected /object_info to be an object",
+    );
+  });
+
+  test("lists at most a few nodes and inputs unless verbose", async () => {
+    const changed = names("Changed", 12);
+    const io = await generated(nodesWith([...changed, ...names("Removed", 11)], ["kept"]));
+    io.files.set(
+      "after.json",
+      nodesWith([...changed, ...names("Added", 15)], ["kept", ...names("input", 13)]),
+    );
+    expect(await run(["check", "--from", "after.json", "--out", "gen"], io)).toBe(1);
+    const lines = io.stdout().split("\n");
+    expect(lines.slice(1, 6)).toEqual([
+      `  + 15 nodes added: ${names("Added", 10).join(", ")}, … and 5 more (--verbose shows all)`,
+      `  - 11 nodes removed: ${names("Removed", 10).join(", ")}, … and 1 more (--verbose shows all)`,
+      "  ~ 12 nodes changed:",
+      "    Changed00",
+      `      inputs added: ${names("input", 10).join(", ")}, … and 3 more (--verbose shows all)`,
+    ]);
+    expect(lines.filter((line) => line.startsWith("    Changed"))).toHaveLength(10);
+    expect(lines).toContain("    … and 2 more (--verbose shows all)");
+    expect(Math.max(...lines.map((line) => line.length))).toBeLessThan(200);
+
+    const verbose = memoryIo(Object.fromEntries(io.files));
+    expect(await run(["check", "--from", "after.json", "--out", "gen", "--verbose"], verbose)).toBe(
+      1,
+    );
+    const all = verbose.stdout();
+    expect(all).toContain(`  + 15 nodes added: ${names("Added", 15).join(", ")}\n`);
+    expect(all).toContain(`  - 11 nodes removed: ${names("Removed", 11).join(", ")}\n`);
+    expect(all).toContain(`      inputs added: ${names("input", 13).join(", ")}\n`);
+    expect(all.split("\n").filter((line) => line.startsWith("    Changed"))).toHaveLength(12);
+    expect(all).not.toContain("more (--verbose");
+  });
+
+  test("lists at most a few upload combos it ignores unless verbose", async () => {
+    const loaders = Array.from(
+      { length: 12 },
+      (_, index) => `Load${String(index).padStart(2, "0")}`,
+    );
+    const io = await generated(
+      JSON.stringify(
+        Object.fromEntries(loaders.map((name) => [name, uploadNode(name, ["a.png"])])),
+      ),
+    );
+    io.files.set(
+      "after.json",
+      JSON.stringify(
+        Object.fromEntries(loaders.map((name) => [name, uploadNode(name, ["a.png", "b.png"])])),
+      ),
+    );
+    expect(await run(["check", "--from", "after.json", "--out", "gen"], io)).toBe(0);
+    expect(io.stdout()).toBe(
+      `Up to date: 12 node types match gen/object_info.json (changed files in 12 upload or remote combos aren't drift: ${loaders
+        .slice(0, 10)
+        .map((name) => `${name}.image`)
+        .join(", ")}, … and 2 more (--verbose shows all)).\n`,
+    );
   });
 });
 
@@ -582,13 +859,37 @@ describe("transpile", () => {
   });
 });
 
-test("transpile refuses a schema whose export name the module needs itself", async () => {
-  const io = memoryIo({ "before.json": basic, "p.json": await readMockApiWorkflow("txt2img") });
-  expect(await run(["generate", "--from", "before.json", "--out", "src/raw", "--quiet"], io)).toBe(
-    0,
+test("transpile refuses a schema whose export name the module declares itself", async () => {
+  // generate refuses such a name; a manifest is a file anyone can edit.
+  const io = await withPrompt(await readMockApiWorkflow("txt2img"));
+  const manifest = io.files.get("gen/tscomfy.json") ?? "";
+  io.files.set("gen/tscomfy.json", manifest.replace('"exportName": "gen"', '"exportName": "raw"'));
+  expect(
+    await run(["transpile", "--prompt", "prompts/My Txt2Img.json", "--schema", "gen"], io),
+  ).toBe(1);
+  expect(io.stderr()).toBe(
+    "tscomfy: The schema's export name, raw, won't do: the generated modules declare it themselves (defineSchema, TypedSchema, Nodes, workflow, Workflow, NodesOf, n, raw). Run tscomfy generate again with another --name.\n",
   );
-  expect(await run(["transpile", "--prompt", "p.json", "--schema", "src/raw"], io)).toBe(1);
-  expect(io.stderr()).toStartWith("tscomfy: The schema's export name, raw, is one the transpiled");
+});
+
+test("transpile records values that start with - as --flag=value", async () => {
+  const io = await withPrompt(await readMockApiWorkflow("txt2img"));
+  io.files.set("-p.json", io.files.get("prompts/My Txt2Img.json") ?? "");
+  const args = ["--prompt=-p.json", "--schema", "gen", "--out=-t.ts", "--name", "flow"];
+  expect(await run(["transpile", ...args], io)).toBe(0);
+  expect(io.files.get("-t.ts")).toContain(
+    "// Regenerate with: tscomfy transpile --prompt=-p.json --schema gen --out=-t.ts --name flow\n",
+  );
+});
+
+test("transpile refuses a name whose declaration is wider than a line", async () => {
+  const io = await withPrompt(await readMockApiWorkflow("txt2img"));
+  const name = "a".repeat(60);
+  const args = ["--prompt", "prompts/My Txt2Img.json", "--schema", "gen", "--name", name];
+  expect(await run(["transpile", ...args], io)).toBe(2);
+  expect(io.stderr()).toStartWith(
+    `tscomfy: --name "${name}" isn't usable: the declaration \`export const ${name}: Workflow<NodesOf<typeof gen>> =\` is wider than 100 columns.\n`,
+  );
 });
 
 test("transpile takes a prompt with a node named prompt", async () => {

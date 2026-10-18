@@ -2,13 +2,12 @@
 // type, any inputs, and a result usable as a handle, an output or a tuple of outputs.
 
 import {
-  defineSchema,
+  typedSchema,
   type InputValue,
   type NodeHandle,
   type NodeOptions,
   normalizeObjectInfo,
   type Out,
-  stringify,
   type TypedSchema,
 } from "@tscomfy/core";
 
@@ -23,5 +22,5 @@ export type LooseNodes = {
 
 /** A schema from mock text, typed loosely. */
 export function looseSchema(objectInfo: string): TypedSchema<LooseNodes> {
-  return defineSchema<LooseNodes>(stringify(normalizeObjectInfo(objectInfo).schema));
+  return typedSchema<LooseNodes>(normalizeObjectInfo(objectInfo).schema);
 }

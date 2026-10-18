@@ -22,7 +22,7 @@ describe("examples/txt2img over the corpus", () => {
     test(
       dump.name,
       async () => {
-        const { tsc, main } = await runExample(dump.path, "a cat");
+        const { tsc, main } = await runExample("txt2img", dump.path, ["a cat"]);
         expect(tsc).toEqual({ code: 0, stdout: "", stderr: "" });
         // A server without checkpoints can't build the prompt; the example says so and exits 1.
         if (!(await hasCheckpoints(dump.path))) {
@@ -42,6 +42,30 @@ describe("examples/txt2img over the corpus", () => {
           "VAEDecode",
           "SaveImage",
         ]);
+      },
+      60_000,
+    );
+  }
+});
+
+describe("examples/hires-fix over the corpus", () => {
+  if (dumps.length === 0) test.skip("object-info is empty", () => {});
+
+  for (const dump of dumps) {
+    test(
+      dump.name,
+      async () => {
+        const { tsc, main } = await runExample("hires-fix", dump.path, ["a fox"]);
+        expect(tsc).toEqual({ code: 0, stdout: "", stderr: "" });
+        if (!(await hasCheckpoints(dump.path))) {
+          expect(main?.code).toBe(1);
+          expect(main?.stderr).toStartWith("The server lists no checkpoints");
+          return;
+        }
+        // Diagnostics go to stderr; a real server may warn (an unlisted file, …), never error.
+        expect(main?.code).toBe(0);
+        const classTypes = [...(main?.stdout ?? "").matchAll(/"class_type":"(\w+)"/g)];
+        expect(classTypes.map((match) => match[1])).toContain("LatentUpscaleBy");
       },
       60_000,
     );

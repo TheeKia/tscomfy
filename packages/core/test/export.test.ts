@@ -10,6 +10,8 @@ import { looseSchema } from "./loose.ts";
 const basic = looseSchema(await readMockObjectInfo("basic-pipeline"));
 const combos = looseSchema(await readMockObjectInfo("combos"));
 const dynamicCombo = looseSchema(await readMockObjectInfo("dynamic-combo"));
+const autogrow = looseSchema(await readMockObjectInfo("autogrow"));
+const dynamicGroup = looseSchema(await readMockObjectInfo("dynamic-group"));
 
 describe("toApi", () => {
   test("leaves out _meta on request", () => {
@@ -127,5 +129,78 @@ describe("toApi", () => {
       "rows.1.value",
       "rows.2.value",
     ]);
+  });
+});
+
+/** Each diagnostic of a workflow as its code and path. */
+function codes(built: Parameters<typeof exportApi>[0]): string[] {
+  return exportApi(built).diagnostics.map(
+    (diagnostic) => `${diagnostic.code} ${diagnostic.path.join(" ")}`,
+  );
+}
+
+describe("values the types reject", () => {
+  // Plain JavaScript, or a cast, can still pass them. They are sent under their own key, as an
+  // unknown input is, so validation reports them rather than the exporter dropping them.
+
+  test("an Autogrow given one link instead of a list", () => {
+    const built = workflow(autogrow, ({ n, raw }) => {
+      const image = raw("MockSources").output(0);
+      n["MockAutogrowPrefixOptional"]?.({ prompt: "x", ref_images: image });
+    });
+    expect(toApi(built, { validate: false })["2"]?.inputs).toEqual({
+      prompt: "x",
+      ref_images: ["1", 0],
+    });
+    expect(codes(built)).toContain("E_UNKNOWN_INPUT 2 inputs ref_images");
+  });
+
+  test("a DynamicGroup given a record, and a row that isn't one", () => {
+    const built = workflow(dynamicGroup, ({ n }) => {
+      n["MockDynamicGroupOptional"]?.({ text: "t", replacements: { find: "a" } });
+      n["MockDynamicGroupOptional"]?.({ text: "u", replacements: ["oops", { find: "x" }] });
+    });
+    const prompt = toApi(built, { validate: false });
+    expect(prompt["1"]?.inputs["replacements"]).toEqual({ find: "a" });
+    expect(prompt["2"]?.inputs["replacements.0"]).toBe("oops");
+    expect(codes(built)).toContain("E_UNKNOWN_INPUT 1 inputs replacements");
+    expect(codes(built)).toContain("E_UNKNOWN_INPUT 2 inputs replacements.0");
+  });
+
+  test.each([
+    ["a misspelled inputs key", { option: "scale dimensions", input: { width: 9 } }],
+    ["inputs that aren't a record", { option: "scale dimensions", inputs: [1, 2] }],
+  ])("a dynamic combo with %s", (_name, mode) => {
+    const built = workflow(dynamicCombo, ({ n, raw }) => {
+      n["MockDynamicComboSimple"]?.({ image: raw("MockImageSource").output(0), mode });
+    });
+    expect(toApi(built, { validate: false })["2"]?.inputs["mode"]).toEqual(mode);
+    expect(codes(built)).toContain("E_INVALID_VALUE 2 inputs mode");
+  });
+
+  test("a dynamic combo linked to a muted node is left out, not sent as the dropped link", () => {
+    const built = workflow(dynamicCombo, ({ n, raw }) => {
+      const mode = raw("MockChooser", {}, { mode: "mute" }).output(0);
+      n["MockDynamicComboSimple"]?.({ image: raw("MockImageSource").output(0), mode });
+    });
+    const { prompt, diagnostics } = exportApi(built, { validate: false });
+    expect(prompt["3"]?.inputs).toEqual({ image: ["2", 0] });
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Input mode of node 3 is left out: it is linked to node 1, which is muted.",
+    ]);
+  });
+});
+
+describe("exportApi", () => {
+  test("with modes: false, sends bypassed and muted nodes as if they ran", () => {
+    const built = workflow(basic, ({ n }) => {
+      const vae = n["VAELoader"]!({ vae_name: "pixel_space" }, { mode: "mute" });
+      n["VAEDecode"]?.({ vae }, { mode: "bypass" });
+    });
+    const { prompt, diagnostics } = exportApi(built, { modes: false, validate: false });
+    expect(Object.keys(prompt)).toEqual(["1", "2"]);
+    expect(prompt["2"]?.inputs).toEqual({ vae: ["1", 0] });
+    expect(diagnostics).toEqual([]);
+    expect(Object.keys(exportApi(built, { validate: false }).prompt)).toEqual([]);
   });
 });

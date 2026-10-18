@@ -1,20 +1,16 @@
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
-import { CODEGEN_VERSION, isExportName, transpile } from "@tscomfy/codegen";
 import {
-  defineSchema,
-  hashSchema,
-  importApi,
-  importUi,
-  type JsonValue,
-  parse,
-  stringify,
-} from "@tscomfy/core";
-import { type Flags, parseFlags, value } from "./args.ts";
-import { loadSchema, path, SNAPSHOT } from "./generate.ts";
+  CODEGEN_VERSION,
+  exportNameProblem,
+  transpile,
+  transpileNameProblem,
+} from "@tscomfy/codegen";
+import { hashSchema, importApi, importUi, type JsonValue, parse, typedSchema } from "@tscomfy/core";
+import { type Flags, HELP, parseFlags, required, value } from "./args.ts";
 import { CliError, type Io } from "./io.ts";
-import { MANIFEST, readManifest } from "./manifest.ts";
+import { MANIFEST, readGenerated, SNAPSHOT } from "./manifest.ts";
 import { count, formatDiagnostic } from "./report.ts";
-import { isRecord, shellQuote } from "./util.ts";
+import { camelName, flagWords, isRecord } from "./util.ts";
 
 /** `tscomfy transpile --help`. */
 export const TRANSPILE_USAGE: string = `Usage: tscomfy transpile (--prompt <prompt.json> | --workflow <workflow.json>) --schema <dir> [options]
@@ -31,8 +27,13 @@ Options:
   --schema <dir>       The directory \`tscomfy generate\` wrote (it reads ${SNAPSHOT} and ${MANIFEST}).
   --out <file>         Where to write the module. Default: standard output, importing the
                        schema relative to the current directory.
-  --name <identifier>  The exported constant. Default: from the prompt's file name.
+  --name <identifier>  The exported constant. Default: from the file name, camelCased
+                       (My Txt2Img.json → myTxt2Img).
   --no-inline          Give every node a variable, rather than inlining those used once.
+  -h, --help           Show this help.
+
+The header records the command that transpiles the file again, for a POSIX shell in the
+directory transpile ran in. A value that starts with - is written --flag=<value>.
 `;
 
 const FLAGS = [
@@ -42,7 +43,7 @@ const FLAGS = [
   { name: "out", takesValue: true },
   { name: "name", takesValue: true },
   { name: "no-inline", takesValue: false },
-  { name: "help", takesValue: false },
+  HELP,
 ] as const;
 
 /** `tscomfy transpile`. */
@@ -59,22 +60,14 @@ export async function transpileCommand(io: Io, args: readonly string[]): Promise
     throw new CliError("--prompt or --workflow is required.", 2);
   }
   const kind = flags.has("workflow") ? "workflow" : "prompt";
-  const promptPath = path(flags, kind);
-  const schemaDir = path(flags, "schema");
-  const out = flags.has("out") ? path(flags, "out") : undefined;
-  const manifest = await readManifest(io, schemaDir);
-  const snapshotPath = join(schemaDir, SNAPSHOT);
-  const snapshot = await io.readText(snapshotPath);
-  if (manifest === undefined || snapshot === undefined) {
-    throw new CliError(
-      `There is no ${manifest === undefined ? MANIFEST : SNAPSHOT} in ${schemaDir}; run tscomfy generate first.`,
-    );
-  }
+  const promptPath = required(flags, kind);
+  const schemaDir = required(flags, "schema");
+  const out = value(flags, "out");
+  const { manifest, schema } = await readGenerated(io, schemaDir);
   const name = readName(flags, promptPath, manifest.exportName);
   const text = await io.readText(promptPath);
   if (text === undefined) throw new CliError(`There is no file at ${promptPath}.`);
 
-  const schema = loadSchema({ text: snapshot, label: snapshotPath, flag: "" }).schema;
   // The types in <dir> must be the ones this version would write, or the code won't fit them.
   if (manifest.codegen !== CODEGEN_VERSION || manifest.schema !== hashSchema(schema)) {
     throw new CliError(
@@ -84,7 +77,7 @@ export async function transpileCommand(io: Io, args: readonly string[]): Promise
   const what = kind === "prompt" ? "a prompt" : "a UI workflow";
   const mixUp = kind === "prompt" ? notAPrompt(text) : notAWorkflow(text);
   if (mixUp !== undefined) throw new CliError(`${promptPath} isn't ${what}: ${mixUp}`);
-  const typed = defineSchema(stringify(schema));
+  const typed = typedSchema(schema);
   const imported = kind === "prompt" ? importApi(text, typed) : importUi(text, typed);
   const fatal = imported.diagnostics.find(
     (diagnostic) =>
@@ -101,10 +94,10 @@ export async function transpileCommand(io: Io, args: readonly string[]): Promise
   }
   const command = [
     "tscomfy transpile",
-    `--${kind} ${shellQuote(promptPath)}`,
-    `--schema ${shellQuote(schemaDir)}`,
-    ...(out === undefined ? [] : [`--out ${shellQuote(out)}`]),
-    ...(flags.has("name") ? [`--name ${name}`] : []),
+    flagWords(kind, promptPath),
+    flagWords("schema", schemaDir),
+    ...(out === undefined ? [] : [flagWords("out", out)]),
+    ...(flags.has("name") ? [flagWords("name", name)] : []),
     ...(flags.has("no-inline") ? ["--no-inline"] : []),
   ].join(" ");
   const result = transpile(imported.workflow, {
@@ -180,47 +173,29 @@ function moduleSpecifier(out: string | undefined, schemaDir: string, extension: 
   return posix.startsWith("./") || posix.startsWith("../") ? posix : `./${posix}`;
 }
 
-/** The export name: `--name`, or from the prompt's file name (`Anima-API.json` → `animaApi`). */
+/**
+ * The export name: `--name`, or from the file name (`Anima-API.json` → `animaApi`, see
+ * `camelName`). The schema's name and this one must both be usable by `transpile`, by the rule
+ * `generate` checked the schema's with.
+ */
 function readName(flags: Flags, promptPath: string, schemaName: string): string {
-  const given = value(flags, "name");
-  const name = given ?? camel(basename(promptPath).replace(/\.[^.]*$/, ""));
-  if (BUILDER_NAMES.includes(schemaName)) {
+  const schemaProblem = exportNameProblem(schemaName);
+  if (schemaProblem !== undefined) {
+    // Generated before generate checked this.
     throw new CliError(
-      `The schema's export name, ${schemaName}, is one the transpiled module needs itself; run tscomfy generate again with another --name.`,
+      `The schema's export name, ${schemaName}, won't do: ${schemaProblem}. Run tscomfy generate again with another --name.`,
     );
   }
-  const taken = name === schemaName || BUILDER_NAMES.includes(name);
-  // The declaration must fit on one line: `export const <name>: Workflow<NodesOf<…>> =`. Export
-  // names are ASCII, so their length is their width.
-  const long = `export const ${name}: Workflow<NodesOf<typeof ${schemaName}>> =`.length > 100;
-  if (!isExportName(name) || taken || long) {
-    const why = taken
-      ? `the module itself uses it (${[schemaName, ...BUILDER_NAMES].join(", ")})`
-      : long
-        ? "it is too long for the declaration's line"
-        : "it must be an identifier, not a reserved word";
+  const given = value(flags, "name");
+  const name = given ?? camelName(basename(promptPath).replace(/\.[^.]*$/, ""));
+  const problem = exportNameProblem(name) ?? transpileNameProblem({ name, schemaName });
+  if (problem !== undefined) {
     throw new CliError(
       given === undefined
-        ? `Can't name the export ${JSON.stringify(name)}, after ${JSON.stringify(promptPath)}: ${why}; pass --name.`
-        : `--name ${JSON.stringify(given)} isn't usable: ${why}.`,
+        ? `Can't name the export ${JSON.stringify(name)}, after ${JSON.stringify(promptPath)}: ${problem}; pass --name.`
+        : `--name ${JSON.stringify(given)} isn't usable: ${problem}.`,
       2,
     );
   }
   return name;
-}
-
-/** Names the transpiled module imports or binds itself. */
-const BUILDER_NAMES: readonly string[] = ["workflow", "Workflow", "NodesOf", "n", "raw"];
-
-/** camelCase from the runs of letters and digits: `Anima-API` → `animaApi`. */
-function camel(text: string): string {
-  const words = text.match(/[A-Za-z0-9]+/g) ?? [];
-  return words
-    .map((word, index) => {
-      const lower = word === word.toUpperCase() ? word.toLowerCase() : word;
-      return index === 0
-        ? lower.charAt(0).toLowerCase() + lower.slice(1)
-        : lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join("");
 }

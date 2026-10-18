@@ -10,15 +10,18 @@
   "scripts": {
     "build": "tsc -b",
     "tscomfy": "bun --conditions=@tscomfy/source packages/cli/src/main.ts",
-    "clean": "rm -rf packages/*/dist",
+    "clean": "rm -rf packages/*/dist internal/*/tsconfig.tsbuildinfo internal/bench/.out",
     "test": "bun test --conditions=@tscomfy/source --path-ignore-patterns='**/*.corpus.test.ts' packages internal",
     "test:corpus": "bun test --conditions=@tscomfy/source .corpus.test",
     "generate:fixtures": "bun --conditions=@tscomfy/source packages/codegen/test/update-generated.ts",
     "bench:types": "bun --conditions=@tscomfy/source internal/bench/src/bench-types.ts",
+    "test:pack": "bun run clean && tsc -b && bun --conditions=@tscomfy/source internal/pack-test/src/pack-test.ts",
+    "api:update": "tsc -b && bun internal/api-report/src/api-report.ts",
+    "api:check": "bun internal/api-report/src/api-report.ts --check",
     "lint": "oxlint --type-aware",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "check": "tsc -b && bun run lint && bun run format:check && bun run test"
+    "check": "tsc -b && bun run lint && bun run format:check && bun run api:check && bun run test"
   },
   "devDependencies": {
     "@types/bun": "1.4.3",

@@ -1,19 +1,20 @@
-// API-format prompt → Workflow (docs/plan.md §10, Phase 6): the exporter in reverse. Wire keys are
+// API-format prompt → Workflow (docs/plan.md §10): the exporter in reverse. Wire keys are
 // folded back into structured inputs by the schema, `__value__` lists unwrapped, links turned into
 // output references. Re-exporting a prompt the frontend wrote gives it back byte for byte.
 
 import { createDiagnostic, type Diagnostic } from "../diagnostic/diagnostic.ts";
+import { sendsInputValue } from "../frontend/widgets.ts";
 import type { InputValue, Workflow } from "../graph/graph.ts";
 import type { NodeId, NodeMode, Out } from "../graph/types.ts";
 import { assembleWorkflow, type AssembledNode } from "../graph/workflow.ts";
 import { parse } from "../json/parse.ts";
-import { isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
-import { sendsValue } from "../schema/frontend.ts";
+import { isJsonArray, isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
+import { definitionOf } from "../schema/lookup.ts";
 import type { TypedSchema } from "../schema/typed.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
 
 /** What {@link importApi} returns. */
-export interface ImportResult<N> {
+export interface ApiImportResult<N> {
   /** The prompt as a workflow over `schema`; nodes it couldn't read are left out. */
   readonly workflow: Workflow<N>;
   /** Problems reading the prompt. Validation (`validate`) is separate. */
@@ -22,14 +23,14 @@ export interface ImportResult<N> {
 
 /**
  * Reads an API-format prompt (the JSON `POST /prompt` takes as `prompt`, or the frontend's
- * "Export (API)") into a workflow over `schema`. Takes raw text, so big integers stay exact (D10).
+ * "Export (API)") into a workflow over `schema`. Takes raw text, so big integers stay exact.
  *
  * Nodes keep their ids and titles. A node whose class the schema has gets structured inputs, as
  * the builder records them; a node of an unknown class, or one whose keys don't fold back (a
  * DynamicGroup with row gaps, keys under a dynamic combo's unknown option), is kept as a raw node
  * with its wire keys, so it still exports as it came.
  */
-export function importApi<N>(text: string, schema: TypedSchema<N>): ImportResult<N> {
+export function importApi<N>(text: string, schema: TypedSchema<N>): ApiImportResult<N> {
   const diagnostics: Diagnostic[] = [];
   const parsed = parse(text);
   diagnostics.push(...parsed.diagnostics);
@@ -105,7 +106,7 @@ export function wireNode(
   diagnostics: Diagnostic[],
 ): AssembledNode {
   const { id, classType, inputs } = node;
-  const definition = Object.hasOwn(schema.nodes, classType) ? schema.nodes[classType] : undefined;
+  const definition = definitionOf(schema, classType);
   // The exporter writes the display name when there is no title, so only a different one is kept.
   const title = node.title === (definition?.displayName ?? classType) ? undefined : node.title;
 
@@ -151,7 +152,7 @@ export function wireNode(
  * the list. `undefined` for a list that isn't a link.
  */
 function decode(value: JsonValue, link: Link): InputValue | undefined {
-  if (isList(value)) {
+  if (isJsonArray(value)) {
     const [node, slot] = value;
     if (value.length !== 2 || typeof node !== "string" || typeof slot !== "number")
       return undefined;
@@ -159,7 +160,8 @@ function decode(value: JsonValue, link: Link): InputValue | undefined {
     return link(node, slot);
   }
   const wrapped = isJsonObject(value) ? value["__value__"] : undefined;
-  if (isJsonObject(value) && Object.keys(value).length === 1 && isList(wrapped)) return wrapped;
+  if (isJsonObject(value) && Object.keys(value).length === 1 && isJsonArray(wrapped))
+    return wrapped;
   return value;
 }
 
@@ -253,17 +255,23 @@ function fold(
       }
       case "value":
         // The frontend never sends a display-only widget, so the exporter would drop the key.
-        if (!sendsValue(definition.widget) && Object.hasOwn(wire, key)) {
+        if (!sendsInputValue(definition) && Object.hasOwn(wire, key)) {
           problem = `${key} is a display-only widget, which the exporter doesn't send`;
           return undefined;
         }
         return unwrapCurve(definition.widget, take(key));
-      case "socket":
       case "int":
       case "float":
       case "string":
       case "boolean":
       case "combo":
+        // Nor an optional input on a widget it never sends (CameraAngle's `view`).
+        if (!sendsInputValue(definition) && Object.hasOwn(wire, key)) {
+          problem = `${key} is a widget the frontend doesn't send, which the exporter leaves out`;
+          return undefined;
+        }
+        return take(key);
+      case "socket":
       case "matchType":
       case "unknown":
         return take(key);
@@ -299,8 +307,4 @@ function isPlain(value: InputValue | undefined): value is { readonly [key: strin
     !Array.isArray(value) &&
     Object.getPrototypeOf(value) === Object.prototype
   );
-}
-
-function isList(value: JsonValue | undefined): value is readonly JsonValue[] {
-  return Array.isArray(value);
 }

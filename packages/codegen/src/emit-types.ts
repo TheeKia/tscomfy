@@ -18,7 +18,7 @@ import {
   type NodeDef,
   type OutputDef,
   type Schema,
-  sendsValue,
+  sendsInputValue,
   type SocketType,
   stringify,
 } from "@tscomfy/core";
@@ -32,12 +32,19 @@ import {
   join,
   line,
   print,
+  PRINT_WIDTH,
   softline,
 } from "./doc.ts";
-import { commentLines, commentText, NameRegistry, pascal, propertyKey, quote } from "./names.ts";
-
-/** Columns the generated code is laid out for: oxfmt's default, and this repo's setting. */
-export const PRINT_WIDTH = 100;
+import {
+  commentLines,
+  commentText,
+  headerLines,
+  NameRegistry,
+  pascal,
+  propertyKey,
+  quote,
+} from "./names.ts";
+import { forcedRowField, isObjectMember, isRequired } from "./rules.ts";
 
 /** The result of {@link emitTypes}. */
 export interface EmitTypesResult {
@@ -54,11 +61,6 @@ export interface EmitTypesResult {
  */
 export function emitTypes(schema: Schema, header: readonly string[] = []): EmitTypesResult {
   return new TypesEmitter(schema).emit(header);
-}
-
-/** `//` comment lines; line terminators in the text can't end the comment early. */
-export function headerLines(header: readonly string[]): string[] {
-  return header.map((text) => `// ${commentText(text)}`);
 }
 
 /** Names the generated file imports from @tscomfy/core. */
@@ -362,8 +364,8 @@ class TypesEmitter {
     let optional = true;
     const forced = sendsSomething ? forcedRowField(inputs) : undefined;
     for (const input of inputs) {
-      // The frontend never sends display-only widgets, so they take no value (§7.4).
-      if (input.kind === "value" && !sendsValue(input.widget)) continue;
+      // Inputs the frontend never sends a value for (display-only widgets) take none (§7.4).
+      if (!sendsInputValue(input)) continue;
       const built = this.#inputType(scope, input, `${prefix}$${pascal(input.name, "Input")}`, [
         ...path,
         input.name,
@@ -741,88 +743,6 @@ class TypesEmitter {
     return [...scope.templates.values()]
       .filter((template) => used.has(template.id))
       .map((template) => template.parameter);
-  }
-}
-
-/**
- * Whether a property named `name` must be required: TypeScript checks an optional property
- * against the `Object` member of that name, which every object literal has.
- */
-export function isObjectMember(name: string): boolean {
-  return OBJECT_MEMBERS.has(name);
-}
-
-/** Members of TypeScript's `Object` interface, which every object type has. */
-const OBJECT_MEMBERS: ReadonlySet<string> = new Set([
-  "constructor",
-  "toString",
-  "toLocaleString",
-  "valueOf",
-  "hasOwnProperty",
-  "isPrototypeOf",
-  "propertyIsEnumerable",
-]);
-
-/**
- * The field a DynamicGroup row's type requires beyond the required ones (§7.2): a row is counted
- * only when one of its keys is sent, so when no field is required or has a default, the first
- * one must be given, or `{}` would send no row at all.
- */
-export function forcedRowField(fields: readonly InputDef[]): InputDef | undefined {
-  const sendable = fields.filter((field) => field.kind !== "value" || sendsValue(field.widget));
-  return sendable.some((field) => isRequired(field) || hasDefault(field)) ? undefined : sendable[0];
-}
-
-/**
- * Whether an input must be given: the backend requires it and no default fills it in.
- * Autogrow and DynamicGroup are required by their minimum alone: the backend enforces it even
- * when the input itself is optional. An input named after a member of `Object` is always
- * required: TypeScript checks an optional property against the member every object literal
- * has (`constructor: Function`), so leaving it out would fail to compile. Shared with the
- * transpiler.
- */
-export function isRequired(input: InputDef): boolean {
-  if (isObjectMember(input.name)) return true;
-  switch (input.kind) {
-    case "autogrow":
-      return input.template.required && input.min > 0 && input.slots.length > 0;
-    case "dynamicGroup":
-      return input.min > 0;
-    case "combo":
-      // A forceInput combo has no widget, so nothing fills its default in.
-      return input.required && (input.default === undefined || input.forceInput === true);
-    case "int":
-    case "float":
-    case "string":
-    case "boolean":
-    case "value":
-      return input.required && input.default === undefined;
-    case "socket":
-    case "dynamicCombo":
-    case "matchType":
-    case "unknown":
-      return input.required;
-  }
-}
-
-/** Whether the exporter sends a value for the input when none is given. */
-export function hasDefault(input: InputDef): boolean {
-  switch (input.kind) {
-    case "combo":
-      return input.default !== undefined && input.forceInput !== true;
-    case "int":
-    case "float":
-    case "string":
-    case "boolean":
-    case "value":
-      return input.default !== undefined;
-    case "socket":
-    case "autogrow":
-    case "dynamicCombo":
-    case "dynamicGroup":
-    case "matchType":
-    case "unknown":
-      return false;
   }
 }
 

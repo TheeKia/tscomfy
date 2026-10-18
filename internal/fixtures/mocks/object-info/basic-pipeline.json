@@ -201,5 +201,72 @@
     "output_node": true,
     "has_intermediate_output": false,
     "search_aliases": ["save"]
+  },
+  "LoraLoader": {
+    "input": {
+      "required": {
+        "model": ["MODEL", { "tooltip": "Model to patch." }],
+        "clip": ["CLIP", { "tooltip": "Text encoder to patch." }],
+        "lora_name": [["lora-a.safetensors", "lora-b.safetensors"], { "tooltip": "LoRA file." }],
+        "strength_model": ["FLOAT", { "default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01 }],
+        "strength_clip": ["FLOAT", { "default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01 }]
+      }
+    },
+    "input_order": {
+      "required": ["model", "clip", "lora_name", "strength_model", "strength_clip"]
+    },
+    "is_input_list": false,
+    "output": ["MODEL", "CLIP"],
+    "output_is_list": [false, false],
+    "output_name": ["MODEL", "CLIP"],
+    "name": "LoraLoader",
+    "display_name": "Load LoRA",
+    "description": "Applies a LoRA to a model and its text encoder.",
+    "python_module": "nodes",
+    "category": "loaders",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "LatentUpscaleBy": {
+    "input": {
+      "required": {
+        "samples": ["LATENT", {}],
+        "upscale_method": [["nearest-exact", "bilinear", "bislerp"], {}],
+        "scale_by": ["FLOAT", { "default": 1.5, "min": 0.01, "max": 8.0, "step": 0.01 }]
+      }
+    },
+    "input_order": { "required": ["samples", "upscale_method", "scale_by"] },
+    "is_input_list": false,
+    "output": ["LATENT"],
+    "output_is_list": [false],
+    "output_name": ["LATENT"],
+    "name": "LatentUpscaleBy",
+    "display_name": "Upscale Latent By",
+    "description": "Scales a latent by a factor.",
+    "python_module": "nodes",
+    "category": "latent",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "PreviewImage": {
+    "input": {
+      "required": { "images": ["IMAGE", { "tooltip": "Images to preview." }] },
+      "hidden": { "prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO" }
+    },
+    "input_order": { "required": ["images"], "hidden": ["prompt", "extra_pnginfo"] },
+    "is_input_list": false,
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "PreviewImage",
+    "display_name": "Preview Image",
+    "description": "Shows images without saving them.",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": true,
+    "has_intermediate_output": false,
+    "search_aliases": []
   }
 }

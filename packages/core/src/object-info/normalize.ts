@@ -31,7 +31,7 @@ export interface NormalizeResult {
 
 /**
  * Normalizes the raw text of a ComfyUI `/object_info` response into a {@link Schema}
- * (docs/plan.md §5.1, §9). Pass the response text, not a parsed value: integers beyond 2^53
+ *. Pass the response text, not a parsed value: integers beyond 2^53
  * only survive our own parser.
  *
  * Lenient and total: it never throws for bad data. A node it can't use is dropped with an
@@ -49,7 +49,8 @@ export function normalizeObjectInfo(text: string, options: NormalizeOptions = {}
   const root = parsed.value;
   if (root !== undefined) {
     if (isObject(root)) {
-      for (const classType of Object.keys(root).toSorted(compareCodeUnits)) {
+      // No comparator: code-unit order, the same in every runtime and locale (D15).
+      for (const classType of Object.keys(root).toSorted()) {
         const node = readNode(context, classType, root[classType]);
         if (node !== undefined) entries.push([classType, node]);
       }
@@ -154,10 +155,4 @@ function readExpected<T extends JsonValue>(
     return undefined;
   }
   return readOptional(context, node, key, path, "W_INVALID_NODE_FIELD", expected, guard);
-}
-
-/** Code-unit order: unlike `localeCompare`, the same in every runtime and locale. */
-function compareCodeUnits(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
 }

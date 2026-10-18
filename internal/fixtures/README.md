@@ -57,16 +57,39 @@ name to `MOCK_UI_WORKFLOW_NAMES`; a test enforces this.
 | `subgraph-modes.json` | A muted subgraph inside another: its interior is still sent, its output resolves to nothing (`W_FRONTEND_QUIRK`) |
 | `subgraph-primitive.json` | A PrimitiveNode linked to a promoted subgraph input: the value never arrives, and the instance's order changes (`W_FRONTEND_QUIRK`) |
 
+## `mocks/workflows/ui-extensions/`, `ui-extensions-api/` and `ui-extensions-export/`
+
+UI workflows over the `ui-extensions` mock schema, of core classes whose widgets the frontend's
+core extensions make (3D loaders and previews, audio, cameras, a remote combo, CustomCombo,
+KSamplerAdvanced's load-time fixups), and under the same name in `ui-extensions-api/` the prompt
+the frontend builds for each; `ui-extensions-export/` holds the prompt it builds for `toUi`'s
+export of the import. Both are captured with `scripts/frontend.ts --object-info
+mocks/object-info/ui-extensions.json --remote-files '["other.png [output]", "out.png [output]"]'`,
+which registers the mock's definitions in the page (so the frontend's extensions see the mock
+shapes) and lists the saved remote file, so the frontend keeps it. The mock classes mirror the
+server's shapes, written by hand. `importUi` must
+give each prompt apart from the documented differences (keys the classes don't declare, values
+computed at queue time), checked in `packages/core/test/ui-extensions.test.ts`. Adding a file
+means adding its name to `MOCK_UI_EXTENSION_WORKFLOW_NAMES`.
+
+| File | Covers |
+|---|---|
+| `core-extensions.json` | Load3D's buttons and computed scene, Load3DAdvanced, Preview3D and SaveGLB's added `image`, LoadAudio and SaveAudio's players and upload button, RecordAudio, CameraAngle's unsent view, CreateCameraInfo's state, ImageCropV2's box fields, LoadImageOutput's remote toggle and refresh button, CustomCombo's scripted widgets, KSamplerAdvanced's boolean control and old sampler name, a file name referencing both |
+
 `mocks/workflows/ui-export/` holds, under the same names, the prompt the frontend builds when it
 loads `toUi`'s export of each import: the oracle for the export. The export is deterministic, so
 a change to `toUi` that fails `ui.test.ts` there means capturing them again with the script below.
 
 ## `scripts/frontend.ts`
 
-`bun internal/fixtures/scripts/frontend.ts --out DIR UI.json…` loads UI workflows into the local
-server's own frontend in a headless Chromium (`TSCOMFY_CHROME`, or the one Playwright caches) and
-writes the prompt `graphToPrompt` builds for each, without queueing it: every request but a GET
-is answered by the script and never reaches the server. Use it to capture `ui-api/` prompts and
+`bun internal/fixtures/scripts/frontend.ts [--object-info FILE] [--remote-files JSON] --out DIR
+UI.json…` loads UI workflows into the local server's own frontend in a headless Chromium
+(`TSCOMFY_CHROME`, or the one Playwright caches) and writes the prompt `graphToPrompt` builds for
+each, without queueing it: every request but a GET is answered by the script and never reaches
+the server, and so are the server's file lists (`/internal/files/…`, which remote combos fetch:
+`--remote-files`, or an empty list), so a capture holds none of the server's files.
+`--object-info` registers a mock's node definitions in the page first. It needs the server
+running. Use it to capture `ui-api/` prompts and
 to settle any question about the frontend's behavior. Development tooling: no test runs it.
 
 ## `mocks/object-info/`
@@ -79,7 +102,7 @@ Node class names start with `Mock` unless the name itself is the thing being tes
 |---|---|
 | `accepts.json` | One input per link rule and one output per output kind, for the `accepts` table run against both `accepts()` and the generated types |
 | `empty.json` | An empty response: no nodes |
-| `basic-pipeline.json` | A txt2img pipeline with realistic fields, and a seed node whose output feeds the sampler's seed widget: legacy combos, widgets with defaults, seed max 2⁶⁴−1, multi-output loader, output node, hidden inputs |
+| `basic-pipeline.json` | A txt2img pipeline with realistic fields, and a seed node whose output feeds the sampler's seed widget: legacy combos, widgets with defaults, seed max 2⁶⁴−1, multi-output loader, output node, hidden inputs; and the LoRA loader, latent upscale and preview the `hires-fix` example uses |
 | `combos.json` | Legacy `[[…]]` and v2 `["COMBO",{options}]` forms, numeric, mixed and boolean options, a default that is not an option, a falsy default (the frontend sends the first option instead), empty lists, upload and remote combos, the three multi-select flag combinations, option-list outputs, a custom widget-like type that is not a COMBO |
 | `dynamic-combo.json` | `COMFY_DYNAMICCOMBO_V3`: options without inputs, required and optional option inputs, three levels of nesting (`format.codec.encoding`), a top-level name colliding with a nested one, option keys with spaces and brackets, Autogrow and MatchType inside options, an optional dynamic combo, an option input whose flattened key equals another input's name |
 | `autogrow.json` | `COMFY_AUTOGROW_V3`: prefix form (min 1 and min 0), names form with a comma-union template, an optional Autogrow whose template sits in `optional`, an optional Autogrow with a required template, MatchType slots |
@@ -92,6 +115,7 @@ Node class names start with `Mock` unless the name itself is the thing being tes
 | `numbers.json` | Integer bounds beyond 2⁵³ (exact in the file), also as FLOAT bounds, beyond the double range and on an `INT:seed` type, defaults outside the bounds, widgets with no default, list-valued defaults, every widget option variant |
 | `malformed.json` | Inputs that must produce diagnostics instead of crashes: null, string, numeric type, empty tuple, bad options, V3 types missing their payload, unknown V3 type, non-record section, mismatched output arrays, dangling `input_order`, missing fields, `name` disagreeing with its key, an input declared in two sections, null options, a legacy combo or output list with an unrepresentable option, out-of-range Autogrow and DynamicGroup counts, duplicate dynamic-combo keys and nested inputs, a MatchType output without a template, an incomplete `input_order` |
 | `ui-widgets.json` | Widgets the frontend adds without an input of their own (docs/plan.md §11): controls after INT (on by default for `seed`, off with an explicit `false`, named after a string option), FLOAT and combo (with its filter) inputs; the `upload` button for the first required image or video upload combo, an animated-image upload, a required `audio` upload combo, and none for an optional one or another name; a `forceInput` socket, whose placeholder value old files saved; a dynamic combo whose first option has inputs (links by slot land on those) |
+| `ui-extensions.json` | Core classes whose widgets the frontend's core extensions make, in the server's shapes: Load3D, Load3DAdvanced, Preview3D, SaveGLB, RecordAudio, WebcamCapture, CameraAngle, CreateCameraInfo, LoadAudio, SaveAudio, LoadImageOutput (remote, refresh button), ImageCropV2 (BOUNDING_BOX), CustomCombo, KSamplerAdvanced, LoadImage, SaveImage; and mock shapes for the frontend rules they exercise: a class merely named `KSampler…`, an INT named like a BOUNDING_BOX field, inputs named `upload` (required and optional), a socketless widget before a socket, a remote combo with a control, FLOAT and multi-select controls, every extension widget type on one node |
 | `widget-types.json` | Core frontend value widgets (COLOR, BOUNDING_BOX, COLORS, IMAGECOMPARE, CURVE with `forceInput`, a CURVE value, display-only RESOLUTION_PREVIEW); `widgetType` (FLOAT on a `FLOAT,INT` socket, PAINTER on STRING, pack-registered widgets, COMBO on a pack type and on INT); a pack type with a default that stays a socket |
 | `nulls.json` | `null` where the server means "not set": `display_name`, `description`, `default`, `tooltip`, an input section, an `output_is_list` entry |
 | `legacy-and-flags.json` | Older servers: no `input_order`, `output_name` or `output_is_list`; empty `input`; `deprecated`, `experimental`, `dev_only`, `advanced`, `essentials_category` |

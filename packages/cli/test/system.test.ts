@@ -3,14 +3,16 @@ import { lstat, mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Io, run, systemIo } from "@tscomfy/cli";
-import { readMockObjectInfo } from "@tscomfy/fixtures";
+import { exec, MOCK_OBJECT_INFO_DIR, readMockObjectInfo } from "@tscomfy/fixtures";
 
-// The real Io: HTTP through fetch, files through Bun, and the executable itself.
+// The real Io: HTTP through fetch, files through node:fs, and the executable itself, under Bun
+// and under Node.
 
 const basic = await readMockObjectInfo("basic-pipeline");
 const temp = await mkdtemp(join(tmpdir(), "tscomfy-cli-"));
 const seen: { readonly method: string; readonly path: string; readonly auth: string | null }[] = [];
 let status = 200;
+let errorBody = "down";
 const server = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
@@ -21,7 +23,7 @@ const server = Bun.serve({
       path: pathname,
       auth: request.headers.get("authorization"),
     });
-    if (status !== 200) return new Response("down", { status });
+    if (status !== 200) return new Response(errorBody, { status });
     if (pathname === "/object_info") return new Response(basic);
     if (pathname === "/system_stats") {
       return Response.json({ system: { comfyui_version: "0.41.0" } });
@@ -64,7 +66,7 @@ describe("systemIo", () => {
 
     const check = captured();
     expect(await run(["check", "--url", url, "--out", out], check)).toBe(0);
-    expect(check.output()).toStartWith("Up to date: 8 node types match");
+    expect(check.output()).toStartWith("Up to date: 11 node types match");
   });
 
   test("reports an error status", async () => {
@@ -78,6 +80,21 @@ describe("systemIo", () => {
       expect(io.output()).toBe(`tscomfy: ${url}/object_info answered 503 Service Unavailable\n`);
     } finally {
       status = 200;
+    }
+  });
+
+  test("says what an error body says", async () => {
+    status = 401;
+    errorBody = '{"detail": "Not authenticated"}';
+    try {
+      const io = captured();
+      expect(await run(["generate", "--url", url, "--out", join(temp, "denied")], io)).toBe(1);
+      expect(io.output()).toBe(
+        `tscomfy: ${url}/object_info answered 401 Unauthorized: "Not authenticated"\n`,
+      );
+    } finally {
+      status = 200;
+      errorBody = "down";
     }
   });
 
@@ -122,6 +139,25 @@ describe("systemIo failures", () => {
     }
   });
 
+  test("reads files without their byte order mark", async () => {
+    const file = join(temp, "bom.json");
+    await Bun.write(file, `\uFEFF${basic}`);
+    const out = join(temp, "bom");
+    expect(await run(["generate", "--from", file, "--out", out, "--quiet"], captured())).toBe(0);
+    expect(await Bun.file(join(out, "object_info.json")).text()).toBe(basic);
+  });
+
+  test("creates the directories it writes into", async () => {
+    const out = join(temp, "deep", "er", "comfy");
+    expect(await run(["generate", "--url", url, "--out", out, "--quiet"], captured())).toBe(0);
+    expect((await readdir(out)).toSorted()).toEqual([
+      "index.ts",
+      "nodes.ts",
+      "object_info.json",
+      "tscomfy.json",
+    ]);
+  });
+
   test("reports a directory given as a file", async () => {
     const io = captured();
     expect(await run(["generate", "--from", temp, "--out", join(temp, "x")], io)).toBe(1);
@@ -155,6 +191,47 @@ test("writes through a symlinked file, keeping the link", async () => {
 
 describe("the executable", () => {
   const main = join(import.meta.dir, "..", "src", "main.ts");
+  // Node runs the source too: it strips the types, and the packages are symlinks outside
+  // node_modules. test:pack runs the built package under Node.
+  const node = Bun.which("node");
+
+  test.skipIf(node === null)("runs under Node as under Bun, byte for byte", async () => {
+    const from = join(MOCK_OBJECT_INFO_DIR, "basic-pipeline.json");
+    const outputs = await Promise.all(
+      [process.execPath, node ?? ""].map(async (runtime, index) => {
+        // Each in a directory of its own, so the recorded commands are the same.
+        const cwd = join(temp, `runtime-${String(index)}`);
+        await mkdir(cwd);
+        const out = join(cwd, "comfy");
+        const ran = await exec(
+          [
+            runtime,
+            "--conditions=@tscomfy/source",
+            main,
+            "generate",
+            "--from",
+            from,
+            "--out",
+            "comfy",
+          ],
+          { cwd },
+        );
+        expect(ran.stderr).toBe("");
+        expect(ran.code).toBe(0);
+        const files = (await readdir(out)).toSorted();
+        return Promise.all(
+          files.map(async (file) => [file, await Bun.file(join(out, file)).text()]),
+        );
+      }),
+    );
+    expect(outputs[1]).toEqual(outputs[0] ?? []);
+    expect(outputs[0]?.map(([file]) => file)).toEqual([
+      "index.ts",
+      "nodes.ts",
+      "object_info.json",
+      "tscomfy.json",
+    ]);
+  });
 
   test.each([
     [["--version"], 0],

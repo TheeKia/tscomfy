@@ -4,20 +4,30 @@
 // written, so loading reproduces the prompt `toApi` builds.
 
 import { exportApi } from "../api/export.ts";
-import { createDiagnostic, type Diagnostic } from "../diagnostic/diagnostic.ts";
+import { isApiLink } from "../api/prompt.ts";
+import { unwrapWire } from "../api/wire.ts";
+import {
+  createDiagnostic,
+  type Diagnostic,
+  type DiagnosticCode,
+} from "../diagnostic/diagnostic.ts";
+import {
+  type FrontendWidget,
+  frontendSlots,
+  frontendWidgets,
+  SCRIPTED_WIDGETS,
+  uncreatable,
+} from "../frontend/node.ts";
+import { replacesText, SAVE_NODES } from "../frontend/text.ts";
 import type { GraphNode, Workflow } from "../graph/graph.ts";
 import type { NodeId } from "../graph/types.ts";
 import { sha256Hex, utf8 } from "../hash/sha256.ts";
 import { stringify } from "../json/stringify.ts";
-import { isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
-import type { InputDef, NodeDef, OutputDef } from "../schema/types.ts";
-import {
-  frontendSlots,
-  frontendWidgets,
-  initialValue,
-  replacesText,
-  SAVE_NODES,
-} from "./frontend.ts";
+import { isJsonArray, isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
+import { definitionOf } from "../schema/lookup.ts";
+import { outputTypeText } from "../schema/type-text.ts";
+import type { AutogrowInput, NodeDef, OutputDef } from "../schema/types.ts";
+import { modeNumber, SEARCH_NAME_PROPERTY } from "./format.ts";
 
 /** Options for {@link toUi}. */
 export interface ToUiOptions {
@@ -34,20 +44,23 @@ export interface ToUiResult {
   readonly workflow: JsonObject;
   /** The UI node id each node got. */
   readonly ids: ReadonlyMap<NodeId, number>;
+  /** What the format can't carry, so the frontend's prompt would differ (see {@link toUi}). */
   readonly diagnostics: readonly Diagnostic[];
 }
 
 /**
- * The workflow as a UI workflow the frontend loads (docs/plan.md §11), deterministic. Node ids
+ * The workflow as a UI workflow the frontend loads, deterministic. Node ids
  * that are integers stay; others (`ckpt`, `40:31`) get the next free numbers, in graph order.
  * Bypassed and muted nodes keep their mode.
  *
  * Loading the file in the frontend queues what `toApi` builds, apart from what the format can't
  * carry, which is reported: `W_UI_VALUE_LOST` for a value with no widget to hold it (DynamicGroup
- * rows, widgets the frontend doesn't save), `W_UNKNOWN_UI_CLASS` for a node of a class the schema
- * doesn't have (written with its links and its values by name) and `W_UNSAFE_INTEGER` for an
- * integer the frontend's parser would round, `W_QUEUE_TIME_VALUE` for a file name the frontend
- * rewrites when it queues (`%date:…%`, `%Node.widget%`). Optional widgets and dynamic combos
+ * rows, widgets the frontend doesn't save or send), `W_UNKNOWN_UI_CLASS` for a node of a class the
+ * schema doesn't have or the frontend can't create (written with its links and its values by
+ * name), `W_EXTENSION_WIDGETS` for a node whose widgets frontend JavaScript builds,
+ * `W_UNSAFE_INTEGER` for an integer the frontend's parser would round, and `W_QUEUE_TIME_VALUE`
+ * for a file name the frontend rewrites when it queues (`%date:…%`, `%Node.widget%`) or a value it
+ * computes then (a 3D scene, a webcam frame, a recording). Optional widgets and dynamic combos
  * left out are sent by the frontend with their initial values, as for a node added by hand.
  */
 export function toUi(workflow: Workflow, options: ToUiOptions = {}): ToUiResult {
@@ -75,12 +88,22 @@ interface Link {
   readonly type: string;
 }
 
+/** A node's saved widget values, by position and by name, and how many widgets it draws. */
+interface SavedWidgets {
+  readonly values: readonly JsonValue[];
+  readonly named: JsonObject;
+  readonly drawn: number;
+}
+
 class UiWriter {
   readonly #workflow: Workflow;
   readonly #options: ToUiOptions;
   readonly #diagnostics: Diagnostic[] = [];
   readonly #ids = new Map<NodeId, number>();
   readonly #sizes = new Map<NodeId, readonly [number, number]>();
+  readonly #links: Link[] = [];
+  /** Link ids by origin node and output slot. */
+  readonly #outputs = new Map<number, Map<number, number[]>>();
 
   get sizes(): ReadonlyMap<NodeId, readonly [number, number]> {
     return this.#sizes;
@@ -96,19 +119,22 @@ class UiWriter {
     this.#assignIds(nodes);
     // Wire inputs before modes: every node is written, with what it would send if it ran.
     const wire = exportApi(this.#workflow, { validate: false, meta: false, modes: false }).prompt;
-    const links: Link[] = [];
-    const outputs = new Map<number, Map<number, number[]>>();
     const written: JsonObject[] = [];
     let y = 0;
     for (const [order, node] of nodes.entries()) {
-      const id = this.#ids.get(node.id) ?? 0;
-      const definition = this.#definition(node.classType);
+      const id = this.#id(node.id);
+      const definition = definitionOf(this.#workflow.schema, node.classType);
       const inputs = wire[node.id]?.inputs ?? {};
-      const { slots, widgets } = this.#layout(node, definition, inputs, links, outputs);
-      const size = nodeSize(definition, slots, widgets.drawn);
+      const reason = definition === undefined ? undefined : uncreatable(definition);
+      const laidOut =
+        definition === undefined || reason !== undefined
+          ? this.#byName(node, inputs, reason)
+          : this.#laidOut(node, definition, inputs);
+      const size = nodeSize(definition, laidOut.slots, laidOut.widgets.drawn);
       this.#sizes.set(node.id, size);
       const position = this.#options.positions?.get(node.id) ?? [0, y];
       y += size[1] + 40;
+      const { values, named } = laidOut.widgets;
       written.push({
         id,
         type: node.classType,
@@ -116,46 +142,25 @@ class UiWriter {
         size: [size[0], size[1]],
         flags: {},
         order,
-        mode: node.mode === "mute" ? 2 : node.mode === "bypass" ? 4 : 0,
-        inputs: slots,
+        mode: modeNumber(node.mode),
+        inputs: laidOut.slots,
         outputs: [],
         ...(node.title === undefined ? {} : { title: node.title }),
-        properties: { "Node name for S&R": node.classType },
-        ...(widgets.values.length === 0
-          ? {}
-          : { widgets_values: widgets.values, widgets_values_named: widgets.named }),
+        properties: { [SEARCH_NAME_PROPERTY]: node.classType },
+        ...(values.length === 0 ? {} : { widgets_values: values, widgets_values_named: named }),
       });
     }
     // Outputs last, once every link into them is known.
     for (const [index, node] of nodes.entries()) {
-      const id = this.#ids.get(node.id) ?? 0;
-      const definition = this.#definition(node.classType);
-      const linked = outputs.get(id) ?? new Map<number, number[]>();
-      const count = Math.max(
-        definition?.outputs.length ?? 0,
-        ...[...linked.keys()].map((slot) => slot + 1),
-      );
       const entry = written[index];
       if (entry === undefined) continue;
-      written[index] = {
-        ...entry,
-        outputs: Array.from({ length: count }, (_, slot) => {
-          const output = definition?.outputs[slot];
-          const ids = linked.get(slot);
-          return {
-            name: output?.name ?? `output ${String(slot)}`,
-            type: output === undefined ? "*" : outputType(output),
-            links: ids ?? null,
-            slot_index: slot,
-          };
-        }),
-      };
+      written[index] = { ...entry, outputs: this.#outputsOf(node) };
     }
     const body: JsonObject = {
       last_node_id: largest(this.#ids.values()),
-      last_link_id: links.length,
+      last_link_id: this.#links.length,
       nodes: written,
-      links: links.map((link) => [
+      links: this.#links.map((link) => [
         link.id,
         link.origin,
         link.originSlot,
@@ -193,179 +198,274 @@ class UiWriter {
     }
   }
 
-  /** A node's input slots, linked, and its widget values. */
-  #layout(
+  /**
+   * A node of a class the frontend lays out: its slots, linked, then its saved widget values,
+   * then what the file can't carry.
+   */
+  #laidOut(
     node: GraphNode,
-    definition: NodeDef | undefined,
+    definition: NodeDef,
     inputs: JsonObject,
-    links: Link[],
-    outputs: Map<number, Map<number, number[]>>,
-  ): {
-    readonly slots: JsonObject[];
-    /** Saved values, by position and by name, and how many widgets the frontend draws. */
-    readonly widgets: {
-      readonly values: JsonValue[];
-      readonly named: JsonObject;
-      readonly drawn: number;
-    };
-  } {
-    const id = this.#ids.get(node.id) ?? 0;
-    const slots: JsonObject[] = [];
-    const link = (value: JsonValue, type: string): number | null => {
-      if (!isLinkValue(value)) return null;
-      const origin = this.#ids.get(value[0]);
-      if (origin === undefined) return null;
-      const linkId = links.length + 1;
-      links.push({
-        id: linkId,
-        origin,
-        originSlot: value[1],
-        target: id,
-        targetSlot: slots.length,
-        type: this.#sourceType(value) ?? type,
-      });
-      const byOutput = outputs.get(origin) ?? new Map<number, number[]>();
-      const ids = byOutput.get(value[1]);
-      if (ids === undefined) byOutput.set(value[1], [linkId]);
-      else ids.push(linkId);
-      outputs.set(origin, byOutput);
-      return linkId;
-    };
-    const values: JsonValue[] = [];
-    const named: [string, JsonValue][] = [];
-    const save = (key: string, value: JsonValue): void => {
-      if (
-        typeof value === "bigint" ||
-        (typeof value === "number" && !Number.isSafeInteger(value) && Number.isInteger(value))
-      ) {
-        this.#diagnostics.push(
-          createDiagnostic(
-            "W_UNSAFE_INTEGER",
-            [node.id, "inputs", key],
-            `Input ${key} of node ${node.id} is ${String(value)}, beyond 2^53: the frontend's JSON parser will round it.`,
-          ),
-        );
-      }
-      values.push(value);
-      named.push([key, value]);
-    };
-    if (definition === undefined) {
-      this.#diagnostics.push(
-        createDiagnostic(
-          "W_UNKNOWN_UI_CLASS",
-          [node.id],
-          `Node ${node.id} has class ${node.classType}, which the schema doesn't have: its links and its values by name are written; the frontend shows it as missing.`,
-        ),
+  ): { readonly slots: JsonObject[]; readonly widgets: SavedWidgets } {
+    if (SCRIPTED_WIDGETS.has(node.classType)) {
+      this.#report(
+        "W_EXTENSION_WIDGETS",
+        [node.id],
+        `Node ${node.id} (${node.classType}) gets widgets from frontend JavaScript that the schema doesn't describe; only the ones it declares are written, so the frontend may send other values for them.`,
       );
-      // Every key by name, in order, a linked one as a null its link replaces: the importer
-      // rebuilds the inputs in that order (the frontend restores no names, only positions).
-      for (const [name, value] of Object.entries(inputs)) {
-        if (isLinkValue(value)) {
-          slots.push({ name, type: "*", link: link(value, "*") });
-          named.push([name, null]);
-        } else {
-          save(name, unwrap(value));
-        }
-      }
-      return { slots, widgets: { values, named: Object.fromEntries(named), drawn: values.length } };
     }
     const chosen = (key: string): JsonValue | undefined => {
       const value = inputs[key];
-      return isLinkValue(value) ? undefined : value;
+      return isApiLink(value) ? undefined : value;
     };
-    // Autogrow: the slots up to the last one given, and one more, as the frontend shows them.
-    const autogrow = (key: string, input: Extract<InputDef, { kind: "autogrow" }>): number => {
+    const slots = this.#slots(node, definition, inputs, chosen);
+    const widgets = frontendWidgets(definition, chosen);
+    const saved = this.#savedWidgets(node, widgets, inputs);
+    this.#lostInputs(node, inputs, slots, widgets);
+    return { slots, widgets: saved };
+  }
+
+  /**
+   * Every slot in the frontend's order with its link, the Autogrow slots up to the last one given
+   * and one more, as the frontend shows them; then links into inputs the definition doesn't
+   * declare (a pack's JavaScript adds them), as extra slots typed as what feeds them, which the
+   * frontend keeps when it loads the node.
+   */
+  #slots(
+    node: GraphNode,
+    definition: NodeDef,
+    inputs: JsonObject,
+    chosen: (key: string) => JsonValue | undefined,
+  ): JsonObject[] {
+    const slots: JsonObject[] = [];
+    const autogrow = (key: string, input: AutogrowInput): readonly string[] => {
       let last = -1;
       input.slots.forEach((slot, index) => {
         if (Object.hasOwn(inputs, `${key}.${slot}`)) last = index;
       });
-      return Math.min(input.slots.length, Math.max(last + 2, input.min + 1, 1));
+      return input.slots.slice(0, Math.max(last + 2, input.min + 1, 1));
     };
-    for (const slot of frontendSlots(definition, chosen, autogrow)) {
+    for (const slot of frontendSlots(definition, { chosen, autogrow })) {
       const value = inputs[slot.name];
       slots.push({
         name: slot.name,
         type: slot.type,
         ...(slot.widget ? { widget: { name: slot.name } } : {}),
-        link: value === undefined ? null : link(value, slot.type),
+        link: this.#link(node, value, slots.length, slot.type),
       });
     }
-    // Links into inputs the definition doesn't declare (a pack's JavaScript adds them): extra
-    // slots, typed as what feeds them, which the frontend keeps when it loads the node.
     const listed = new Set(slots.map((slot) => slot["name"]));
     for (const [name, value] of Object.entries(inputs)) {
-      if (isLinkValue(value) && !listed.has(name)) {
+      if (isApiLink(value) && !listed.has(name)) {
         const type = this.#sourceType(value) ?? "*";
-        slots.push({ name, type, link: link(value, type) });
+        slots.push({ name, type, link: this.#link(node, value, slots.length, type) });
       }
     }
-    /** Wire keys the file carries: a linked slot, or a saved widget value. */
+    return slots;
+  }
+
+  /**
+   * The values the frontend saves, in widget order: each input's own (a linked widget keeps the
+   * frontend's initial value under its link), controls `fixed`, so the frontend doesn't change a
+   * value after queueing, a BOUNDING_BOX's fields from the box, the rest as created.
+   */
+  #savedWidgets(
+    node: GraphNode,
+    widgets: readonly FrontendWidget[],
+    inputs: JsonObject,
+  ): SavedWidgets {
+    const values: JsonValue[] = [];
+    const named: [string, JsonValue][] = [];
+    let box: JsonValue | undefined;
+    for (const widget of widgets) {
+      if (!widget.saved) continue;
+      let value: JsonValue;
+      switch (widget.role) {
+        case "value": {
+          const given = widget.key === undefined ? undefined : inputs[widget.key];
+          value = given === undefined || isApiLink(given) ? widget.initial : unwrapWire(given);
+          box = value;
+          break;
+        }
+        case "control":
+          value = "fixed";
+          break;
+        case "filter":
+          value = "";
+          break;
+        case "part":
+          value =
+            widget.field !== undefined && isJsonObject(box)
+              ? (box[widget.field] ?? widget.initial)
+              : widget.initial;
+          break;
+      }
+      if (hasUnsafeInteger(value)) {
+        this.#report(
+          "W_UNSAFE_INTEGER",
+          [node.id, "inputs", widget.key ?? widget.name],
+          `Widget ${widget.name} of node ${node.id} holds an integer beyond 2^53: the frontend's JSON parser will round it.`,
+        );
+      }
+      values.push(value);
+      named.push([widget.name, value]);
+    }
+    return { values, named: Object.fromEntries(named), drawn: widgets.length };
+  }
+
+  /**
+   * Reports the wire keys the frontend won't send as given: no linked slot or sent widget carries
+   * them (a DynamicGroup row, a widget the frontend doesn't save or send, one it sends under
+   * another name), its widget's value is computed when the frontend queues, or the file name has
+   * `%…%` patterns the frontend replaces.
+   */
+  #lostInputs(
+    node: GraphNode,
+    inputs: JsonObject,
+    slots: readonly JsonObject[],
+    widgets: readonly FrontendWidget[],
+  ): void {
     const carried = new Set<string>();
     for (const slot of slots) {
       if (slot["link"] !== null && typeof slot["name"] === "string") carried.add(slot["name"]);
     }
-    const all = frontendWidgets(definition, chosen);
-    for (const widget of all) {
-      if (!widget.persisted) continue;
-      if (widget.key === undefined || widget.input === undefined) {
-        // A control: fixed, so the frontend doesn't change the value after queueing.
-        save(
-          widget.name,
-          widget.name === "upload"
-            ? widget.initial
-            : widget.name === "control_filter_list"
-              ? ""
-              : "fixed",
-        );
-        continue;
-      }
-      const given = inputs[widget.key];
-      if (given !== undefined && !isLinkValue(given)) carried.add(widget.key);
-      // A linked widget keeps a value under its link; the frontend's own initial one.
-      save(
-        widget.key,
-        given === undefined || isLinkValue(given)
-          ? fallback(widget.input, widget.initial)
-          : unwrap(given),
-      );
+    const computed = new Set<string>();
+    for (const widget of widgets) {
+      if (widget.key === undefined || !widget.saved) continue;
+      if (widget.sent === "queue") computed.add(widget.key);
+      if (widget.sent === "value" && widget.name === widget.key) carried.add(widget.key);
     }
     const prefix = inputs["filename_prefix"];
     if (SAVE_NODES.has(node.classType) && typeof prefix === "string" && replacesText(prefix)) {
-      this.#diagnostics.push(
-        createDiagnostic(
+      this.#report(
+        "W_QUEUE_TIME_VALUE",
+        [node.id, "inputs", "filename_prefix"],
+        `Input filename_prefix of node ${node.id} holds %…%, which the frontend replaces (with the time, or another node's widget value) when it queues the prompt.`,
+      );
+    }
+    for (const [key, value] of Object.entries(inputs)) {
+      if (carried.has(key) || isApiLink(value)) continue;
+      if (computed.has(key)) {
+        this.#report(
           "W_QUEUE_TIME_VALUE",
-          [node.id, "inputs", "filename_prefix"],
-          `Input filename_prefix of node ${node.id} holds %…%, which the frontend replaces (with the time, or another node's widget value) when it queues the prompt.`,
-        ),
-      );
-    }
-    for (const key of Object.keys(inputs)) {
-      if (carried.has(key)) continue;
-      this.#diagnostics.push(
-        createDiagnostic(
-          "W_UI_VALUE_LOST",
           [node.id, "inputs", key],
-          `Input ${key} of node ${node.id} has nowhere to go in a UI workflow (a DynamicGroup row, or a widget the frontend doesn't save): the frontend will send its own value instead.`,
-        ),
+          `Input ${key} of node ${node.id} is a widget whose value the frontend computes when it queues the prompt (a 3D scene, a webcam frame, a recording); the value given isn't sent.`,
+        );
+        continue;
+      }
+      this.#report(
+        "W_UI_VALUE_LOST",
+        [node.id, "inputs", key],
+        `Input ${key} of node ${node.id} has nowhere to go in a UI workflow (a DynamicGroup row, or a widget the frontend doesn't save, doesn't send or sends under another name): the frontend will send its own value instead.`,
       );
     }
-    return { slots, widgets: { values, named: Object.fromEntries(named), drawn: all.length } };
+  }
+
+  /**
+   * A node the frontend can't lay out: of a class the schema doesn't have, or one it can't
+   * create. Every key by name, in order, a linked one as a null its link replaces: the importer
+   * rebuilds the inputs in that order (the frontend restores no names, only positions).
+   */
+  #byName(
+    node: GraphNode,
+    inputs: JsonObject,
+    reason: string | undefined,
+  ): { readonly slots: JsonObject[]; readonly widgets: SavedWidgets } {
+    this.#report(
+      "W_UNKNOWN_UI_CLASS",
+      [node.id],
+      reason === undefined
+        ? `Node ${node.id} has class ${node.classType}, which the schema doesn't have: its links and its values by name are written; the frontend shows it as missing.`
+        : `Node ${node.id} has class ${node.classType}, which the frontend can't create: ${reason}. Its links and its values by name are written; the frontend shows it as missing.`,
+    );
+    const slots: JsonObject[] = [];
+    const values: JsonValue[] = [];
+    const named: [string, JsonValue][] = [];
+    for (const [name, value] of Object.entries(inputs)) {
+      if (isApiLink(value)) {
+        slots.push({ name, type: "*", link: this.#link(node, value, slots.length, "*") });
+        named.push([name, null]);
+        continue;
+      }
+      const unwrapped = unwrapWire(value);
+      if (hasUnsafeInteger(unwrapped)) {
+        this.#report(
+          "W_UNSAFE_INTEGER",
+          [node.id, "inputs", name],
+          `Input ${name} of node ${node.id} holds an integer beyond 2^53: the frontend's JSON parser will round it.`,
+        );
+      }
+      values.push(unwrapped);
+      named.push([name, unwrapped]);
+    }
+    return {
+      slots,
+      widgets: { values, named: Object.fromEntries(named), drawn: values.length },
+    };
+  }
+
+  /** Writes a link into slot `targetSlot` of `node`, if `value` links a node of the workflow. */
+  #link(
+    node: GraphNode,
+    value: JsonValue | undefined,
+    targetSlot: number,
+    type: string,
+  ): number | null {
+    if (!isApiLink(value)) return null;
+    const origin = this.#ids.get(value[0]);
+    if (origin === undefined) return null;
+    const id = this.#links.length + 1;
+    this.#links.push({
+      id,
+      origin,
+      originSlot: value[1],
+      target: this.#id(node.id),
+      targetSlot,
+      type: this.#sourceType(value) ?? type,
+    });
+    const byOutput = this.#outputs.get(origin) ?? new Map<number, number[]>();
+    const ids = byOutput.get(value[1]);
+    if (ids === undefined) byOutput.set(value[1], [id]);
+    else ids.push(id);
+    this.#outputs.set(origin, byOutput);
+    return id;
+  }
+
+  /** A node's outputs: those its definition declares, and any a link uses beyond them. */
+  #outputsOf(node: GraphNode): JsonObject[] {
+    const definition = definitionOf(this.#workflow.schema, node.classType);
+    const linked = this.#outputs.get(this.#id(node.id)) ?? new Map<number, number[]>();
+    let count = definition?.outputs.length ?? 0;
+    for (const slot of linked.keys()) count = Math.max(count, slot + 1);
+    return Array.from({ length: count }, (_, slot) => {
+      const output = definition?.outputs[slot];
+      return {
+        name: output?.name ?? `output ${String(slot)}`,
+        type: output === undefined ? "*" : outputTypeText(output.type),
+        links: linked.get(slot) ?? null,
+        slot_index: slot,
+      };
+    });
   }
 
   /** The declared type of the output a link comes from, when it has one. */
   #sourceType(value: readonly [NodeId, number]): string | undefined {
     const source = this.#workflow.graph.nodes.get(value[0]);
-    const output =
-      source === undefined ? undefined : this.#definition(source.classType)?.outputs[value[1]];
+    const output: OutputDef | undefined =
+      source === undefined
+        ? undefined
+        : definitionOf(this.#workflow.schema, source.classType)?.outputs[value[1]];
     return output === undefined || output.matchTemplate !== undefined || output.type.kind === "any"
       ? undefined
-      : outputType(output);
+      : outputTypeText(output.type);
   }
 
-  #definition(classType: string): NodeDef | undefined {
-    return Object.hasOwn(this.#workflow.schema.nodes, classType)
-      ? this.#workflow.schema.nodes[classType]
-      : undefined;
+  #id(node: NodeId): number {
+    return this.#ids.get(node) ?? 0;
+  }
+
+  #report(code: DiagnosticCode, path: readonly (string | number)[], message: string): void {
+    this.#diagnostics.push(createDiagnostic(code, path, message));
   }
 }
 
@@ -386,54 +486,18 @@ function nodeSize(
   return [definition === undefined ? 240 : 320, Math.ceil((46 + rows * 24) / 10) * 10];
 }
 
-/** The frontend's initial value for a widget without one of ours. */
-function fallback(input: InputDef, initial: JsonValue): JsonValue {
-  switch (input.kind) {
-    case "int":
-    case "float":
-    case "string":
-    case "boolean":
-    case "combo":
-    case "value":
-      return initialValue(input);
-    case "socket":
-    case "matchType":
-    case "dynamicCombo":
-    case "autogrow":
-    case "dynamicGroup":
-    case "unknown":
-      return initial;
-  }
+/**
+ * Whether a value holds an integer the frontend's `JSON.parse` rounds: a bigint, which tscomfy
+ * uses for integers outside ±(2^53 − 1). A `number`, even a large one, round-trips exactly.
+ */
+function hasUnsafeInteger(value: JsonValue): boolean {
+  if (typeof value === "bigint") return value > MAX_SAFE || value < -MAX_SAFE;
+  if (isJsonArray(value)) return value.some(hasUnsafeInteger);
+  if (isJsonObject(value)) return Object.values(value).some(hasUnsafeInteger);
+  return false;
 }
 
-/** A wire value as a widget holds it: lists and CURVE values unwrapped. */
-function unwrap(value: JsonValue): JsonValue {
-  if (isJsonObject(value) && Object.hasOwn(value, "__value__")) return value["__value__"] ?? null;
-  return value;
-}
-
-function outputType(output: OutputDef): string {
-  const { type } = output;
-  switch (type.kind) {
-    case "combo":
-      return "COMBO";
-    case "any":
-      return "*";
-    case "named":
-      return type.name;
-    case "union":
-      return type.names.join(",");
-  }
-}
-
-function isLinkValue(value: JsonValue | undefined): value is readonly [NodeId, number] {
-  return (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    typeof value[0] === "string" &&
-    typeof value[1] === "number"
-  );
-}
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 
 /** The largest of some numbers, or 0; without spreading them into one call. */
 function largest(numbers: Iterable<number>): number {

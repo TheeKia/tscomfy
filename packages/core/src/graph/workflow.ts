@@ -6,7 +6,7 @@ import { isOutputRef, outputRef, ownerOf } from "./output-ref.ts";
 import type { NodeHandle, NodeId, NodeMode, Out } from "./types.ts";
 
 /**
- * Builds a workflow (docs/plan.md §7): `build` calls node functions on `n`, which add nodes and
+ * Builds a workflow: `build` calls node functions on `n`, which add nodes and
  * return their outputs, and `raw` for untyped nodes. The result is frozen; ids are `"1"`, `"2"`,
  * … in creation order unless set with `options.id`.
  *

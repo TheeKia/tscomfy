@@ -1,6 +1,6 @@
 # ADR-0003: Runtime-agnostic library packages
 
-Status: accepted, 2026-10-17
+Status: accepted, 2026-10-17; updated 2026-10-18 (layout, globals)
 
 ## Context
 
@@ -8,12 +8,12 @@ Workflow generation should work wherever JavaScript runs: Node, Bun, Deno, brows
 
 ## Decision
 
-`@tscomfy/core` and `@tscomfy/codegen` use no `node:*`, `bun`, `bun:*` or DOM APIs. `@tscomfy/cli` is the only package with I/O. The ban is enforced by oxlint `no-restricted-imports`, scoped to `packages/{core,codegen}/src/**`.
+`@tscomfy/core`, `@tscomfy/codegen` and `@tscomfy/layout` use no `node:*`, `bun`, `bun:*` or DOM APIs. `@tscomfy/cli` is the only package with I/O. Imports are banned by oxlint `no-restricted-imports`, scoped to `packages/{core,codegen,layout}/src/**`; runtime and DOM globals by the build config (`lib: ["es2024"]`, `types: []`), so using one fails `tsc -b`.
 
 ## Consequences
 
 - Codegen returns files as data; the CLI writes them.
-- `types: []` alone is not a sufficient guard, because Bun's types pull in `@types/node` transitively; the lint rule is the guard.
+- `types: []` alone is not a sufficient guard for imports, because Bun's types pull in `@types/node` transitively wherever they are loaded; the lint rule is the guard. Test configs load Bun's types, so tests may use Bun and Node APIs.
 
 ## Evidence
 

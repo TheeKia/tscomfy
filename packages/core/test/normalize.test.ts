@@ -676,3 +676,88 @@ describe("malformed input", () => {
     ]);
   });
 });
+
+/** Normalizes one node with the given fields, inputs and outputs. */
+function one(fields: Record<string, unknown>): NormalizeResult {
+  return normalizeObjectInfo(
+    JSON.stringify({
+      MockOne: {
+        input: { required: {} },
+        output: [],
+        name: "MockOne",
+        display_name: "MockOne",
+        category: "t",
+        python_module: "nodes",
+        output_node: false,
+        ...fields,
+      },
+    }),
+  );
+}
+const codes = (result: NormalizeResult): [string, (string | number)[]][] =>
+  result.diagnostics.map((each) => [each.code, [...each.path]]);
+
+describe("branches no mock reaches", () => {
+  test("an empty output type, or one neither a string nor a list, drops the node", () => {
+    for (const output of [[""], [5], [{}]]) {
+      const result = one({ output });
+      expect(result.schema.nodes["MockOne"]).toBeUndefined();
+      expect(codes(result)).toEqual([["E_INVALID_NODE", ["MockOne", "output", 0]]]);
+    }
+  });
+
+  test("output_* fields that aren't lists, or hold entries of the wrong type, are ignored", () => {
+    const result = one({
+      output: ["IMAGE", "MASK"],
+      output_name: "image",
+      output_is_list: [true, "no"],
+      output_tooltips: [5, null],
+    });
+    expect(codes(result)).toEqual([
+      ["W_INVALID_NODE_FIELD", ["MockOne", "output_name"]],
+      ["W_INVALID_NODE_FIELD", ["MockOne", "output_is_list", 1]],
+      ["W_INVALID_NODE_FIELD", ["MockOne", "output_tooltips", 0]],
+    ]);
+    expect(
+      result.schema.nodes["MockOne"]?.outputs.map((output) => [output.name, output.isList]),
+    ).toEqual([
+      ["IMAGE", true],
+      ["MASK", false],
+    ]);
+  });
+
+  test("optional fields of the wrong type are reported and read as absent", () => {
+    const result = one({
+      input: { required: { image: ["IMAGE", { lazy: "yes" }] } },
+      input_order: [],
+      name: 5,
+    });
+    expect(codes(result)).toEqual([
+      ["W_INVALID_NODE_FIELD", ["MockOne", "input_order"]],
+      ["W_INVALID_INPUT_OPTION", ["MockOne", "input", "required", "image", 1, "lazy"]],
+      ["W_INVALID_NODE_FIELD", ["MockOne", "name"]],
+    ]);
+    expect(result.schema.nodes["MockOne"]?.inputs[0]).toMatchObject({
+      kind: "socket",
+      lazy: false,
+    });
+  });
+
+  test("GALLERIA and CHART start from their own spec fields, not the default", () => {
+    const result = one({
+      input: {
+        required: {
+          shown: ["GALLERIA", { images: ["a.png"], default: ["ignored.png"] }],
+          empty: ["GALLERIA", {}],
+          plot: ["CHART", { data: { labels: ["x"] }, default: { ignored: true } }],
+          blank: ["CHART", {}],
+        },
+      },
+    });
+    expect(
+      result.schema.nodes["MockOne"]?.inputs.map((input) =>
+        input.kind === "value" ? input.default : undefined,
+      ),
+    ).toEqual([["a.png"], [], { labels: ["x"] }, {}]);
+  });
+});

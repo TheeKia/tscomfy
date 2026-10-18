@@ -10,14 +10,18 @@
 // - an input whose link resolves to nothing is left out, unless it is a widget: the frontend
 //   writes widget values first and a link only replaces one, so the widget's value is sent.
 //
-// Slots are those of a node as the frontend creates it (see `inputSlots`), with MatchType types
+// Slots are those of a node as the frontend creates it (`frontend/node.ts`), with MatchType types
 // narrowed by the node's links as the frontend narrows them once a graph is loaded.
 
 import { createDiagnostic, type Diagnostic } from "../diagnostic/diagnostic.ts";
+import { bypassSlot, commonType } from "../frontend/links.ts";
+import { type FrontendSlot, frontendSlots } from "../frontend/node.ts";
+import { sendsValue } from "../frontend/widgets.ts";
 import type { NodeId, NodeMode } from "../graph/types.ts";
-import type { JsonValue } from "../json/value.ts";
-import type { InputDef, NodeDef, SocketType } from "../schema/types.ts";
-import type { ApiNode } from "./prompt.ts";
+import { isJsonArray, type JsonValue } from "../json/value.ts";
+import { outputTypeText, typeText } from "../schema/type-text.ts";
+import type { InputDef, NodeDef } from "../schema/types.ts";
+import { type ApiNode, isApiLink } from "./prompt.ts";
 
 /** One node of a prompt before modes apply: its wire inputs, definition and mode. */
 export interface ModalNode {
@@ -69,7 +73,7 @@ export function applyModes(
     );
     const inputs: [string, JsonValue][] = [];
     for (const [key, value] of Object.entries(node.node.inputs)) {
-      if (!isLink(value)) {
+      if (!isApiLink(value)) {
         inputs.push([key, value]);
         continue;
       }
@@ -123,7 +127,7 @@ class Resolver {
         opened.add(node.id);
         const sources = slots.flatMap((slot) => {
           const value = node.node.inputs[slot.key];
-          if (slot.template === undefined || value === undefined || !isLink(value)) return [];
+          if (slot.template === undefined || value === undefined || !isApiLink(value)) return [];
           const source = this.#nodes.get(value[0]);
           return source === undefined || this.#shapes.has(source.id) || opened.has(source.id)
             ? []
@@ -186,7 +190,7 @@ class Resolver {
         break;
       }
       const value = source.node.inputs[input.key];
-      if (value === undefined || !isLink(value)) {
+      if (value === undefined || !isApiLink(value)) {
         result = `it is linked to bypassed node ${id}, whose input ${input.key} isn't linked`;
         break;
       }
@@ -206,11 +210,7 @@ class Resolver {
     const types = new Map(slots.map((slot) => [slot.key, slot.type]));
     const definitions = node.definition?.outputs ?? [];
     const outputs = definitions.map((output) =>
-      output.matchTemplate !== undefined
-        ? "*"
-        : output.type.kind === "combo"
-          ? "COMBO"
-          : typeText(output.type),
+      output.matchTemplate === undefined ? outputTypeText(output.type) : "*",
     );
     const templates = new Map<string, Slot[]>();
     for (const slot of slots) {
@@ -222,7 +222,7 @@ class Resolver {
     for (const [template, members] of templates) {
       const linked = members.map((slot) => {
         const value = node.node.inputs[slot.key];
-        if (value === undefined || !isLink(value)) return "*";
+        if (value === undefined || !isApiLink(value)) return "*";
         return this.#shapes.get(value[0])?.outputs[value[1]] ?? "*";
       });
       members.forEach((slot, index) => {
@@ -242,216 +242,67 @@ class Resolver {
 }
 
 /**
- * The frontend's `commonType`: `*` when every type is `*`, else the members all the other types
- * share (comma lists split, `*` ignored, case kept), or `undefined` when they share none.
- */
-export function commonType(types: readonly string[]): string | undefined {
-  const typed = types.filter((type) => type !== "*");
-  if (typed.length === 0) return "*";
-  const counts = new Map<string, number>();
-  for (const type of typed) {
-    for (const member of new Set(type.split(","))) {
-      counts.set(member, (counts.get(member) ?? 0) + 1);
-    }
-  }
-  const shared = [...counts]
-    .filter(([, count]) => count === typed.length)
-    .map(([member]) => member);
-  return shared.length === 0 ? undefined : shared.join(",");
-}
-
-/**
- * The input of a bypassed node that output `slot` passes through (`_getBypassSlotIndex`):
- * 1. for a target typed `*` or untyped, the input at the same index, else the first;
- * 2. the input at the same index, if it is valid for both the output's type and the target's;
- * 3. the first input whose type is exactly the target's;
- * 4. the first input valid for both; else none (`-1`).
- */
-export function bypassSlot(
-  inputs: readonly { readonly type: string }[],
-  output: string,
-  slot: number,
-  target: string,
-): number {
-  if (target === "*" || target === "") return inputs.length > slot ? slot : 0;
-  const same = inputs[slot];
-  if (
-    same !== undefined &&
-    validConnection(same.type, output) &&
-    validConnection(same.type, target)
-  ) {
-    return slot;
-  }
-  const exact = inputs.findIndex((input) => input.type === target);
-  if (exact !== -1) return exact;
-  return inputs.findIndex(
-    (input) => validConnection(input.type, output) && validConnection(input.type, target),
-  );
-}
-
-/**
- * LiteGraph's `isValidConnection`: `*` and the empty type match anything; otherwise the types
- * match ignoring case, or, for comma lists, when any member of one matches any of the other.
- */
-export function validConnection(a: string, b: string): boolean {
-  if (a === "" || a === "*" || b === "" || b === "*" || a === b) return true;
-  const x = a.toLowerCase();
-  const y = b.toLowerCase();
-  if (!x.includes(",") && !y.includes(",")) return x === y;
-  return x.split(",").some((one) => y.split(",").some((other) => validConnection(one, other)));
-}
-
-/** The slot an input gets, and whether it is a socket rather than a widget's. */
-interface Placed {
-  readonly slot: Slot;
-  readonly socket: boolean;
-}
-
-/**
- * A node's input slots in the order the frontend creates them (`litegraphService.ts`
- * `addInputs`, `dynamicWidgets.ts`): sockets (inputs without a widget, `forceInput` legacy
- * combos, MatchType inputs, Autogrow slots) in input order, then the sockets of widgets in input
- * order. A chosen dynamic-combo option's inputs follow the combo's own slot, one each in their
- * declaration order (the frontend adds each with `addNodeInput`). Slot types are the declared
- * `type` (not `widgetType`): COMBO for legacy combos, the allowed types for MatchType.
- *
- * Limits, where the frontend's slots depend on more than a prompt records: an Autogrow lists the
- * slots the prompt gives (the frontend adds one empty slot more, and keeps saved slots in the
- * order a workflow file lists them); a node created anew lists a dynamic combo's first option
- * inputs before the combo's own slot; DynamicGroup fields have no slots (no frontend handler).
- * A node of an unknown class lists its wire keys, typed `*`.
+ * A node's input slots in the order the frontend creates them (`frontend/node.ts`), with what
+ * bypass needs: MatchType templates, and for a widget's slot what the exporter sends when no link
+ * replaces its value. Where the frontend's slots depend on more than a prompt records: an Autogrow
+ * lists the slots the prompt gives (the frontend adds one empty slot more, and keeps saved slots
+ * in the order a workflow file lists them); a dynamic combo the prompt leaves out lists no option
+ * slots (the frontend lists its first option's, which no link of the prompt targets); a node
+ * created anew lists a dynamic combo's first option inputs before the combo's own slot;
+ * DynamicGroup fields have no slots (no frontend handler). A node of an unknown class lists its
+ * wire keys, typed `*`.
  */
 function inputSlots({ node, definition }: ModalNode): Slot[] {
   const wire = node.inputs;
   if (definition === undefined) return Object.keys(wire).map((key) => ({ key, type: "*" }));
-  const placeOf = (input: InputDef, key: string): Placed | undefined => place(input, key, wire);
-  /** A chosen option's inputs, in declaration order, each followed by its own options. */
-  const optionSlots = (input: InputDef, key: string): Slot[] => {
-    if (input.kind !== "dynamicCombo") return [];
-    const chosen = input.options.find((option) => option.key === wire[key]);
-    const slots: Slot[] = [];
-    for (const child of chosen?.inputs ?? []) {
-      const childKey = `${key}.${child.name}`;
-      if (child.kind === "autogrow") {
-        slots.push(...autogrowSlots(child, childKey, wire));
-        continue;
-      }
-      const own = placeOf(child, childKey);
-      if (own !== undefined) slots.push(own.slot);
-      slots.push(...optionSlots(child, childKey));
-    }
-    return slots;
-  };
-  const sockets: Slot[] = [];
-  const widgets: Slot[] = [];
-  for (const input of definition.inputs) {
-    if (input.kind === "autogrow") {
-      sockets.push(...autogrowSlots(input, input.name, wire));
-      continue;
-    }
-    const own = placeOf(input, input.name);
-    if (own === undefined) continue;
-    (own.socket ? sockets : widgets).push(own.slot, ...optionSlots(input, input.name));
-  }
-  return [...sockets, ...widgets];
+  const slots = frontendSlots(definition, {
+    chosen: (key) => wire[key],
+    autogrow: (key, input) => input.slots.filter((slot) => Object.hasOwn(wire, `${key}.${slot}`)),
+    unset: "none",
+  });
+  return slots.map(toSlot);
 }
 
-/** The slot one input gets, if it gets one. */
-function place(
-  input: InputDef,
-  key: string,
-  wire: { readonly [key: string]: JsonValue },
-): Placed | undefined {
+/** A slot with what bypass needs: its MatchType template, and a widget's fallback value. */
+function toSlot({ name, type, input, widget }: FrontendSlot): Slot {
+  const template =
+    input?.kind === "matchType"
+      ? { template: input.templateId, allowed: typeText(input.allowed) }
+      : {};
+  const fallback = widget
+    ? { widget: { value: input === undefined ? undefined : widgetValue(input) } }
+    : {};
+  return { key: name, type, ...template, ...fallback };
+}
+
+/** What the exporter sends for a widget left without a value: its default, encoded. */
+function widgetValue(input: InputDef): JsonValue | undefined {
   switch (input.kind) {
-    case "socket":
-      return { slot: { key, type: typeText(input.type) }, socket: true };
-    case "matchType": {
-      const allowed = typeText(input.allowed);
-      return { slot: { key, type: allowed, template: input.templateId, allowed }, socket: true };
-    }
-    case "unknown":
-      return { slot: { key, type: unknownType(input.spec) }, socket: true };
-    case "combo":
-      if (input.forceInput === true) return { slot: { key, type: "COMBO" }, socket: true };
-      if (input.socketless) return undefined;
-      return { slot: { key, type: "COMBO", widget: { value: widgetValue(input) } }, socket: false };
     case "int":
     case "float":
     case "string":
     case "boolean":
-    case "value":
-      if (input.socketless) return undefined;
-      return {
-        slot: { key, type: typeText(input.type), widget: { value: widgetValue(input) } },
-        socket: false,
-      };
-    case "dynamicCombo":
-      return {
-        slot: { key, type: "COMFY_DYNAMICCOMBO_V3", widget: { value: wire[key] } },
-        socket: false,
-      };
+    case "combo":
+    case "value": {
+      const value = input.default;
+      if (value === undefined) return undefined;
+      if (input.kind === "value" && !sendsValue(input.widget)) return undefined;
+      if (input.kind === "value" && input.widget === "CURVE" && value !== null) {
+        return { __type__: "CURVE", __value__: value };
+      }
+      return isJsonArray(value) ? { __value__: value } : value;
+    }
+    case "socket":
+    case "matchType":
+    case "unknown":
     case "autogrow":
+    case "dynamicCombo":
     case "dynamicGroup":
+      // A dynamic combo's widget has no default: when its link resolves to nothing, it is left out.
       return undefined;
   }
 }
 
-/** The slots of an Autogrow the prompt gives, typed by its template. */
-function autogrowSlots(
-  input: Extract<InputDef, { kind: "autogrow" }>,
-  key: string,
-  wire: { readonly [key: string]: JsonValue },
-): Slot[] {
-  const template = place(input.template, key, wire);
-  if (template === undefined) return [];
-  const { widget: _, ...slot } = template.slot;
-  return input.slots.flatMap((name) => {
-    const slotKey = `${key}.${name}`;
-    return Object.hasOwn(wire, slotKey) ? [{ ...slot, key: slotKey }] : [];
-  });
-}
-
-/** What the exporter sends for a widget left without a value: its default, encoded. */
-function widgetValue(
-  input: Extract<InputDef, { kind: "int" | "float" | "string" | "boolean" | "combo" | "value" }>,
-): JsonValue | undefined {
-  const value = input.default;
-  if (value === undefined) return undefined;
-  if (input.kind === "value" && input.widget === "CURVE" && value !== null) {
-    return { __type__: "CURVE", __value__: value };
-  }
-  return isList(value) ? { __value__: value } : value;
-}
-
 function hasOutput(source: ModalNode, slot: number): boolean {
   return source.definition === undefined || source.definition.outputs[slot] !== undefined;
-}
-
-function typeText(type: SocketType): string {
-  switch (type.kind) {
-    case "any":
-      return "*";
-    case "named":
-      return type.name;
-    case "union":
-      return type.names.join(",");
-  }
-}
-
-function unknownType(spec: JsonValue): string {
-  const head = isList(spec) ? spec[0] : undefined;
-  return typeof head === "string" ? head : "*";
-}
-
-function isList(value: JsonValue): value is readonly JsonValue[] {
-  return Array.isArray(value);
-}
-
-function isLink(value: JsonValue): value is readonly [NodeId, number] {
-  return (
-    isList(value) &&
-    value.length === 2 &&
-    typeof value[0] === "string" &&
-    typeof value[1] === "number"
-  );
 }

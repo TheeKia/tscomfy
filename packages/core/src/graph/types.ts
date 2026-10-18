@@ -1,7 +1,7 @@
 // The type surface generated node types are written against (docs/plan.md §6.2, D9). The runtime
 // values behind it (OutputRef, node handles) come with the builder.
 
-/** A node's id in a prompt: `"1"`, `"2"`, … unless set explicitly (§7.3). */
+/** A node's id in a prompt: `"1"`, `"2"`, … unless set explicitly. */
 export type NodeId = string;
 
 declare const socketType: unique symbol;
@@ -19,25 +19,25 @@ export interface Out<out T extends string> {
 
 /**
  * What a socket of type `T` accepts: an output of type `T`, or an any-typed (`*`) output. The
- * backend accepts `*` on either side (§5.2).
+ * backend accepts `*` on either side.
  */
 export type In<T extends string> = Out<T | "*">;
 
 /**
- * The link type of a MatchType input after the first one of its template (§6.3): the inferred
+ * The link type of a MatchType input after the first one of its template: the inferred
  * type or `*`, or any output when the template was inferred as `*`.
  */
 export type Match<T extends string> = "*" extends T ? string : T | "*";
 
 /**
- * The socket type tscomfy gives an output that is a list of combo options (§5.2). The backend
+ * The socket type tscomfy gives an output that is a list of combo options. The backend
  * connects one only into an input typed exactly `COMBO` or `*`, so it needs a name of its own:
  * a plain `COMBO` output also fits comma unions that contain `COMBO`.
  */
 export type OptionList = "COMBO (option list)";
 
 /**
- * A list type of a limited length: `T` with `length` one of `L` (§6.2). Generated types use it
+ * A list type of a limited length: `T` with `length` one of `L`. Generated types use it
  * for Autogrow slots and DynamicGroup rows, whose count the backend bounds.
  */
 export type Bounded<T extends readonly unknown[], L extends number> = T & { readonly length: L };
@@ -55,11 +55,11 @@ export interface NodeOptions {
   readonly title?: string;
   /**
    * `"bypass"`: the node isn't sent, and links through it reroute to one of its inputs, as the
-   * frontend's bypass does (docs/plan.md §12). `"mute"`: the node isn't sent, and inputs linked
+   * frontend's bypass does. `"mute"`: the node isn't sent, and inputs linked
    * to it are left out.
    */
   readonly mode?: NodeMode;
 }
 
-/** How a node takes part in a prompt, besides normally (§12). */
+/** How a node takes part in a prompt, besides normally. */
 export type NodeMode = "bypass" | "mute";

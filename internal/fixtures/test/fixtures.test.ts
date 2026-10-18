@@ -8,11 +8,18 @@ import {
   MOCK_OBJECT_INFO_NAMES,
   MOCK_UI_API_WORKFLOW_DIR,
   MOCK_UI_EXPORT_DIR,
+  MOCK_UI_EXTENSION_API_DIR,
+  MOCK_UI_EXTENSION_DIR,
+  MOCK_UI_EXTENSION_EXPORT_DIR,
+  MOCK_UI_EXTENSION_WORKFLOW_NAMES,
   MOCK_UI_WORKFLOW_DIR,
   MOCK_UI_WORKFLOW_NAMES,
   readMockApiWorkflow,
   readMockObjectInfo,
   readMockUiApiWorkflow,
+  readMockUiExtensionApiWorkflow,
+  readMockUiExtensionExportPrompt,
+  readMockUiExtensionWorkflow,
   readMockUiWorkflow,
 } from "@tscomfy/fixtures";
 
@@ -65,6 +72,33 @@ describe("mock UI workflows", () => {
     expect(ui).toBeObject();
     expect(prompt).toBeObject();
   });
+});
+
+describe("mock UI workflows of core extension classes", () => {
+  test.each([MOCK_UI_EXTENSION_DIR, MOCK_UI_EXTENSION_API_DIR, MOCK_UI_EXTENSION_EXPORT_DIR])(
+    "the name list matches the files in %s",
+    async (dir) => {
+      const onDisk = (await readdir(dir))
+        .filter((name) => name.endsWith(".json"))
+        .map((name) => name.slice(0, -".json".length))
+        .toSorted();
+      expect(onDisk).toEqual([...MOCK_UI_EXTENSION_WORKFLOW_NAMES]);
+    },
+  );
+
+  test.each(MOCK_UI_EXTENSION_WORKFLOW_NAMES)(
+    "%s and its prompts are JSON objects",
+    async (name) => {
+      for (const text of [
+        await readMockUiExtensionWorkflow(name),
+        await readMockUiExtensionApiWorkflow(name),
+        await readMockUiExtensionExportPrompt(name),
+      ]) {
+        const parsed: unknown = JSON.parse(text);
+        expect(parsed).toBeObject();
+      }
+    },
+  );
 });
 
 describe("corpus", () => {

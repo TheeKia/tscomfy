@@ -4,9 +4,9 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { generate } from "@tscomfy/codegen";
+import { typecheckProject } from "@tscomfy/fixtures";
 import { mockNodes, syntheticSchema } from "./synthetic.ts";
 
-const REPO = join(import.meta.dir, "../../..");
 const OUT = join(import.meta.dir, "../.out");
 const SIZES = [1758, 3516, 7032] as const;
 const BUDGET = { size: 7032, seconds: 0.5, megabytes: 300 } as const;
@@ -62,27 +62,8 @@ async function measure(
   await Promise.all([
     ...files.map((file) => Bun.write(join(directory, file.path), file.contents)),
     Bun.write(join(directory, "workflow.ts"), WORKFLOW),
-    Bun.write(
-      join(directory, "tsconfig.json"),
-      JSON.stringify({
-        extends: join(REPO, "tsconfig.base.json"),
-        compilerOptions: {
-          noEmit: true,
-          allowImportingTsExtensions: true,
-          paths: { "@tscomfy/core": [join(REPO, "packages/core/src/index.ts")] },
-        },
-        include: ["*.ts"],
-      }),
-    ),
   ]);
-  const process = Bun.spawn(
-    [join(REPO, "node_modules/.bin/tsc"), "-p", directory, "--extendedDiagnostics"],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  const [output, code] = await Promise.all([new Response(process.stdout).text(), process.exited]);
+  const { code, output } = await typecheckProject(directory, ["--extendedDiagnostics"]);
   if (code !== 0) throw new Error(`tsc failed at ${String(size)} nodes:\n${output}`);
   const seconds = Number(/Total time:\s+([\d.]+)s/.exec(output)?.[1]);
   const megabytes = Number(/Memory used:\s+(\d+)K/.exec(output)?.[1]) / 1024;

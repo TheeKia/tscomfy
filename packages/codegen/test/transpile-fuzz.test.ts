@@ -15,6 +15,13 @@ import {
   type Workflow,
   workflow,
 } from "@tscomfy/core";
+import {
+  exec,
+  OXFMT_CONFIG,
+  TOOLS,
+  typecheckProject,
+  writeScratchProject,
+} from "@tscomfy/fixtures";
 import { GENERATED_DIR } from "./generated-fixtures.ts";
 import { mock as autogrow } from "./generated/autogrow/index.ts";
 import { mock as basic } from "./generated/basic-pipeline/index.ts";
@@ -30,8 +37,6 @@ import { mock as widgetTypes } from "./generated/widget-types/index.ts";
 // compile under the generated types, and rebuild its workflow's prompt. Crafted cases cover the
 // layout rules one by one; a seeded fuzzer builds random workflows over the mock schemas.
 
-const REPO = join(import.meta.dir, "../../..");
-const BIN = join(REPO, "node_modules/.bin");
 const directory = await mkdtemp(join(tmpdir(), "tscomfy-transpile-"));
 
 afterAll(async () => {
@@ -290,16 +295,6 @@ interface Written {
   readonly code: string;
 }
 
-async function exec(command: readonly string[]): Promise<{ code: number; output: string }> {
-  const child = Bun.spawn([...command], { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  return { code, output: stdout + stderr };
-}
-
 const written: Written[] = await Promise.all(
   CASES.map(async (each, index) => {
     // Relative, as real output is: oxfmt sorts absolute specifiers before packages.
@@ -325,28 +320,12 @@ const written: Written[] = await Promise.all(
     return { test: each, file, code };
   }),
 );
-await Bun.write(join(directory, "package.json"), JSON.stringify({ type: "module" }));
-await Bun.write(
-  join(directory, "tsconfig.json"),
-  JSON.stringify({
-    extends: join(REPO, "tsconfig.base.json"),
-    compilerOptions: {
-      noEmit: true,
-      allowImportingTsExtensions: true,
-      paths: { "@tscomfy/core": [join(REPO, "packages/core/src/index.ts")] },
-    },
-    include: ["*.ts"],
-  }),
-);
+// Bun resolves @tscomfy/core in the modules through this project's paths, when they are imported.
+await writeScratchProject(directory);
 
 describe("transpiled modules", () => {
   test("are exactly what oxfmt writes", async () => {
-    const formatted = await exec([
-      join(BIN, "oxfmt"),
-      "-c",
-      join(REPO, ".oxfmtrc.json"),
-      directory,
-    ]);
+    const formatted = await exec([TOOLS.oxfmt, "-c", OXFMT_CONFIG, directory]);
     expect(formatted.code).toBe(0);
     const changed: string[] = [];
     for (const { test: each, file, code } of written) {
@@ -357,7 +336,7 @@ describe("transpiled modules", () => {
   }, 60_000);
 
   test("type-check under the generated types", async () => {
-    const tsc = await exec([join(BIN, "tsc"), "-p", directory]);
+    const tsc = await typecheckProject(directory);
     expect(tsc.output).toBe("");
   }, 60_000);
 

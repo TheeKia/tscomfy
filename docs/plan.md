@@ -1,8 +1,11 @@
-# tscomfy: implementation plan
+# tscomfy: design and plan
 
-> Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`). MIT.
-> Publishing is not a priority. Status: revision 6, 2026-10-17: the builder and exporter as built in Phase 3 (§5.3, §7). **Phases 0–3 complete.**
-> Every claim marked **[verified]** was checked hands-on; the evidence is in [§16](#16-verification-log).
+> Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`), `@tscomfy/layout`. MIT.
+> Status: revision 7, 2026-10-18. **Phases 0–9 complete**; the packages are publish-ready but not published.
+> This is the design reference: what was decided and why (§3, with an ADR per decision in
+> `docs/decisions/`), how it is built (§4–§13), how it got there (§14) and the evidence (§16).
+> User documentation is in `docs/guides/`. Every claim marked **[verified]** was checked
+> hands-on; the evidence is in [§16](#16-verification-log).
 
 ## 1. Goal
 
@@ -41,48 +44,56 @@ differences in §7.4.
 | stepupgaming/comfy-workflows | Graph IR; index-based slot identity; drift detection by snapshot hash; file-like combos produce warnings | Exact-string type matching; widgets that can't take links; output filtering that shifts indices; dropping defaults; untyped transpiler output |
 | @saintno/comfyui-sdk | Phantom-branded refs; `input_order`; the `["COMBO",{options}]` form | Bare-tuple refs (`["1",0]` fits anywhere); codegen that needs a live server; mixed mutable and immutable builder methods |
 | StableCanvas/comfyui-client | A transpiler as the way users adopt the library | Untyped outputs |
-| ComfyUI frontend 1.58 (GPL-3.0) | The **specification** of serialization rules (§7.4) | Copying code |
+| ComfyUI frontend 1.55.17 (GPL-3.0), the version ComfyUI 0.41 installs | The **specification** of serialization rules (§7.4, §11, §12) | Copying code |
 | ComfyUI backend 0.41 `_io.py`, `execution.py` | Ground truth for V3 dynamic inputs, type compatibility, validation | — |
 
 ## 3. Key decisions
 
 | # | Decision | Why |
 |---|---|---|
-| D1 | **Bun 1.4** for package manager, workspaces (isolated linker, text `bun.lock`), tests and scripts. The CLI may use Bun APIs | Fast and a single tool. **[verified]** |
+| D1 | **Bun 1.4** for package manager, workspaces (isolated linker, text `bun.lock`), tests and scripts. The published CLI uses only `node:fs`, `node:crypto` and `fetch`, so it runs on Node 24+ and Bun 1.4+ | Fast and a single tool for development; users install and run the packages with whatever they use (`npx @tscomfy/cli`). **[verified]** |
 | D2 | **TypeScript 7.0** (`typescript@7.0.x`) | Stable since 2026-07. Strict config, `tsc -b` references, `.d.ts` consumption under `nodenext` and `bundler`, and the type tests all pass. The missing compiler API (arrives in 7.1) doesn't matter: codegen writes strings. **[verified]** |
-| D3 | **`core` and `codegen` are runtime-agnostic**: no `node:*`, `bun`, `bun:*` or DOM APIs, enforced by lint | Generation works in Node, Bun, Deno, browsers and edge runtimes. |
+| D3 | **`core`, `codegen` and `layout` are runtime-agnostic**: no `node:*`, `bun` or `bun:*` imports (oxlint) and no DOM or runtime globals (`lib: ["es2024"]`, `types: []`) | Generation works in Node, Bun, Deno, browsers and edge runtimes. |
 | D4 | **ESM only, unbundled** per-file JS, `.d.ts` and maps from `tsc -b`. Source uses `.ts` specifiers with `rewriteRelativeImportExtensions` | Simplest correct library output. **[verified]** |
 | D5 | **Zero runtime dependencies in every package** | The object_info normalizer is a hand-written lenient tree walk with diagnostics per field. A schema library would add a dependency and a second representation of the data, and lenient handling needs the custom code anyway. |
 | D6 | **The object_info normalizer lives in `core`** | Runtime users (e.g. a browser app against a live server) need it without codegen. Raw object_info is confined to one module, `core/src/object-info/`. |
-| D7 | **API format first.** UI format later, as separate import/export modules | API format maps 1:1 onto the graph. |
+| D7 | **API format first.** The UI format is separate import/export modules on top (D17) | API format maps 1:1 onto the graph. |
 | D8 | **The schema is passed explicitly as a typed value**; no global module augmentation | Several servers in one project, isolated tests, no hidden state. |
 | D9 | **Refs are frozen `OutputRef` instances typed as a branded, covariant `Out<T>`** | Lists are meaningful values (they get wrapped as `__value__`, §7.4), so refs can't be tuples. **[verified]** |
 | D10 | **Lossless integers.** INT accepts `number \| bigint`. Our own small deterministic serializer writes bigint as a JSON number. The parser reads big ints via `JSON.parse` source-text access. The normalizer and the importer take **raw text**, never an already-parsed value | Seeds go up to 2⁶⁴−1, and 134 bounds in the real dump are integer literals beyond 2⁵³ (102 of them INT `max`). A parsed value has already lost them. **[verified]** in Bun 1.4.3 and Node 26. |
 | D11 | **oxfmt formats, oxlint lints** (`--type-aware` via tsgolint, built on TS 7) | One toolchain. oxlint's type-aware rules are as accurate as tsc and catch cross-package cases Biome's linter misses. oxfmt is 0.x, so it is pinned exactly. **[verified]** |
-| D12 | **No CI for now.** `bun run check` is the single local gate | Your request. Adding CI later means running the same script. |
+| D12 | **No CI for now.** `bun run check` is the single local gate | The owner's choice. Adding CI later means running the same script. |
 | D13 | **The generated runtime schema is a `.ts` module holding the schema as one string literal**, loaded by `defineSchema`, not a JSON import | A 3.4 MB JSON import costs 142 MB and 0.2 s of type-checking on every check; a string literal is nearly free, needs no copy step and no `resolveJsonModule`. `defineSchema` parses it with the lossless `parse`, because a plain `JSON.parse` would round the 134 big bounds; on a runtime without source-text access (such as Node 20) it throws a clear error rather than load imprecise bounds. **[verified]** |
 | D14 | **One diagnostic model, from Phase 1** (§5.4): `{ code, severity, path, message }`. `path` is an array of segments. Each code has one fixed severity, which its `E_`/`W_` prefix names | The normalizer emits diagnostics long before validation exists (Phase 5). Segment paths need no escaping for the 851 dotted input names and 328 non-identifier class names, unlike dotted paths or JSON Pointers |
 | D15 | **Schema identity.** `Schema.nodes` is built in code-unit order of class type (JavaScript still lists integer-like keys first). `hashSchema(schema)` is computed on demand, not stored: a synchronous, hand-written SHA-256 over `stringify({ formatVersion, nodes })` | Output doesn't depend on the server's node load order. The hash changes when the generated output can, not when whitespace, key order or the ComfyUI version changes. `crypto.subtle` is async; hashing raw text tracks noise. 62 ms on 3.4 MB. **[verified]** |
-| D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its core widget registry. When `type` is primitive (INT/FLOAT/STRING/BOOLEAN/COMBO) the kind follows `type`, because the backend coerces and validates by it, and `widgetType` is recorded. Otherwise a primitive widget gives its kind, another core widget (COLOR, BOUNDING_BOX, CURVE, …) gives a `value` kind holding JSON, and anything else, `TYPE:name` types included, is a socket. The socket type is always `type` | This is the only rule that matches which inputs get values in exported prompts and stays sound. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
+| D16 | **An input is a widget exactly when the frontend makes it one**: the frontend looks up `widgetType ?? type` in its widget registry: the core widgets and those its core extensions register (3D, camera, webcam, audio), each saved and sent, or not, as the frontend does. When `type` is primitive (INT/FLOAT/STRING/BOOLEAN/COMBO) the kind follows `type`, because the backend coerces and validates by it, and `widgetType` is recorded. Otherwise a primitive widget gives its kind, another core widget (COLOR, BOUNDING_BOX, CURVE, …) gives a `value` kind holding JSON, and anything else, `TYPE:name` types included, is a socket. The socket type is always `type` | This is the only rule that matches which inputs get values in exported prompts and stays sound. 25 real inputs use non-primitive core widgets, mostly socketless; as sockets they could never be set. `widgetType` splits widget and socket (`frame_rate` is a FLOAT widget on a `FLOAT,INT` socket). Widgets a pack registers in the browser are invisible in `/object_info`, so those inputs stay sockets (stricter, and `raw()` remains). **[verified]** |
 | D17 | **`importUi` reproduces the frontend's prompt, quirks included** (with a warning), except that a node of a missing class keeps its class; values by position, as the frontend reads them, by name only when the positions don't fit; **`toUi` writes a flat graph**; layout is its own package | The user gets the prompt they would get from the frontend, checked against the frontend itself. Where the frontend sends something the backend rejects, there is nothing to be faithful to. **[verified]** |
+| D18 | **Dynamic combos are `{ option, inputs }`**, nested, or the bare option key when its inputs may all be left out (§6.4) | Option inputs can't collide with the node's own (`SaveVideo` has `codec` and `format.codec`) or with a key named `option`; the shape is recursive, as 189 nested dynamic inputs need. **[verified]** |
+| D19 | **Combos are strict** literal unions, except upload, remote and empty combos (§6.5) | The types describe the server they were generated from and `check` catches drift; loosening file combos would compile values validation rejects. One schema per server instead |
+| D20 | **Fill the schema's defaults, never invent one** (§7.2) | Prompts match the frontend's wherever a value is stated; the frontend's fallbacks (`0`, the first checkpoint) pick values silently and can break `min` |
+| D21 | **`toApi` validates by default and throws `ValidationError`**; `exportApi` returns warnings (§8) | The default path can't produce a prompt the backend rejects for a reason the schema states; a library has nowhere to print warnings |
+| D22 | **The public API is pinned by declaration reports** in `docs/api/`, checked by `bun run check` (§13) | Every API change shows as a reviewed diff; TS 7.0 has no compiler API for API Extractor |
 
 ## 4. Architecture
 
 ```
-@tscomfy/cli           Bun · fs · network · args
+@tscomfy/cli           node:fs · fetch · args (Node 24+ or Bun 1.4+)
   generate · check · transpile
         │
 @tscomfy/codegen       pure: Schema in → files (as data) out
-  emitTypes · emitSchemaModule · transpile (graph → TS)
+  generate (types + schema module) · transpile (graph → TS)
         │
 @tscomfy/core          pure, zero deps
   object-info/  raw /object_info → Schema   (the only module that knows the raw format)
-  schema/       Schema model, SocketType, accepts(), hashSchema()
-  graph/        IR, builder, OutputRef
-  api/          export (flatten, defaults, __value__), import (schema-driven un-flatten)
-  validate/     workflow checks
+  schema/       Schema model, SocketType, accepts(), hashSchema(), diffSchemas()
+  frontend/     the frontend's node model: widget registry (saved, sent), widgets and slots,
+                LiteGraph link rules, `%…%` text; shared by api/ and ui/
+  graph/        IR, builder, OutputRef, prune, splitOutputs
+  api/          export (flatten, defaults, __value__, modes), import (schema-driven un-flatten)
+  validate/     prompt checks, as the backend validates
   diagnostic/   Diagnostic model and code registry (every module may import it)
   json/         lossless parse and serialize
+  hash/         synchronous SHA-256 (D15)
   ui/           UI workflows: importUi (as the frontend queues them), toUi (flat, format 0.4)
 
 @tscomfy/layout        pure: positions for toUi (layered, left to right)
@@ -107,8 +118,9 @@ workflow(local, ({ n, raw }) => …) ─► Workflow { schema, graph }
    ├─► stringify(prompt)        → lossless JSON string for POST /prompt
    ├─► validate(wf)             → Diagnostic[]
    └─► transpile(wf)            → TS source
-parse(json) ─► importApi(prompt, schema) ─► Workflow
-UI JSON (text) ─► importUi(text, schema) ─► Workflow ─► toUi(wf, { positions: layout(wf) }) ─► UI JSON
+prompt JSON (text) ─► importApi(text, schema) ─► { workflow, diagnostics }
+UI JSON (text) ─► importUi(text, schema) ─► { workflow, diagnostics }
+workflow ─► toUi(wf, { positions: layout(wf) }) ─► { workflow: UI JSON object, ids, diagnostics }
 ```
 
 The core API is free functions over immutable data, so every operation is pure and composable
@@ -348,7 +360,7 @@ left out, the others fall back to the default and accept anything; and runtime v
 checks template consistency in full.
 - An `IMAGE,MASK` template rejects `LATENT`, and the output keeps the narrowed type.
 
-### 6.4 DynamicCombo shape (your question 4: decided with evidence)
+### 6.4 DynamicCombo shape (D18)
 
 ```ts
 n.SaveVideo({ video, format: { option: "mp4", inputs: { codec: { option: "h264", inputs: { encoding: "auto" } } } } });
@@ -368,15 +380,19 @@ Why this shape and not the alternatives, based on the real dump:
 On the wire this becomes `format`, `format.codec`, `format.codec.encoding`, which matches the
 frontend and the backend's recursive expander.
 
-### 6.5 Combo strictness (your question 5)
+### 6.5 Combo strictness (D19)
 
-**Strict by default; I agree with you.** The types then reflect the server they were generated
-from, and `tscomfy check` catches drift. There are two principled exceptions, both in the
-encoding table, rather than a global loosening:
+**Strict by default.** The types reflect the server they were generated from, and `tscomfy check`
+catches drift. There are two principled exceptions, both in the encoding table, rather than a
+global loosening:
 1. Upload and remote combos: their options are runtime state, not schema.
 2. Empty combos: they carry no information to be strict about.
 
-`--combos loose-files` stays as an opt-in for projects that target several servers with different model sets.
+An earlier draft offered `--combos loose-files` for projects that target several servers with
+different model sets. It isn't provided: loosened types would compile values that validation
+against the generating server then rejects, which breaks the soundness ordering (§1). Such
+projects generate one schema per server (`src/comfy/<server>`, D8) and build each workflow for
+the server it runs on.
 
 ### 6.6 Type-checking speed
 
@@ -465,7 +481,7 @@ const body = stringify(toApi(txt2img({ prompt: "a cat", seed: 42n })));   // POS
 
 - Strings, sequential (`"1"`, `"2"`, …) or set explicitly.
 - Links are emitted as `[id, slot]` with a string id; the backend's `is_link` requires that.
-- Ids of expanded subgraph nodes (UI-format phase) follow the frontend's `parent:child` form.
+- Ids of expanded subgraph nodes (§11) follow the frontend's `parent:child` form.
 
 ### 7.4 Parity with the frontend's API output
 
@@ -479,11 +495,11 @@ Researched in frontend 1.55.17 (the version the corpus came from) and backend 0.
 | A CURVE value is sent as `{"__type__": "CURVE", "__value__": …}` | Same |
 | A list-valued widget is sent as `{"__value__": [...]}`, because the backend reads a bare list as a link | Same; the importer unwraps it |
 | `_meta.title` is always present (title, or display name) | Same (`toApi({ meta: false })` turns it off) |
-| control_after_generate is never sent (its widget has `serialize: false`) | Not modeled; seeds are plain values |
+| control_after_generate is never sent (its widget has `serialize: false`) | Same. The builder has no controls (seeds are plain values); the schema keeps `control` for the UI format (§11) |
 | Autogrow sends connected slots only (`images.image0`, …) | Same |
 | DynamicGroup keys are `group.<row>.<field>` | Same keys, as the backend parses them. Frontend 1.55.17 has no DynamicGroup handler at all, so there is nothing to match there; rows go at the group's widget position, as newer frontends place them |
-| **The frontend resolves `{a\|b}` dynamic prompts and strips `/* */` and `//` comments** in `dynamicPrompts` STRING inputs, so `http://` gets truncated | **We don't** (determinism, fidelity). An opt-in `dynamicPrompt()` helper may come later. Documented. |
-| **The frontend substitutes `%…%`** in save-node `filename_prefix` values | **We don't**; the text is sent verbatim. Documented. |
+| **The frontend resolves `{a\|b}` dynamic prompts and strips `/* */` and `//` comments** in `dynamicPrompts` STRING inputs, so `http://` gets truncated | **We don't** (determinism, fidelity). Documented in `docs/guides/building-workflows.md`. |
+| **The frontend substitutes `%…%`** in save-node `filename_prefix` values when it queues | **The builder doesn't**; the text is sent verbatim. `importUi`, which reproduces what the frontend would queue for a saved file, replaces `%Node.widget%` (§11). Documented |
 
 ### 7.5 Serialization
 
@@ -492,8 +508,8 @@ Researched in frontend 1.55.17 (the version the corpus came from) and backend 0.
   flattened key that collides with another input (`E_INPUT_KEY_COLLISION`), or more Autogrow
   slots or group rows than exist (`E_TOO_MANY_DYNAMIC_INPUTS`, which the types already prevent).
   `exportApi()` returns the prompt and the diagnostics without throwing. An output reference
-  nested inside a JSON value (not a whole input, slot or field) throws a `TypeError`. Phase 5
-  adds `validate`.
+  nested inside a JSON value (not a whole input, slot or field) throws a `TypeError`. `toApi`
+  also validates by default (§8).
 - `stringify()` is our own deterministic serializer: keys in JavaScript's enumeration order, as
   `JSON.stringify` and the frontend use (integer-like keys such as node ids `"1"`, `"10"` first in
   numeric order, then insertion order; every object we build has a fixed construction order,
@@ -506,7 +522,6 @@ Researched in frontend 1.55.17 (the version the corpus came from) and backend 0.
   2⁵³ becomes a bigint wherever it occurs, and each consumer decides per field (§9). On runtimes
   without source-text access, such literals produce `W_PRECISION_LOSS`. Invalid JSON is a
   diagnostic (`E_INVALID_JSON`), not a throw.
-- Both land in Phase 1: the normalizer needs `parse`, and `hashSchema` needs `stringify`.
 
 ## 8. Validation
 
@@ -514,9 +529,8 @@ Researched in frontend 1.55.17 (the version the corpus came from) and backend 0.
 and `validate(workflow)` checks what `toApi` would send. `toApi(wf, { validate })` validates by
 default and throws one `ValidationError` carrying every diagnostic when there is an error;
 `validate: false` skips validation (problems building the prompt itself still throw).
-`exportApi` returns the prompt with every diagnostic, warnings included. (An earlier draft had
-`"error" | "warn" | "off"`; a pure library has nowhere to send a warning, so `exportApi` is the
-way to see them.)
+`exportApi` returns the prompt with every diagnostic, warnings included: a pure library has
+nowhere to send a warning, so there is no warning level to configure (D21).
 
 **On the wire.** Validation runs on the prompt, keyed by wire keys, because that is what the
 backend validates. Dynamic inputs are expanded as `get_finalized_class_inputs` expands them
@@ -526,8 +540,7 @@ unknown key makes the backend drop the input silently); DynamicGroup keys are
 `<group>.<row>.<field>` with decimal rows below `max` and no leading zeros, rows may have gaps,
 and the present rows count against `min`. Each position is then checked as `validate_inputs`
 (`execution.py`) checks it: links by `accepts`, values after unwrapping `__value__` and after
-the backend's `int()` truncation for bounds. `raw()` nodes are validated like any other, so
-the plan's earlier "validation warns when raw is used" became plain validation.
+the backend's `int()` truncation for bounds. `raw()` nodes are validated like any other.
 
 **Severity follows the soundness ordering.** A check is an error when the generated types reject
 the same thing, or when the types can't express it and the backend rejects it (bounds, unknown
@@ -643,6 +656,11 @@ The diagnostic model is §5.4.
     missing or half-written files and output of another version. It exits 1 on
     any of these and suggests `generate` with the checked source and the recorded options.
   - Exit codes: 0 on success, 1 on a failure or drift, 2 on a usage error (with the usage).
+  - `-h`/`--help`, `-v`/`--version` and `help <command>`. A value starting with `-` is given and
+    recorded as `--flag=value`. A body that holds only `detail`, `error` or `message` is reported
+    as an error response. The manifest records the ComfyUI version whenever it is known, and
+    `--from` the recorded snapshot keeps it. `check` lists at most 10 names and 5 options per list
+    unless `--verbose`. Default export names follow one camelCase rule (`camelName`).
 - **Report**: counts plus diagnostics grouped by node pack (`python_module`; the dump has 203
   packs), 5 per pack unless `--verbose`. `--quiet` prints errors only, to stderr.
 
@@ -684,42 +702,55 @@ diagnostics }` (codegen) writes an ES module exporting `const <name>: Workflow<N
   always breaking, number arrays filled, exponents without `+`, `["__proto__"]` keys, destructuring
   only while the pattern fits its line, and the declaration hugging the build function, moving
   below `=`, or breaking its arguments as Prettier would. The committed transpiled mock prompts
-  pass `format:check` and `tsc -b`; `transpile-fuzz.test.ts` runs crafted cases and 150 seeded
+  pass `format:check` and `tsc -b`; `transpile-fuzz.test.ts` runs crafted cases and 300 seeded
   random workflows through oxfmt, `tsc` and back through the exporter.
 
-CLI: `tscomfy transpile --prompt <file> --schema <dir> [--out <file>] [--name] [--no-inline]`,
+CLI: `tscomfy transpile (--prompt <file> | --workflow <file>) --schema <dir> [--out <file>]
+[--name] [--no-inline]`, for an API prompt or a UI workflow (read with `importUi`, §11),
 importing the schema relative to the output, with the import extension the manifest records. It
 refuses types generated by another version (the manifest's codegen version and schema hash), a
-UI workflow or `POST /prompt` body, a prompt with no readable node, and export names the module
-uses itself (`workflow`, `Workflow`, `NodesOf`, `n`, `raw`, the schema's).
+file of the other kind or a `POST /prompt` body, a file with no readable node, and export names that
+`exportNameProblem` or `transpileNameProblem` refuse: one rule shared with `generate`, which
+refuses the names the module uses itself (`workflow`, `Workflow`, `NodesOf`, `n`, `raw`) too.
 
-**Round-trip guarantee**: `stringify(toApi(importApi(x)))` equals `stringify(parse(x))`, and
+**Round-trip guarantee**: `stringify(toApi(importApi(x, schema).workflow))` equals
+`stringify(parse(x).value)`, and
 running the transpiled module and exporting gives the same bytes, for prompts as the frontend
 writes them (every node with `_meta`, every widget value present, the frontend's key order): every
 mock prompt and every corpus API workflow. Other prompts come back normalized: defaults filled in,
 `_meta` added (unless `meta: false`), keys in the frontend's order. Ids that aren't integers may
 also come back in another order after transpiling, since creation order follows dependencies.
 
-## 11. UI format (Phase 8)
+## 11. UI format
 
 `core/src/ui/` reads and writes the JSON the frontend saves (D17, ADR-0017). The frontend
 behavior it follows is in `docs/research/ui-format.md`, read in frontend 1.55.17 and checked
 with probes in the frontend itself.
 
-**The frontend's node.** `ui/frontend.ts` rebuilds a node as the frontend creates it from its
-definition, the one model both directions share:
+**The frontend's node.** `frontend/node.ts` rebuilds a node as the frontend creates it from its
+definition, the one model both directions and the exporter's modes (§12) share. Its registry
+(`frontend/widgets.ts`) holds the core widgets and those the frontend's core extensions register
+(AUDIO_RECORD, AUDIO_UI, AUDIOUPLOAD, CAMERA_ANGLE_VIEW, CAMERA_INFO_STATE, LOAD_3D,
+LOAD_3D_ADVANCED, PREVIEW_3D, WEBCAM), each with whether the frontend saves its value and whether
+it sends it, sends nothing, or computes the value when it queues. The exporter, the importers and
+codegen ask one predicate (`sendsInputValue`) whether an input's value is sent:
 - **Widgets**, in input order, the order `widgets_values` lists them: a value widget per input;
   after an INT or FLOAT with `control_after_generate` (on by default for INT inputs named `seed`
   or `noise_seed`; an explicit `false` turns it off) a control widget, named after the option
   when it is a string; after a combo with one, a control and a `control_filter_list`; a dynamic
   combo followed by the chosen option's widgets, depth-first; then the `upload` button the
   upload extensions add (for the first required combo that uploads images or videos, or a
-  required `audio` combo that uploads audio). IMAGECOMPARE, RESOLUTION_PREVIEW and
-  CAMERA_INFO_STATE aren't saved. The schema keeps what this needs: `control` on INT, FLOAT and
-  COMBO inputs and `uploads` on combos.
+  required `audio` combo that uploads audio); the inputs and buttons core extensions add
+  (3D previews, audio players, the Load3D buttons, a remote combo's refresh toggle and button);
+  names an earlier widget has are made unique (`width#1`), as the frontend does.
+  IMAGECOMPARE, RESOLUTION_PREVIEW, AUDIO_UI and CAMERA_INFO_STATE aren't saved; values the
+  extensions compute at queue time (a 3D scene, a webcam frame, a recording) are reported
+  (`W_QUEUE_TIME_VALUE`); widgets JavaScript builds from nothing in the definition
+  (CustomCombo's) are reported as `W_EXTENSION_WIDGETS`. The schema keeps what this needs:
+  `control` on INT, FLOAT and COMBO inputs, `uploads` and `refreshButton` on combos.
 - **Slots**, the order links target: sockets in input order (`forceInput` legacy combos,
-  MatchType inputs and Autogrow slots among them), then widget slots; a chosen option's slots
-  right after its combo's.
+  MatchType inputs and Autogrow slots among them), then widget slots, `socketless` ones
+  included (frontend 1.55.17 ignores the flag); a chosen option's slots right after its combo's.
 
 **Import** (`importUi(text, schema)`): `toApi` of the result is the frontend's prompt.
 - **Versions.** Format 0.4 has tuple links; anything else, object links. Tuple links outside
@@ -791,7 +822,7 @@ same prompt.
 from a source, ordered within a column by their sources' rows (`layered`, iterative, cycles
 broken deterministically). Sizes come from `uiNodeSizes`, the sizes `toUi` writes.
 
-## 12. Graph operations (Phase 7)
+## 12. Graph operations
 
 `NodeOptions.mode` is `"bypass"` or `"mute"` (the frontend's other modes, always and the event
 modes, aren't modes here). The exporter applies modes to the prompt it builds
@@ -825,7 +856,7 @@ modes, aren't modes here). The exporter applies modes to the prompt it builds
 - **Slots** are a node's as the frontend creates it (`litegraphService.ts` `addInputs`,
   `dynamicWidgets.ts`): sockets in input order (inputs without a widget, `forceInput` legacy
   combos, which the normalizer marks `forceInput`, MatchType inputs, Autogrow slots), then the
-  sockets of widgets in input order; a chosen dynamic-combo option's inputs follow the combo's
+  sockets of widgets in input order (`socketless` widgets too); a chosen dynamic-combo option's inputs follow the combo's
   own slot, one each in declaration order. Slot types are the declared types (COMBO for legacy
   combos; a widget's `type`, not its `widgetType`). **MatchType narrowing** follows
   `withComfyMatchType`, which runs once a graph is loaded: each input of a template takes the
@@ -853,7 +884,8 @@ tscomfy/
   AGENTS.md                # working agreements, architecture rules, conventions, gotchas
   CLAUDE.md                # imports AGENTS.md for Claude Code
   LICENSE                  # MIT
-  package.json             # private root: bun workspaces (packages/*, internal/*), scripts
+  CONTRIBUTING.md          # how-to: scripts, data, common changes
+  package.json             # private root: bun workspaces (packages/*, internal/*, examples/*), scripts
   bun.lock                 # text lockfile (Bun default)
   tsconfig.base.json       # shared strict flags
   tsconfig.json            # solution: "files": [], references to every project
@@ -866,6 +898,8 @@ tscomfy/
     codegen/               # @tscomfy/codegen
     cli/                   # @tscomfy/cli
     layout/                # @tscomfy/layout: positions for toUi
+    */README.md  */LICENSE #   what npm shows; src/ ships too, so the maps resolve
+  examples/                # txt2img, hires-fix: projects typed by your server; tests generate from the mocks
   internal/                # private workspace packages, never published
     fixtures/              # @tscomfy/fixtures: all test data, typed loaders
       src/index.ts         #   readMockObjectInfo(name), listCorpus(section)
@@ -873,11 +907,17 @@ tscomfy/
       mocks/workflows/     #   committed mock API and UI workflows, and the frontend's prompts for the UI ones
       scripts/frontend.ts  #   asks the server's own frontend, in headless Chromium, what it would queue
       corpus/              #   local real data; only its README is committed
+    fixtures/src/exec.ts   #   process and scratch-project helpers for tests and scripts
     bench/                 # @tscomfy/bench: bench:types, synthetic schemas from the mocks
+    api-report/            # @tscomfy/api-report: docs/api/ from the declarations (D22)
+    pack-test/             # @tscomfy/pack-test: test:pack, the published packages as a user installs them
   docs/
-    plan.md                # this plan
+    guides/                # user documentation
+    api/                   # API-surface reports, generated
+    diagnostics.md         # every diagnostic code
+    plan.md                # this document
     decisions/             # one short ADR per decision in §3
-    research/              # ComfyUI serialization ground truth, prior-art review
+    research/              # ComfyUI serialization ground truth, UI format, prior-art review
 ```
 
 **tsconfig.base.json** **[verified]**:
@@ -891,7 +931,7 @@ tscomfy/
 Configs per package:
 - **Build** (`tsconfig.json`): `composite`, `rootDir: src`, `outDir: dist`,
   `tsBuildInfoFile: dist/.tsbuildinfo` (so deleting `dist` triggers a rebuild), plus `references`.
-  `cli` adds `types: ["bun"]`.
+  `cli` adds `types: ["node"]` (`@types/node` 24), so its source can't use Bun's APIs.
 - **Test** (`test/tsconfig.json`): `noEmit`, non-composite, `incremental`, `types: ["bun"]`,
   **no references**. References in a noEmit config cause TS2878.
 
@@ -902,14 +942,17 @@ Configs per package:
 
 **Scripts**:
 - `build`: `tsc -b`
-- `clean`: remove the `dist` directories (tsc never deletes stale outputs)
+- `clean`: remove the `dist` directories, `internal/*/tsconfig.tsbuildinfo` and `internal/bench/.out` (tsc never deletes stale outputs)
 - `test`: `bun test --conditions=@tscomfy/source`, skipping corpus tests
 - `test:corpus`: only the corpus tests (`*.corpus.test.ts`)
 - `lint`: `oxlint --type-aware`
 - `format`: `oxfmt` (format and sort imports); `format:check`: `oxfmt --check`
 - `bench:types`: the type-check budget (§6.6)
+- `api:update` / `api:check`: write or check the API-surface reports in `docs/api/` (D22)
+- `test:pack`: cleans, builds, packs every package, installs the tarballs offline with npm, runs
+  the CLI under Node and Bun and type-checks and runs a consumer; not part of `check`
 - `generate:fixtures`: regenerates `packages/codegen/test/generated/` from the mocks
-- **`check`**: `tsc -b`, then lint, `format:check` and test
+- **`check`**: `tsc -b`, then lint, `format:check`, `api:check` and test
 
 There is no separate fast check config: under TS 7, `tsc -b` is fast enough to be the one type-checking
 path, and a second config with Bun types would let library code use Bun APIs undetected (ADR-0004).
@@ -918,7 +961,7 @@ path, and a second config with Bun types would let library code use Bun APIs und
 - **Unit**: `bun test` (`*.test.ts`).
 - **Type tests**: `*.test-d.ts` with `expect-type` and `@ts-expect-error`, checked by tsc. A stale directive
   is TS2578. `bun test` ignores these files on its own **[verified]**.
-- **Codegen snapshots**: `toMatchSnapshot` against the mock fixtures.
+- **Codegen fixtures**: the committed output for every mock (`packages/codegen/test/generated/`), compared by `generated.test.ts`; normalizer snapshots (`toMatchSnapshot`).
 - **Parity tests**: §7.4 rules, one mock workflow per rule, with the expected API JSON written from the frontend source.
 - **Round-trip**: §10, on mock workflows.
 - **Corpus tests** (`test/*.corpus.test.ts`, run by `bun run test:corpus`, local only): the same
@@ -932,28 +975,28 @@ path, and a second config with Bun types would let library code use Bun APIs und
 - `no-explicit-any`, `no-non-null-assertion`, `import/no-default-export`, `consistent-type-imports`
 - type-aware: `no-floating-promises`, `no-unnecessary-condition`, `strict-boolean-expressions`,
   `switch-exhaustiveness-check`, `no-unsafe-*`
-- `no-restricted-imports` for `node:*`, `bun` and `bun:*`, scoped to `packages/{core,codegen}/src/**`
+- `no-restricted-imports` for `node:*`, `bun` and `bun:*`, scoped to `packages/{core,codegen,layout}/src/**`
 - generated files excluded
 - `unicorn/no-empty-file` off: tsc and the tests already catch an accidentally empty module
 
 **Fixtures**: a committed mock set plus a local, uncommitted real corpus.
 
 - **Committed mocks** (`internal/fixtures/mocks/`) are small and hand-written: one feature or edge case per file,
-  named after what it covers (`dynamic-combo-nested.json`, `dotted-input-names.json`, …).
+  named after what it covers (`dynamic-combo.json`, `names.json`, …).
   - They are written by us, not copied, so they hold no personal data and no upstream text.
-  - They stay stable when your models change, and a failure points straight at the cause.
+  - They stay stable when a server's models change, and a failure points straight at the cause.
   - Their **coverage comes from the real data**. Every fact in §16's dump row gets a mock: dotted
     ordinary names, nested DynamicCombo with a sibling-name collision, both Autogrow forms,
     MatchType inside an option, empty, upload, remote and numeric combos, unsafe-integer maxima,
     list outputs, duplicate output names, class names that aren't identifiers, odd hidden-input specs.
 - **Local corpus** (`internal/fixtures/corpus/`, gitignored apart from its README) holds real data. `tscomfy generate --url …` already writes
-  `object_info.json`, so populating it is one command against your server. Real workflows go there
+  `object_info.json`, so populating it is one command against a server. Real workflows go there
   too (the UI's "Export (API)" output).
   - This catches what mocks can't: shapes nobody thought to write down. That gap is how
     comfy-workflows ended up tested against a 24-node hand-picked subset that missed most real-world cases.
 - **The rule that connects them**: when a corpus run finds a new shape or failure, it gets distilled
   into a new committed mock (a regression test) before the fix lands. The mocks grow from real
-  findings, and the repo never contains your data.
+  findings, and the repo never contains anyone's data.
 - **Scale**: `bench/` generates synthetic schemas of N nodes from the mock templates, so the speed
   budget (§6.6) doesn't depend on any real dump.
 
@@ -961,7 +1004,7 @@ path, and a second config with Bun types would let library code use Bun APIs und
 
 Each phase ends with `bun run check` and `bun run test:corpus` passing and a short demo. A phase isn't done while it has known `TODO`s.
 
-**Phase 0: foundation**
+**Phase 0: foundation** (done)
 - `git init`; the workspace skeleton exactly as in §13; ADRs for §3.
 - Write the first mock fixtures (§13 list); fill the local corpus from your server, plus a few
   real workflows exported from the UI.
@@ -1024,7 +1067,7 @@ Exit: a negative test for every code; `toApi({ validate })`.
 - `parse`, `importApi` (schema-driven un-flattening, `__value__` unwrap), `transpile`, CLI `transpile`.
 
 Exit: every corpus API workflow re-exports byte for byte, key order included:
-`stringify(toApi(importApi(parse(x))))` equals `stringify(parse(x))`. The transpiler round-trip
+`stringify(toApi(importApi(x, schema).workflow))` equals `stringify(parse(x).value)`. The transpiler round-trip
 (§10) passes on the same corpus.
 
 **Phase 7: graph operations** (done)
@@ -1041,8 +1084,15 @@ Exit: the UI corpus imports to the prompts the frontend builds for it and round-
 checked against the frontend itself, in a headless browser (`internal/fixtures/scripts/frontend.ts`),
 rather than by hand.
 
-**Phase 9: polish**
-- README and guides, examples, an API-surface snapshot (`dist/*.d.ts`), and (optionally) publishing under the `@tscomfy` npm org.
+**Phase 9: polish** (done)
+- README and guides (`docs/guides/`), examples (`examples/txt2img`, `examples/hires-fix`), an
+  API-surface snapshot (`docs/api/`, D22), CONTRIBUTING, and packages ready to publish under the
+  `@tscomfy` npm org (publishing itself stays optional).
+- Four independent audits (core API, core UI and normalizer, codegen, CLI and packaging, docs);
+  every finding reproduced before it was fixed (§16).
+
+Exit: `check`, `test:corpus`, `bench:types` and `test:pack` pass; the guides' code type-checks
+against real generated types; the packed packages install and run under Node and Bun.
 
 ## 15. Risks
 
@@ -1059,7 +1109,7 @@ rather than by hand.
 
 ## 16. Verification log
 
-Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI 0.41.0 (frontend 1.55.17).
+Checked from 2026-10-17 to 2026-10-18 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI 0.41.0 (frontend 1.55.17), unless a row says otherwise.
 
 | Claim | Result |
 |---|---|
@@ -1072,7 +1122,7 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | Biome lint vs oxlint `--type-aware` | Biome missed cross-package floating promises, cross-package truthiness checks, and `noUncheckedIndexedAccess` nullability. oxlint caught all of them |
 | oxfmt 0.73.0 as a drop-in for Biome 2.5.15 | Identical output on every TypeScript file, including import order with `newlinesBetween: false`. Respects `.gitignore` (`dist`, corpus). Differences: it sorts `package.json` keys and reflows one mock JSON line; it pads Markdown tables, so Markdown is excluded |
 | Type encoding on the real dump: covariant sockets, widget+link, combo errors (with "did you mean"), excess and missing inputs, Autogrow, nested DynamicCombo, DynamicGroup, MatchType with `NoInfer` | Pass, every negative test fires |
-| Type-checking cost at 1,758 / 3,516 / 7,032 nodes | 0.11 s / 0.13 s / 0.26 s |
+| Type-checking cost at 1,758 / 3,516 / 7,032 nodes (Phase 0 spike, a lighter encoding; today's numbers are in §6.6) | 0.11 s / 0.13 s / 0.26 s |
 | Dump facts used in this plan | 851 dotted ordinary input names; 193 DynamicCombo inputs (189 nested dynamics; 111/608 options have no inputs; a `codec` vs `format.codec` collision); 57 Autogrow (19 names form); 17 MatchType; 102 INT with max > 2⁵³; 19 FLOAT bounds and 3 `INT:seed` inputs with integer literals beyond 2⁵³; 328 class names that aren't identifiers; 72 list outputs; 2 nodes with duplicate output names |
 | Lossless parse of the 3.4 MB dump (reviver with source text, Bun 1.4.3) | 26 ms, vs 4 ms for plain `JSON.parse`. 134 integer literals beyond 2⁵³, all of them `min`/`max`: 102 INT max, 7 INT min, 10 FLOAT max, 9 FLOAT min, 3 `INT:seed` max, 3 inside DynamicCombo options. None in exponent notation |
 | Hand-written synchronous SHA-256 (D15) | 62 ms on the 3.4 MB dump in Bun 1.4.3; matches `Bun.CryptoHasher` on the dump and on empty input |
@@ -1106,4 +1156,9 @@ Checked on 2026-10-17 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and a local ComfyUI
 | `importUi` against the frontend | `frontend.ts` loads files into the server's own frontend in headless Chromium and saves what `graphToPrompt` builds; every request but a GET is answered locally. For the 10 corpus UI files `importUi` gives 248 of the 259 prompt entries byte for byte, and every file's node order. The other 11 are pack JavaScript at queue time (4 VHS date substitutions, 2 rgthree Any Switch, 2 pack widgets) and 3 nodes of classes the server doesn't have, which the frontend sends without `class_type`. Of the five committed mock UI files, four match the captured prompts exactly; `txt2img` uses the mock class `MockSeed`, which the server lacks, and its expected prompt is the hand-written parity prompt, which the capture matches on every other node |
 | `toUi` against the frontend | The frontend loads `toUi` output of every corpus file to the prompt `importUi` reads from it in 247 of 259 entries; the other 12 are the 11 above and use-everywhere's Anything Everywhere, whose JavaScript rebuilds its inputs from properties we don't write. Sizes after loading: 221 of 231 nodes of core classes are no larger than `uiNodeSizes` (the frontend snaps to 10 px); the others carry frontend-extension widgets the schema doesn't show (audio players, PreviewAny's preview) or long labels, up to 60 px taller or 40 px wider |
 | Phase 8 review | An independent review found 15 issues, each reproduced in the real frontend, among them: self-containing subgraphs expanded (or hanging) where the frontend refuses the file, promoted values through nested subgraphs costing exponential time, quadratic primitive, unknown-node and Reroute paths, `toUi` spreading every id into one `Math.max` (a RangeError past ~125k nodes under V8), link placement without the frontend's deduplication and realignment rules, object-form and partial named values, stale values across settle passes, `forceInput` placeholders, `%Node.widget%` file names, legacy group nodes, string and repeated node ids, null promoted values, and the frontend's per-definition loop guard. All fixed with tests; the reviewer's 54 crafted files match the frontend except a big seed (rounded), a `%date:…%`, a group node and a refused loop, each reported. 200,000 Reroutes in a chain import in 1.4 s, 200 nested subgraphs in 5 ms. The five mock UI files' `toUi` exports load in the frontend to the prompts committed in `mocks/workflows/ui-export/`. A re-review confirmed the fixes and found six more, each reproduced and fixed: reminting when the next id is taken, the frontend's default titles (`Primitive`), references to controls, a quadratic file-name lookup (8,000 save nodes: 6.75 s, now 0.1 s), fractional ids, and quadratic wide nodes (50,000 inputs: 0.15 s) |
-| Frontend and backend serialization rules (§7.4, §12) | From source: frontend 1.58 `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |
+| Frontend and backend serialization rules (§7.4, §12) | An early pass over the frontend 1.58 source, before each rule was re-read in 1.55.17 (§7.4, §11, §12): `executionUtil.ts`, `ExecutableNodeDTO.ts`, `dynamicWidgets.ts`; backend `execution.py`, `comfy_api/latest/_io.py`, `comfy_execution/validation.py` |
+| Phase 9 audits | Four independent reviews, each finding reproduced. Fixed with tests: the exporter dropping misshaped values silently instead of passing them to validation, a muted link into a dynamic combo re-sending the dropped link, `W_UNSAFE_INTEGER` for every bigint (`42n` included), widgets of the frontend's core extensions not modeled (Load3D, CameraAngle, Webcam, RecordAudio: `widgets_values` misaligned by one or more), three disagreeing "not sent" lists, the KSampler control fixup applied by class-name prefix, a memoized message naming the wrong link, `widgets_values_named` collisions on an input named `upload`, a mutable diagnostics registry, `bun run check` failing on a fresh clone (type-aware lint of examples needs generated types), a second copy of core breaking layout silently, the CLI running only under Bun, tarballs shipping build info, npm dropping the `bin`, unbounded `check` output, unreproducible regenerate commands. Structure: the frontend's node model once (`core/src/frontend/`), `ui/import.ts` split into eight modules, codegen's transpiler into four |
+| Frontend registry (D16, §11) | Created a node of every widget type and every core-extension class in frontend 1.55.17, with mock classes registered through `app.registerNodeDef`: the saved and sent table in `frontend/widgets.ts`, the extensions' added inputs and buttons, widget renaming (`width#1`), and that `socketless` is ignored: every widget gets a slot, which a bypass picks by index. Details in `docs/research/ui-format.md` |
+| Consumers of the packages | A project over the built packages and generated mock types type-checks with TypeScript 5.9.3, 6.0.3 and 7.0.2 under `nodenext` and `bundler`, `strict` and `skipLibCheck: false`, and runs under Node 24.22.0, Node 26.11.1 and Bun 1.4.3. `test:pack` checks the same from packed tarballs installed offline, the `tscomfy` bin included |
+| Guides | Every snippet in `docs/guides/` type-checks against types generated from the corpus server (1,758 classes), the four compile errors getting-started promises included; the runtime-schema snippet validates with one expected warning |
+| Frontend 1.55.18 | The server updated its frontend from 1.55.17 to 1.55.18 during Phase 9. Captured again on 1.55.18, every committed mock prompt (`ui-api/`, `ui-export/`) is identical. The `ui-extensions` captures were made on 1.55.18, with the mock's definitions registered in the page and the server's file lists answered by the probe (a remote combo's saved file listed), so no capture holds the server's files. The frontend queues exactly `toApi`'s prompt for `examples/hires-fix`'s UI workflow, its bypassed LoRA included |

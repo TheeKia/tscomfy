@@ -5,7 +5,7 @@ import {
   type DiagnosticPath,
 } from "../diagnostic/diagnostic.ts";
 import { stringify } from "../json/stringify.ts";
-import { isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
+import { isJsonArray, isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
 
 /** Collects the diagnostics of one normalizer run. */
 export interface Context {
@@ -68,11 +68,6 @@ export function isObject(value: JsonValue): value is JsonObject {
   return isJsonObject(value);
 }
 
-/** Type guard for arrays. */
-export function isArray(value: JsonValue): value is readonly JsonValue[] {
-  return Array.isArray(value);
-}
-
 const PREVIEW_LENGTH = 60;
 
 /** A short JSON rendering for messages. Total on `parse` output, which is always finite. */
@@ -85,6 +80,6 @@ export function preview(value: JsonValue): string {
 export function describe(value: JsonValue | undefined): string {
   if (value === undefined) return "missing";
   if (value === null) return "null";
-  if (Array.isArray(value)) return "an array";
+  if (isJsonArray(value)) return "an array";
   return typeof value === "object" ? "an object" : `a ${typeof value}`;
 }

@@ -1,59 +1,16 @@
-// What the official frontend renders as a widget (docs/plan.md D16). The frontend looks up
-// `widgetType ?? type` in its widget registry; an input whose key is registered gets a widget
-// (and so sends a value), anything else is a plain socket. Source: ComfyUI_frontend 1.55.17,
-// `src/scripts/widgets.ts` (`ComfyWidgets`) and `src/services/litegraphService.ts`
-// (`addInputSocket`, `addInputWidget`). Packs can register more widgets in the browser; those
-// are invisible in /object_info.
+// What the /object_info format says about frontend widgets: the V3 dynamic input types, and the
+// value a value widget starts from, which some widgets read from their own spec fields rather
+// than `default`. Which types are widgets at all is the frontend's registry
+// (`frontend/widgets.ts`, docs/plan.md D16).
 
 import type { JsonObject, JsonValue } from "../json/value.ts";
-
-/** Widgets tscomfy models with their own input kind. */
-export type PrimitiveWidget = "INT" | "FLOAT" | "STRING" | "BOOLEAN" | "COMBO";
-
-const PRIMITIVE_WIDGETS: ReadonlySet<string> = new Set<PrimitiveWidget>([
-  "INT",
-  "FLOAT",
-  "STRING",
-  "BOOLEAN",
-  "COMBO",
-]);
-
-/** The other widgets of the frontend's core registry: their values are arbitrary JSON. */
-const VALUE_WIDGETS: ReadonlySet<string> = new Set([
-  "MARKDOWN",
-  "IMAGEUPLOAD",
-  "COLOR",
-  "IMAGECOMPARE",
-  "BOUNDING_BOX",
-  "CHART",
-  "GALLERIA",
-  "PAINTER",
-  "COMPOSITOR",
-  "TEXTAREA",
-  "CURVE",
-  "RANGE",
-  "VIDEO_EDIT",
-  "RESOLUTION_PREVIEW",
-  "BOUNDING_BOXES",
-  "COLORS",
-]);
-
-/** Whether `type` is one of the primitive widgets. */
-export function isPrimitiveWidget(type: string): type is PrimitiveWidget {
-  return PRIMITIVE_WIDGETS.has(type);
-}
-
-/** Whether `type` is a core frontend widget with a JSON value. */
-export function isValueWidget(type: string): boolean {
-  return VALUE_WIDGETS.has(type);
-}
 
 /**
  * The value the frontend gives a value widget when none is given, which is what the exporter
  * fills in. Most widgets start at the server's default; a few ignore it (1.55.17 composables):
  * IMAGECOMPARE starts at `["", ""]`, GALLERIA at the spec's `images`, CHART at its `data`.
  */
-export function initialValue(widget: string, options: JsonObject): JsonValue | undefined {
+export function widgetDefault(widget: string, options: JsonObject): JsonValue | undefined {
   switch (widget) {
     case "IMAGECOMPARE":
       return ["", ""];

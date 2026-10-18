@@ -3,7 +3,15 @@
 // for each (that call only builds the prompt; nothing is queued). Read-only for the server: every
 // request that isn't a GET is answered here with an empty success and never reaches it.
 //
-//   bun internal/fixtures/scripts/frontend.ts [--server URL] --out DIR UI.json…
+//   bun internal/fixtures/scripts/frontend.ts [--server URL] [--object-info FILE] [--remote-files JSON] --out DIR UI.json…
+//
+// `--object-info` registers the node definitions of an /object_info file in the page first, as
+// the server's would be (`app.registerNodesFromDefs`, which runs the core extensions' hooks), so
+// mock classes, or mock definitions of real ones, load as nodes rather than as missing ones.
+//
+// The server's file lists (`/internal/files/…`, which remote combos fetch) are answered here, so a
+// capture never depends on, or holds, the files on the server: with `--remote-files '["a.png"]'`,
+// or an empty list. The frontend replaces a saved remote-combo value the list lacks.
 //
 // Needs a Chromium (or its headless shell): TSCOMFY_CHROME, or the one Playwright caches.
 // Development tooling: not part of any package, and not run by `check` or `test:corpus`.
@@ -30,11 +38,15 @@ const option = (name: string): string | undefined => {
 };
 const server = (option("--server") ?? "http://127.0.0.1:8188").replace(/\/+$/, "");
 const out = option("--out");
+const objectInfo = option("--object-info");
+const remoteFiles = option("--remote-files") ?? "[]";
 const files = args.filter(
   (arg, index) => !arg.startsWith("--") && args[index - 1]?.startsWith("--") !== true,
 );
 if (out === undefined || files.length === 0) {
-  console.error("Usage: bun frontend.ts [--server URL] --out DIR UI.json…");
+  console.error(
+    "Usage: bun frontend.ts [--server URL] [--object-info FILE] [--remote-files JSON] --out DIR UI.json…",
+  );
   process.exit(2);
 }
 
@@ -91,6 +103,16 @@ try {
       requestId: string;
       request: { method: string; url: string };
     };
+    if (request.method === "GET" && new URL(request.url).pathname.startsWith("/internal/files/")) {
+      answered.push(`${request.method} ${request.url}`);
+      void send("Fetch.fulfillRequest", {
+        requestId,
+        responseCode: 200,
+        responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+        body: btoa(remoteFiles),
+      });
+      return;
+    }
     if (request.method === "GET" || request.method === "OPTIONS") {
       void send("Fetch.continueRequest", { requestId });
       return;
@@ -114,6 +136,10 @@ try {
   }
   // The frontend restores the last workflow on start; let that finish before loading ours.
   await Bun.sleep(3000);
+  if (objectInfo !== undefined) {
+    const definitions = await Bun.file(objectInfo).text();
+    await evaluate(`${app}.registerNodesFromDefs(JSON.parse(${JSON.stringify(definitions)}))`);
+  }
 
   for (const file of files) {
     const text = await Bun.file(file).text();

@@ -1,4 +1,4 @@
-# ADR-0014: One diagnostic model, from Phase 1
+# ADR-0014: One diagnostic model
 
 Status: accepted, 2026-10-17
 
@@ -10,7 +10,7 @@ Errors are data, but the plan only described diagnostics with validation (Phase 
 
 Every module returns the same `Diagnostic`: `{ code, severity, path, message }` (plan §5.4).
 
-- `path` is an array of segments: strings for keys, numbers for array indexes. Normalizer paths point into the raw `/object_info` document; export and validation paths point into the structured workflow.
+- `path` is an array of segments: strings for keys, numbers for array indexes. Normalizer paths point into the raw `/object_info` document; export and validation paths point into the prompt, by node id and wire key (`["5", "inputs", "format.codec"]`); UI import paths into the workflow file or at the prompt's node ids.
 - Each code has exactly one severity, named by its prefix: `E_` for errors (dropped, or rejected by the backend), `W_` for warnings (kept but degraded, or unverifiable). A check that can end either way gets two codes.
 - Codes form a literal union backed by one registry in `core/src/diagnostic/`. Each code has one negative test and an entry in `docs/diagnostics.md`, and a test keeps the two in sync.
 
@@ -18,7 +18,7 @@ Every module returns the same `Diagnostic`: `{ code, severity, path, message }` 
 
 - No escaping rules: a dotted name is one segment. Display formatting is a separate concern.
 - Callers can filter by code or severity without parsing messages; message wording may change.
-- The registry grows phase by phase; codes are never reused for a different meaning.
+- The registry grows with the features; codes are never reused for a different meaning.
 
 ## Alternatives
 

@@ -6,6 +6,11 @@ How the official frontend builds API prompts and how the backend reads them. Res
 numbers are from those versions and will drift. Both projects are GPL-3.0: this file describes
 behavior, it does not copy code.
 
+This was the first pass. Each rule tscomfy implements was then re-read in frontend 1.55.17, the
+version ComfyUI 0.41 installs, and checked in the running frontend: the export rules in plan
+§7.4, bypass and mute in §12, and the UI format in `ui-format.md`, which supersedes the virtual
+node and subgraph notes below.
+
 Abbreviations: FE = frontend, BE = backend, `dW` = FE `src/core/graph/widgets/dynamicWidgets.ts`.
 
 ## Graph to API prompt
@@ -80,8 +85,9 @@ tscomfy deliberately fills only explicit schema defaults (plan §7.2).
   Resolution recurses, so an unconnected widget input means the value is dropped. Validity
   (`LiteGraphGlobal.ts` `isValidConnection`) treats `*`/`""` as wildcards and splits comma types.
   Input index order: socket-only inputs first, then widget-backed sockets.
-- Unconfirmed: a muted SubgraphNode nested inside another subgraph may still have its inner nodes
-  expanded.
+- A muted or bypassed SubgraphNode nested inside another subgraph still has its inner nodes
+  expanded and sent (confirmed in the running frontend 1.55.17; `ui-format.md`,
+  `W_FRONTEND_QUIRK`).
 
 ## Virtual nodes and subgraphs
 
@@ -111,7 +117,10 @@ tscomfy deliberately fills only explicit schema defaults (plan §7.2).
   otherwise comma sets must overlap.
 - Unknown class types may first be rewritten by a node-replacement manager (`server.py`).
 
-## Frontend-only transforms tscomfy does not replicate
+## Frontend-only transforms at queue time
+
+The builder and `toApi` replicate neither; `importUi`, which reproduces what the frontend would
+queue for a saved file, replicates the `%Node.widget%` substitution (plan §11).
 
 - `dynamicPrompts` STRING inputs: `{a|b}` resolved to a random choice, `/* */` and `//` comments
   stripped (which truncates `http://`). FE `dynamicPrompts.ts`, `formatUtil.ts`.

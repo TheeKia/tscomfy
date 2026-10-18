@@ -14,7 +14,7 @@ export class ValidationError extends Error {
         `The workflow has ${String(errors.length)} error${errors.length === 1 ? "" : "s"}:`,
         ...errors.map(
           (diagnostic) =>
-            `  ${diagnostic.code} at ${diagnostic.path.join(" › ")}: ${diagnostic.message}`,
+            `  ${diagnostic.code}${diagnostic.path.length === 0 ? "" : ` at ${diagnostic.path.join(" › ")}`}: ${diagnostic.message}`,
         ),
       ].join("\n"),
     );

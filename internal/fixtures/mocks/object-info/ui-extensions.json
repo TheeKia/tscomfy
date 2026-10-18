@@ -1,0 +1,974 @@
+{
+  "LoadImage": {
+    "input": {
+      "required": {
+        "image": [
+          ["example.png", "other.png"],
+          {
+            "image_upload": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image"]
+    },
+    "output": ["IMAGE", "MASK"],
+    "output_is_list": [false, false],
+    "output_name": ["IMAGE", "MASK"],
+    "name": "LoadImage",
+    "display_name": "Load Image",
+    "description": "",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": false
+  },
+  "ImageCropV2": {
+    "input": {
+      "required": {
+        "image": ["IMAGE", {}],
+        "crop_region": [
+          "BOUNDING_BOX",
+          {
+            "default": {
+              "x": 0,
+              "y": 0,
+              "width": 512,
+              "height": 512
+            },
+            "socketless": true,
+            "component": "ImageCrop"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image", "crop_region"]
+    },
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "ImageCropV2",
+    "display_name": "Crop Image",
+    "description": "",
+    "python_module": "comfy_extras.nodes_images",
+    "category": "image",
+    "output_node": false
+  },
+  "CameraAngle": {
+    "input": {
+      "required": {
+        "horizontal_angle": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 360
+          }
+        ],
+        "vertical_angle": [
+          "INT",
+          {
+            "default": 0,
+            "min": -30,
+            "max": 60
+          }
+        ],
+        "zoom": [
+          "FLOAT",
+          {
+            "default": 5,
+            "min": 0,
+            "max": 10,
+            "step": 0.1
+          }
+        ]
+      },
+      "optional": {
+        "image": ["IMAGE", {}],
+        "view": [
+          "STRING",
+          {
+            "widgetType": "CAMERA_ANGLE_VIEW",
+            "default": "",
+            "socketless": true,
+            "multiline": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["horizontal_angle", "vertical_angle", "zoom"],
+      "optional": ["image", "view"]
+    },
+    "output": ["LOAD3D_CAMERA", "STRING"],
+    "output_is_list": [false, false],
+    "output_name": ["camera_info", "prompt"],
+    "name": "CameraAngle",
+    "display_name": "Compose Camera Angle Prompt",
+    "description": "",
+    "python_module": "comfy_extras.nodes_camera_angle",
+    "category": "3d",
+    "output_node": false
+  },
+  "CreateCameraInfo": {
+    "input": {
+      "required": {
+        "mode": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              {
+                "key": "orbit",
+                "inputs": {
+                  "required": {
+                    "yaw": [
+                      "FLOAT",
+                      {
+                        "default": 35,
+                        "min": -360,
+                        "max": 360,
+                        "step": 1
+                      }
+                    ],
+                    "pitch": [
+                      "FLOAT",
+                      {
+                        "default": 30,
+                        "min": -89,
+                        "max": 89,
+                        "step": 1
+                      }
+                    ],
+                    "distance": [
+                      "FLOAT",
+                      {
+                        "default": 4,
+                        "min": 0.01,
+                        "max": 1000,
+                        "step": 0.01
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "look_at",
+                "inputs": {
+                  "required": {
+                    "position_x": [
+                      "FLOAT",
+                      {
+                        "default": 4,
+                        "min": -1000,
+                        "max": 1000,
+                        "step": 0.01
+                      }
+                    ],
+                    "position_y": [
+                      "FLOAT",
+                      {
+                        "default": 4,
+                        "min": -1000,
+                        "max": 1000,
+                        "step": 0.01
+                      }
+                    ],
+                    "position_z": [
+                      "FLOAT",
+                      {
+                        "default": 4,
+                        "min": -1000,
+                        "max": 1000,
+                        "step": 0.01
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "target_x": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -1000,
+            "max": 1000,
+            "step": 0.01
+          }
+        ],
+        "target_y": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -1000,
+            "max": 1000,
+            "step": 0.01
+          }
+        ],
+        "target_z": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -1000,
+            "max": 1000,
+            "step": 0.01
+          }
+        ],
+        "roll": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -180,
+            "max": 180,
+            "step": 1
+          }
+        ],
+        "fov": [
+          "FLOAT",
+          {
+            "default": 35,
+            "min": 1,
+            "max": 120,
+            "step": 1
+          }
+        ],
+        "zoom": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0.01,
+            "max": 100,
+            "step": 0.01
+          }
+        ],
+        "camera_type": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": ["perspective", "orthographic"]
+          }
+        ]
+      },
+      "optional": {
+        "camera_info_state": [
+          "CAMERA_INFO_STATE",
+          {
+            "socketless": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "mode",
+        "target_x",
+        "target_y",
+        "target_z",
+        "roll",
+        "fov",
+        "zoom",
+        "camera_type"
+      ],
+      "optional": ["camera_info_state"]
+    },
+    "output": ["LOAD3D_CAMERA"],
+    "output_is_list": [false],
+    "output_name": ["camera_info"],
+    "name": "CreateCameraInfo",
+    "display_name": "Create Camera Info",
+    "description": "",
+    "python_module": "comfy_extras.nodes_camera",
+    "category": "3d",
+    "output_node": false
+  },
+  "Load3D": {
+    "input": {
+      "required": {
+        "model_file": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": ["none"],
+            "file_upload": true
+          }
+        ],
+        "image": ["LOAD_3D", {}],
+        "width": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["model_file", "image", "width", "height"]
+    },
+    "output": ["IMAGE", "MASK", "STRING"],
+    "output_is_list": [false, false, false],
+    "output_name": ["image", "mask", "mesh_path"],
+    "name": "Load3D",
+    "display_name": "Load 3D & Animation",
+    "description": "",
+    "python_module": "comfy_extras.nodes_load_3d",
+    "category": "3d",
+    "output_node": false
+  },
+  "Load3DAdvanced": {
+    "input": {
+      "required": {
+        "model_file": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": ["none"],
+            "file_upload": true
+          }
+        ],
+        "viewport_state": ["LOAD_3D", {}],
+        "width": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["model_file", "viewport_state", "width", "height"]
+    },
+    "output": ["FILE_3D", "INT", "INT"],
+    "output_is_list": [false, false, false],
+    "output_name": ["model_3d", "width", "height"],
+    "name": "Load3DAdvanced",
+    "display_name": "Load 3D (Advanced)",
+    "description": "",
+    "python_module": "comfy_extras.nodes_load_3d",
+    "category": "3d",
+    "output_node": false
+  },
+  "Preview3D": {
+    "input": {
+      "required": {
+        "model_file": [
+          "STRING,FILE_3D_GLB,FILE_3D",
+          {
+            "default": "",
+            "widgetType": "STRING",
+            "multiline": false
+          }
+        ]
+      },
+      "optional": {
+        "camera_info": ["LOAD3D_CAMERA", {}],
+        "bg_image": ["IMAGE", {}]
+      }
+    },
+    "input_order": {
+      "required": ["model_file"],
+      "optional": ["camera_info", "bg_image"]
+    },
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "Preview3D",
+    "display_name": "Preview 3D & Animation (DEPRECATED)",
+    "description": "",
+    "python_module": "comfy_extras.nodes_load_3d",
+    "category": "3d",
+    "output_node": true
+  },
+  "SaveGLB": {
+    "input": {
+      "required": {
+        "mesh": ["MESH,FILE_3D_GLB,FILE_3D", {}],
+        "filename_prefix": [
+          "STRING",
+          {
+            "default": "3d/ComfyUI",
+            "multiline": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["mesh", "filename_prefix"]
+    },
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "SaveGLB",
+    "display_name": "Save 3D Model",
+    "description": "",
+    "python_module": "comfy_extras.nodes_save_3d",
+    "category": "3d",
+    "output_node": true
+  },
+  "RecordAudio": {
+    "input": {
+      "required": {
+        "audio": ["AUDIO_RECORD", {}]
+      }
+    },
+    "input_order": {
+      "required": ["audio"]
+    },
+    "output": ["AUDIO"],
+    "output_is_list": [false],
+    "output_name": ["AUDIO"],
+    "name": "RecordAudio",
+    "display_name": "Record Audio",
+    "description": "",
+    "python_module": "comfy_extras.nodes_audio",
+    "category": "audio",
+    "output_node": false
+  },
+  "WebcamCapture": {
+    "input": {
+      "required": {
+        "image": ["WEBCAM", {}],
+        "width": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384
+          }
+        ],
+        "capture_on_queue": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image", "width", "height", "capture_on_queue"]
+    },
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "WebcamCapture",
+    "display_name": "Webcam Capture",
+    "description": "",
+    "python_module": "comfy_extras.nodes_webcam",
+    "category": "image",
+    "output_node": false
+  },
+  "LoadAudio": {
+    "input": {
+      "required": {
+        "audio": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": ["voice.wav"],
+            "audio_upload": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["audio"]
+    },
+    "output": ["AUDIO"],
+    "output_is_list": [false],
+    "output_name": ["AUDIO"],
+    "name": "LoadAudio",
+    "display_name": "Load Audio",
+    "description": "",
+    "python_module": "comfy_extras.nodes_audio",
+    "category": "audio",
+    "output_node": false
+  },
+  "SaveAudio": {
+    "input": {
+      "required": {
+        "audio": ["AUDIO", {}],
+        "filename_prefix": [
+          "STRING",
+          {
+            "default": "audio/ComfyUI",
+            "multiline": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["audio", "filename_prefix"]
+    },
+    "output": ["AUDIO"],
+    "output_is_list": [false],
+    "output_name": ["audio"],
+    "name": "SaveAudio",
+    "display_name": "Save Audio (FLAC) (DEPRECATED)",
+    "description": "",
+    "python_module": "comfy_extras.nodes_audio",
+    "category": "audio",
+    "output_node": true
+  },
+  "LoadImageOutput": {
+    "input": {
+      "required": {
+        "image": [
+          "COMBO",
+          {
+            "image_upload": true,
+            "image_folder": "output",
+            "remote": {
+              "route": "/internal/files/output",
+              "refresh_button": true,
+              "control_after_refresh": "first"
+            }
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image"]
+    },
+    "output": ["IMAGE", "MASK"],
+    "output_is_list": [false, false],
+    "output_name": ["IMAGE", "MASK"],
+    "name": "LoadImageOutput",
+    "display_name": "Load Image (from Outputs)",
+    "description": "",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": false
+  },
+  "CustomCombo": {
+    "input": {
+      "required": {
+        "choice": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": []
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["choice"]
+    },
+    "output": ["STRING", "INT"],
+    "output_is_list": [false, false],
+    "output_name": ["STRING", "INDEX"],
+    "name": "CustomCombo",
+    "display_name": "Custom Combo",
+    "description": "",
+    "python_module": "comfy_extras.nodes_logic",
+    "category": "utilities",
+    "output_node": false
+  },
+  "KSamplerAdvanced": {
+    "input": {
+      "required": {
+        "model": ["MODEL"],
+        "add_noise": [["enable", "disable"]],
+        "noise_seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 1000,
+            "control_after_generate": true
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "default": 20,
+            "min": 1,
+            "max": 10000
+          }
+        ],
+        "cfg": [
+          "FLOAT",
+          {
+            "default": 8,
+            "min": 0,
+            "max": 100,
+            "step": 0.1,
+            "round": 0.01
+          }
+        ],
+        "sampler_name": [["euler", "dpmpp_2m"]],
+        "scheduler": [["simple", "normal"]],
+        "positive": ["CONDITIONING"],
+        "negative": ["CONDITIONING"],
+        "latent_image": ["LATENT"],
+        "start_at_step": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 10000
+          }
+        ],
+        "end_at_step": [
+          "INT",
+          {
+            "default": 10000,
+            "min": 0,
+            "max": 10000
+          }
+        ],
+        "return_with_leftover_noise": [["disable", "enable"]]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "add_noise",
+        "noise_seed",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "positive",
+        "negative",
+        "latent_image",
+        "start_at_step",
+        "end_at_step",
+        "return_with_leftover_noise"
+      ]
+    },
+    "output": ["LATENT"],
+    "output_is_list": [false],
+    "output_name": ["LATENT"],
+    "name": "KSamplerAdvanced",
+    "display_name": "KSampler (Advanced)",
+    "description": "",
+    "python_module": "nodes",
+    "category": "sampling",
+    "output_node": false
+  },
+  "SaveImage": {
+    "input": {
+      "required": {
+        "images": ["IMAGE"],
+        "filename_prefix": [
+          "STRING",
+          {
+            "default": "ComfyUI"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["images", "filename_prefix"]
+    },
+    "output": [],
+    "output_is_list": [],
+    "output_name": [],
+    "name": "SaveImage",
+    "display_name": "Save Image",
+    "description": "",
+    "python_module": "nodes",
+    "category": "image",
+    "output_node": true
+  },
+  "KSamplerMockVariant": {
+    "input": {
+      "required": {
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 1000
+          }
+        ],
+        "steps": [
+          "INT",
+          {
+            "default": 20
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["seed", "steps"]
+    },
+    "output": ["LATENT"],
+    "output_is_list": [false],
+    "output_name": ["LATENT"],
+    "name": "KSamplerMockVariant",
+    "display_name": "KSamplerMockVariant",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  },
+  "MockBoxThenWidth": {
+    "input": {
+      "required": {
+        "box": [
+          "BOUNDING_BOX",
+          {
+            "default": {
+              "x": 1,
+              "y": 2,
+              "width": 30,
+              "height": 40
+            }
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "default": 9
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["box", "width"]
+    },
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockBoxThenWidth",
+    "display_name": "MockBoxThenWidth",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  },
+  "MockUploadNamedInput": {
+    "input": {
+      "required": {
+        "image": [
+          ["a.png"],
+          {
+            "image_upload": true
+          }
+        ],
+        "upload": [
+          "STRING",
+          {
+            "default": "u"
+          }
+        ],
+        "z": [
+          "INT",
+          {
+            "default": 1
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image", "upload", "z"]
+    },
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockUploadNamedInput",
+    "display_name": "MockUploadNamedInput",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  },
+  "MockUploadOptionalInput": {
+    "input": {
+      "required": {
+        "image": [
+          ["a.png"],
+          {
+            "image_upload": true
+          }
+        ]
+      },
+      "optional": {
+        "upload": [
+          "STRING",
+          {
+            "default": "u"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image"],
+      "optional": ["upload"]
+    },
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockUploadOptionalInput",
+    "display_name": "MockUploadOptionalInput",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  },
+  "MockSocketlessBypass": {
+    "input": {
+      "required": {
+        "text": [
+          "STRING",
+          {
+            "default": "q",
+            "socketless": true
+          }
+        ],
+        "image": ["IMAGE", {}]
+      }
+    },
+    "input_order": {
+      "required": ["text", "image"]
+    },
+    "output": ["IMAGE", "IMAGE"],
+    "output_is_list": [false, false],
+    "output_name": ["IMAGE", "IMAGE"],
+    "name": "MockSocketlessBypass",
+    "display_name": "MockSocketlessBypass",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  },
+  "MockRemoteControl": {
+    "input": {
+      "required": {
+        "file": [
+          "COMBO",
+          {
+            "remote": {
+              "route": "/internal/files/output",
+              "refresh_button": true
+            },
+            "control_after_generate": true
+          }
+        ],
+        "after": [
+          "INT",
+          {
+            "default": 7
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["file", "after"]
+    },
+    "output": ["STRING"],
+    "output_is_list": [false],
+    "output_name": ["STRING"],
+    "name": "MockRemoteControl",
+    "display_name": "MockRemoteControl",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  },
+  "MockFloatControls": {
+    "input": {
+      "required": {
+        "named": [
+          "FLOAT",
+          {
+            "control_after_generate": "fixed"
+          }
+        ],
+        "plain": [
+          "FLOAT",
+          {
+            "control_after_generate": true
+          }
+        ],
+        "pick": [
+          "COMBO",
+          {
+            "options": ["a", "b"],
+            "multiselect": true,
+            "multi_select": {},
+            "control_after_generate": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["named", "plain", "pick"]
+    },
+    "output": ["FLOAT"],
+    "output_is_list": [false],
+    "output_name": ["FLOAT"],
+    "name": "MockFloatControls",
+    "display_name": "MockFloatControls",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  },
+  "MockExtensionWidgets": {
+    "input": {
+      "required": {
+        "before": [
+          "INT",
+          {
+            "default": 3
+          }
+        ],
+        "scene": ["LOAD_3D", {}],
+        "view": ["CAMERA_ANGLE_VIEW", {}],
+        "state": ["CAMERA_INFO_STATE", {}],
+        "player": ["AUDIO_UI", {}],
+        "take": ["AUDIO_RECORD", {}],
+        "after": [
+          "INT",
+          {
+            "default": 7
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["before", "scene", "view", "state", "player", "take", "after"]
+    },
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockExtensionWidgets",
+    "display_name": "MockExtensionWidgets",
+    "description": "",
+    "python_module": "nodes",
+    "category": "mock",
+    "output_node": false
+  }
+}

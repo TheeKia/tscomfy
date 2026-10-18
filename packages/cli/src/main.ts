@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // The `tscomfy` executable.
 
 import { systemIo } from "./io.ts";

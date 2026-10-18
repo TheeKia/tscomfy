@@ -1,6 +1,7 @@
+import { type Diagnostic, normalizeObjectInfo, type Schema } from "@tscomfy/core";
 import { type Flags, value } from "./args.ts";
-import { type Io, CliError, redactUrl } from "./io.ts";
-import { shellQuote } from "./util.ts";
+import { type Io, CliError } from "./io.ts";
+import { errorBodyMessage, flagWords, redactUrl } from "./util.ts";
 
 /** Where node definitions come from: a server, or a saved `/object_info` response. */
 export interface Source {
@@ -31,7 +32,7 @@ export async function readSource(io: Io, flags: Flags): Promise<Source> {
       text,
       ...(comfyVersion === undefined ? {} : { comfyVersion }),
       label: from,
-      flag: `--from ${shellQuote(from)}`,
+      flag: flagWords("from", from),
     };
   }
   const base = serverBase(url ?? "");
@@ -42,7 +43,7 @@ export async function readSource(io: Io, flags: Flags): Promise<Source> {
     text,
     ...(comfyVersion === undefined ? {} : { comfyVersion }),
     label: shown,
-    flag: `--url ${shellQuote(shown)}`,
+    flag: flagWords("url", shown),
   };
 }
 
@@ -84,4 +85,30 @@ async function readComfyVersion(io: Io, url: string): Promise<string | undefined
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The normalized schema of a source. A response that holds no usable node at all (not JSON, not
+ * an object, an error body such as `{"detail": "Not authenticated"}`, or `{}`) is fatal, so it
+ * can't replace good types; anything less is reported and the rest generated.
+ */
+export function loadSchema(source: Source): {
+  readonly schema: Schema;
+  readonly diagnostics: readonly Diagnostic[];
+} {
+  const result = normalizeObjectInfo(
+    source.text,
+    source.comfyVersion === undefined ? {} : { comfyVersion: source.comfyVersion },
+  );
+  if (Object.keys(result.schema.nodes).length === 0) {
+    const detail = errorBodyMessage(source.text);
+    if (detail !== undefined) {
+      throw new CliError(`${source.label} is an error response, not node definitions: ${detail}.`);
+    }
+    const error = result.diagnostics.find((diagnostic) => diagnostic.severity === "error");
+    throw new CliError(
+      `${source.label} doesn't hold node definitions${error === undefined ? "" : `: ${error.message}`}`,
+    );
+  }
+  return result;
 }

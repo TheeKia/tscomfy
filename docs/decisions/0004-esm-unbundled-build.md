@@ -10,7 +10,7 @@ A library needs JS, declarations and source maps. Bundlers add configuration and
 
 - ESM only. `tsc -b` emits per-file JS, `.d.ts` and maps; source uses `.ts` import specifiers with `rewriteRelativeImportExtensions`.
 - Package exports put a custom `@tscomfy/source` condition first, pointing at `src/index.ts`. TypeScript picks it up through `customConditions`, and Bun through `--conditions`.
-- Each package has a composite build config (`rootDir: src`, `tsBuildInfoFile: dist/.tsbuildinfo`) and a non-composite noEmit test config with no references. The root `tsconfig.json` is a solution file over all six.
+- Each package has a composite build config (`rootDir: src`, `tsBuildInfoFile: dist/.tsbuildinfo`) and a non-composite noEmit test config with no references. The root `tsconfig.json` is a solution file over every package, test config and internal package.
 
 ## Consequences
 

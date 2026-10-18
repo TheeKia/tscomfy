@@ -35,6 +35,11 @@ const schema = looseSchema(
     Loose: node({ latent: ["LATENT"], either: ["IMAGE,MASK"] }, ["IMAGE"]),
     // A widget declared before a socket: the frontend lists sockets first.
     Widgeted: node({ strength: ["FLOAT", { default: 1 }], image: ["IMAGE"] }, ["IMAGE"]),
+    // A socketless widget, then a socket: the frontend still gives the widget a slot (probed).
+    Socketless: node({ text: ["STRING", { default: "q", socketless: true }], image: ["IMAGE"] }, [
+      "IMAGE",
+      "IMAGE",
+    ]),
     // An untyped input: the next hop's target type is `*`.
     Any: node({ value: ["*"] }, ["IMAGE"]),
     Switch: node(
@@ -111,6 +116,20 @@ function sinkOf(build: (context: BuildContext<LooseNodes>) => void): {
       .map((diagnostic) => diagnostic.path),
   };
 }
+
+describe("slots", () => {
+  test("a socketless widget has a slot, which an untyped link through a bypass picks", () => {
+    // Probed in frontend 1.55.17: output 1 of the bypassed node into `*` takes input 1, the
+    // widget's slot (sockets first: image, text), which isn't linked: nothing is sent.
+    const result = sinkOf(({ n }) => {
+      const [image] = n["Src"]!({}, { id: "src" });
+      const bypassed = n["Socketless"]!({ image }, { id: "b", mode: "bypass" });
+      n["Sink"]?.({ any: bypassed[1] }, { id: "s" });
+    });
+    expect(result.links).toEqual({});
+    expect(result.dropped).toEqual([["s", "inputs", "any"]]);
+  });
+});
 
 describe("mute", () => {
   test("leaves the node out, and the inputs linked to it, but sends their consumer", () => {

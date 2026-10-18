@@ -1,0 +1,319 @@
+{
+  "id": "5b0c6f2e-0d3c-4b7e-9a51-3c1e2f4a6b70",
+  "revision": 0,
+  "last_node_id": 15,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [0, 100],
+      "size": [300, 90],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [1]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": ["example.png", "image"]
+    },
+    {
+      "id": 2,
+      "type": "ImageCropV2",
+      "pos": [0, 200],
+      "size": [300, 90],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "name": "crop_region",
+          "type": "BOUNDING_BOX",
+          "link": null,
+          "widget": {
+            "name": "crop_region"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [2]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageCropV2"
+      },
+      "widgets_values": [
+        {
+          "x": 8,
+          "y": 16,
+          "width": 256,
+          "height": 128
+        },
+        8,
+        16,
+        256,
+        128
+      ]
+    },
+    {
+      "id": 3,
+      "type": "CameraAngle",
+      "pos": [0, 300],
+      "size": [300, 90],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "camera_info",
+          "type": "LOAD3D_CAMERA",
+          "links": null
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CameraAngle"
+      },
+      "widgets_values": [30, 15, 4.5, "camera"]
+    },
+    {
+      "id": 4,
+      "type": "CreateCameraInfo",
+      "pos": [0, 400],
+      "size": [300, 90],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "camera_info",
+          "type": "LOAD3D_CAMERA",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CreateCameraInfo"
+      },
+      "widgets_values": ["look_at", 1, 2, 3, 0.5, 0, 0, 10, 50, 2, "orthographic"]
+    },
+    {
+      "id": 5,
+      "type": "Load3D",
+      "pos": [0, 500],
+      "size": [300, 90],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Load3D"
+      },
+      "widgets_values": ["none", "upload3dmodel", "uploadExtraResources", "clear", "", 640, 480]
+    },
+    {
+      "id": 6,
+      "type": "Load3DAdvanced",
+      "pos": [0, 600],
+      "size": [300, 90],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Load3DAdvanced"
+      },
+      "widgets_values": ["none", "", 320, 240]
+    },
+    {
+      "id": 7,
+      "type": "Preview3D",
+      "pos": [0, 700],
+      "size": [300, 90],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Preview3D"
+      },
+      "widgets_values": ["models/a.glb", ""]
+    },
+    {
+      "id": 8,
+      "type": "SaveGLB",
+      "pos": [0, 800],
+      "size": [300, 90],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveGLB"
+      },
+      "widgets_values": ["3d/mock", ""]
+    },
+    {
+      "id": 9,
+      "type": "LoadAudio",
+      "pos": [0, 900],
+      "size": [300, 90],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [3]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": ["voice.wav", ""]
+    },
+    {
+      "id": 10,
+      "type": "SaveAudio",
+      "pos": [0, 1000],
+      "size": [300, 90],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 3
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveAudio"
+      },
+      "widgets_values": ["audio/mock"]
+    },
+    {
+      "id": 11,
+      "type": "LoadImageOutput",
+      "pos": [0, 1100],
+      "size": [300, 90],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "LoadImageOutput"
+      },
+      "widgets_values": ["out.png [output]", false, "refresh", "image"]
+    },
+    {
+      "id": 12,
+      "type": "CustomCombo",
+      "pos": [0, 1200],
+      "size": [300, 90],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "CustomCombo"
+      },
+      "widgets_values": ["b", 1, "a", "b", ""]
+    },
+    {
+      "id": 13,
+      "type": "KSamplerAdvanced",
+      "pos": [0, 1300],
+      "size": [300, 90],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "KSamplerAdvanced"
+      },
+      "widgets_values": ["enable", 42, true, 20, 8, "sample_euler", "normal", 0, 10000, "disable"]
+    },
+    {
+      "id": 14,
+      "type": "SaveImage",
+      "pos": [0, 1400],
+      "size": [300, 90],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "ks_%KSamplerAdvanced.control_after_generate%_%Compose Camera Angle Prompt.view%"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "RecordAudio",
+      "pos": [0, 1500],
+      "size": [300, 90],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "RecordAudio"
+      },
+      "widgets_values": ["", ""]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 2, 0, 3, 0, "IMAGE"],
+    [3, 9, 0, 10, 0, "AUDIO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

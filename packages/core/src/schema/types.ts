@@ -8,7 +8,7 @@ import type { JsonValue } from "../json/value.ts";
 
 /**
  * An integer as the schema stores it: a `number` when it is a safe integer, otherwise a `bigint`
- * (docs/plan.md D10). One value never has both forms.
+ *. One value never has both forms.
  */
 export type IntValue = number | bigint;
 
@@ -47,7 +47,10 @@ type InputBase = {
 type WidgetBase = InputBase & {
   /** The type a link into this input must match, and the type the backend coerces by. */
   readonly type: SocketType;
-  /** The frontend draws no socket for it, so links are only possible in API JSON. */
+  /**
+   * The server asks for no socket. Frontend 1.55.17 ignores it (every widget gets a slot), so it
+   * only makes the generated types refuse links, which is stricter than the frontend and backend.
+   */
   readonly socketless: boolean;
   /**
    * The frontend widget the server names, when it differs from the one `kind` implies: a pack's
@@ -62,7 +65,7 @@ export type SocketInput = InputBase & {
   readonly type: SocketType;
   /**
    * The server marks it `forceInput`: files from frontends before 1.16 saved a placeholder value
-   * for it in `widgets_values`, which the frontend drops on load (docs/plan.md §11).
+   * for it in `widgets_values`, which the frontend drops on load.
    */
   readonly forceInput?: true;
   /** `control_after_generate` as the server states it, for a `forceInput` input. */
@@ -76,11 +79,16 @@ export type IntInput = WidgetBase & {
   readonly min?: IntValue;
   readonly max?: IntValue;
   readonly step?: number;
-  /** `control_after_generate` as the server states it; see {@link FloatInput.control}. */
+  /**
+   * `control_after_generate` as the server states it. The frontend adds a control widget
+   * (randomize, fixed, …) when it is truthy, named after it when it is a string, and also when
+   * it is absent and the input is named `seed` or `noise_seed`. The control is saved in UI
+   * workflows but never sent.
+   */
   readonly control?: boolean | string;
 };
 
-/** A FLOAT widget. Bounds the server wrote beyond 2^53 are rounded inward (docs/plan.md §9). */
+/** A FLOAT widget. Bounds the server wrote beyond 2^53 are rounded inward. */
 export type FloatInput = WidgetBase & {
   readonly kind: "float";
   readonly default?: number;
@@ -89,12 +97,7 @@ export type FloatInput = WidgetBase & {
   readonly step?: number;
   /** Rounding precision the frontend applies, or `false` for none. */
   readonly round?: number | false;
-  /**
-   * `control_after_generate` as the server states it. The frontend adds a control widget
-   * (randomize, fixed, …) when it is truthy, named after it when it is a string; for INT also when
-   * it is absent and the input is named `seed` or `noise_seed`. The control is saved in UI
-   * workflows but never sent.
-   */
+  /** `control_after_generate` as the server states it; see {@link IntInput.control}. */
   readonly control?: boolean | string;
 };
 
@@ -103,7 +106,7 @@ export type StringInput = WidgetBase & {
   readonly kind: "string";
   readonly default?: string;
   readonly multiline: boolean;
-  /** The frontend rewrites `{a|b}` and comments in this input; tscomfy doesn't (§7.4). */
+  /** The frontend rewrites `{a|b}` and comments in this input; tscomfy doesn't. */
   readonly dynamicPrompts: boolean;
 };
 
@@ -121,13 +124,13 @@ export type ComboInput = WidgetBase & {
   readonly kind: "combo";
   /**
    * The backend matches links into the legacy form against the option list itself, and into
-   * the `COMBO` form by `type` (§5.2). A legacy combo's `type` is `COMBO`, as the frontend sees it.
+   * the `COMBO` form by `type`. A legacy combo's `type` is `COMBO`, as the frontend sees it.
    */
   readonly form: "legacy" | "combo";
   /** Server order. May be empty (no model files installed, or a remote combo). */
   readonly options: readonly ComboOption[];
   /**
-   * What the frontend sends when no value is given (§7.2): `[]` for a multi-select widget, the
+   * What the frontend sends when no value is given: `[]` for a multi-select widget, the
    * first option in place of a falsy default. Absent when the server states none.
    */
   readonly default?: ComboOption | readonly ComboOption[];
@@ -139,7 +142,12 @@ export type ComboInput = WidgetBase & {
   readonly uploads?: readonly ComboUpload[];
   /** Options are fetched by the frontend at runtime. */
   readonly remote: boolean;
-  /** `control_after_generate` as the server states it; see {@link FloatInput.control}. */
+  /**
+   * A remote combo whose `remote.refresh_button` asks the frontend for a refresh button, which
+   * it saves after the combo.
+   */
+  readonly refreshButton?: true;
+  /** `control_after_generate` as the server states it; see {@link IntInput.control}. */
   readonly control?: boolean | string;
   /**
    * A legacy combo with `forceInput`: the frontend draws a socket and no widget, so it sends a
@@ -149,8 +157,8 @@ export type ComboInput = WidgetBase & {
 };
 
 /**
- * A frontend widget whose value is arbitrary JSON (COLOR, BOUNDING_BOX, CURVE, …), see
- * docs/plan.md D16. The backend coerces by `type`, not by the widget.
+ * A frontend widget whose value is arbitrary JSON (COLOR, BOUNDING_BOX, CURVE, …). The backend
+ * coerces by `type`, not by the widget.
  */
 export type ValueInput = WidgetBase & {
   readonly kind: "value";
@@ -274,7 +282,7 @@ export type Schema = {
   /** The ComfyUI version, if the caller supplied it. Metadata only: not part of the hash. */
   readonly comfyVersion?: string;
   /**
-   * Keyed by class type and built in code-unit order of class type (D15). JavaScript enumerates
+   * Keyed by class type and built in code-unit order of class type. JavaScript enumerates
    * integer-like keys first, in numeric order, so a class named "10" would list before "A".
    */
   readonly nodes: { readonly [classType: string]: NodeDef };

@@ -1,6 +1,6 @@
-// Identifiers for generated declarations. ComfyUI names (class types, input names, option keys)
-// are arbitrary strings: 328 class names in a real dump are not identifiers. They stay exact as
-// property keys and are sanitized only where TypeScript needs an identifier.
+// Identifiers and literal text for generated code. ComfyUI names (class types, input names,
+// option keys) are arbitrary strings: 328 class names in a real dump are not identifiers. They
+// stay exact as property keys and are sanitized only where TypeScript needs an identifier.
 
 // ECMAScript IdentifierName, which oxfmt leaves unquoted as a key (`café`, `日本`).
 const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
@@ -37,6 +37,11 @@ export function commentLines(text: string): string[] {
 /** Server text for a one-line comment. */
 export function commentText(text: string): string {
   return commentLines(text).join(" ");
+}
+
+/** `//` comment lines; line terminators in the text can't end the comment early. */
+export function headerLines(header: readonly string[]): string[] {
+  return header.map((text) => `// ${commentText(text)}`);
 }
 
 /**

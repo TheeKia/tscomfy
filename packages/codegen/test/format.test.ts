@@ -4,30 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generate, type GeneratedFile } from "@tscomfy/codegen";
 import { normalizeObjectInfo } from "@tscomfy/core";
+import { oxfmt, typecheckProject } from "@tscomfy/fixtures";
 
 // Generated code must be exactly what oxfmt produces (docs/plan.md §9), whatever the server's
 // names, and server text must never break out of comments. Each case is a hand-written node
 // definition built to hit one layout rule or one hostile name.
-
-const REPO = join(import.meta.dir, "../../..");
-const BIN = join(REPO, "node_modules/.bin");
-
-async function run(
-  command: readonly string[],
-  stdin?: string,
-): Promise<{ code: number; output: string }> {
-  const child = Bun.spawn([...command], {
-    stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  return { code, output: stdout + stderr };
-}
 
 function node(classType: string, fields: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -152,34 +133,13 @@ describe("generated code is oxfmt-formatted and compiles", () => {
 });
 
 async function expectFormattedAndCompiling(files: readonly GeneratedFile[]): Promise<void> {
-  const formatted = await Promise.all(
-    files.map((file) =>
-      run(
-        [join(BIN, "oxfmt"), "--stdin-filepath", file.path, "-c", join(REPO, ".oxfmtrc.json")],
-        file.contents,
-      ),
-    ),
-  );
+  const formatted = await Promise.all(files.map((file) => oxfmt(file.path, file.contents)));
   expect(formatted.map((result) => result.output)).toEqual(files.map((file) => file.contents));
 
   const directory = await mkdtemp(join(tmpdir(), "tscomfy-format-"));
   try {
     await Promise.all(files.map((file) => Bun.write(join(directory, file.path), file.contents)));
-    // An ES module package, as generated code expects under `nodenext`.
-    await Bun.write(join(directory, "package.json"), JSON.stringify({ type: "module" }));
-    await Bun.write(
-      join(directory, "tsconfig.json"),
-      JSON.stringify({
-        extends: join(REPO, "tsconfig.base.json"),
-        compilerOptions: {
-          noEmit: true,
-          allowImportingTsExtensions: true,
-          paths: { "@tscomfy/core": [join(REPO, "packages/core/src/index.ts")] },
-        },
-        include: ["*.ts"],
-      }),
-    );
-    const tsc = await run([join(BIN, "tsc"), "-p", directory]);
+    const tsc = await typecheckProject(directory);
     expect(tsc.output).toBe("");
   } finally {
     await rm(directory, { recursive: true, force: true });

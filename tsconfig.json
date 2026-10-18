@@ -30,6 +30,12 @@
     },
     {
       "path": "internal/bench"
+    },
+    {
+      "path": "internal/api-report"
+    },
+    {
+      "path": "internal/pack-test"
     }
   ]
 }

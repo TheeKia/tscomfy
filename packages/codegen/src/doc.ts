@@ -112,6 +112,9 @@ interface Command {
   readonly doc: Doc;
 }
 
+/** Columns the generated code is laid out for: oxfmt's default, and this repo's setting. */
+export const PRINT_WIDTH = 100;
+
 /** Prints a document at `width` columns with two-space indentation. */
 export function print(doc: Doc, width: number): string {
   // Chunks, not one growing string: trimming trailing spaces must stay O(1) per line.

@@ -8,12 +8,12 @@ import {
   type Schema,
   type SchemaDiff,
 } from "@tscomfy/core";
-import { parseFlags } from "./args.ts";
-import { loadSchema, path, regenerateCommand, SNAPSHOT } from "./generate.ts";
-import { CliError, type Io } from "./io.ts";
-import { contentHash, FILES, MANIFEST, readManifest } from "./manifest.ts";
+import { HELP, parseFlags, required } from "./args.ts";
+import { regenerateCommand } from "./generate.ts";
+import type { Io } from "./io.ts";
+import { contentHash, FILES, MANIFEST, readGenerated, SNAPSHOT } from "./manifest.ts";
 import { count } from "./report.ts";
-import { readSource } from "./source.ts";
+import { loadSchema, readSource } from "./source.ts";
 
 /** `tscomfy check --help`. */
 export const CHECK_USAGE: string = `Usage: tscomfy check (--url <server> | --from <object_info.json>) --out <dir>
@@ -27,7 +27,8 @@ Options:
   --url <server>   A ComfyUI server, e.g. http://127.0.0.1:8188. Only GET requests.
   --from <file>    A saved /object_info response instead of a server.
   --out <dir>      The directory \`tscomfy generate\` wrote.
-  --verbose        List every changed combo option.
+  --verbose        List every changed node, input and combo option, rather than the first few.
+  -h, --help       Show this help.
 `;
 
 const FLAGS = [
@@ -35,11 +36,17 @@ const FLAGS = [
   { name: "from", takesValue: true },
   { name: "out", takesValue: true },
   { name: "verbose", takesValue: false },
-  { name: "help", takesValue: false },
+  HELP,
 ] as const;
 
-/** How many combo options a change lists before the rest are summarized, unless verbose. */
+/** How many node and input names a list shows before the rest are counted, unless verbose. */
+const SHOWN_NAMES = 10;
+
+/** How many combo options a change lists before the rest are counted, unless verbose. */
 const SHOWN_OPTIONS = 5;
+
+/** What follows a count of entries left out. */
+const MORE = " (--verbose shows all)";
 
 /** `tscomfy check`. */
 export async function checkCommand(io: Io, args: readonly string[]): Promise<number> {
@@ -48,17 +55,9 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
     io.out(CHECK_USAGE);
     return 0;
   }
-  const out = path(flags, "out");
-  if (flags.has("from")) path(flags, "from");
-  const manifest = await readManifest(io, out);
-  const snapshotPath = join(out, SNAPSHOT);
-  const snapshotText = await io.readText(snapshotPath);
-  if (manifest === undefined || snapshotText === undefined) {
-    throw new CliError(
-      `There is no ${manifest === undefined ? MANIFEST : SNAPSHOT} in ${out}; run tscomfy generate first.`,
-    );
-  }
-  const snapshot = loadSchema({ text: snapshotText, label: snapshotPath, flag: "" }).schema;
+  const out = required(flags, "out");
+  const verbose = flags.has("verbose");
+  const { manifest, snapshotPath, snapshotText, schema: snapshot } = await readGenerated(io, out);
   const source = await readSource(io, flags);
   const current = loadSchema(source).schema;
 
@@ -79,7 +78,7 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
   const ignored =
     runtime.length === 0
       ? ""
-      : ` (changed files in ${count(runtime.length, "upload or remote combo")} aren't drift: ${runtime.join(", ")})`;
+      : ` (changed files in ${count(runtime.length, "upload or remote combo")} aren't drift: ${listed(runtime, verbose, SHOWN_NAMES)})`;
   if (!drifted && stale.length === 0 && !outdated) {
     const nodes = Object.keys(current.nodes).length;
     io.out(
@@ -103,7 +102,7 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
   if (drifted) {
     lines.push(
       `${source.label} differs from ${snapshotPath}${ignored}:`,
-      ...formatDiff(diff, flags.has("verbose")),
+      ...formatDiff(diff, verbose),
     );
   }
   const command = regenerateCommand({
@@ -111,6 +110,7 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
     out,
     exportName: manifest.exportName,
     importExtension: manifest.importExtension,
+    // With --url, the server says again.
     ...(flags.has("from") && manifest.comfyVersion !== undefined
       ? { comfyVersion: manifest.comfyVersion }
       : {}),
@@ -154,31 +154,51 @@ function withoutRuntimeOptions(
   return { diff: { ...diff, changed }, runtime };
 }
 
-/** The diff as indented lines. */
-export function formatDiff(diff: SchemaDiff, verbose: boolean): string[] {
+/**
+ * The diff as indented lines: every list (nodes, inputs, options, changed nodes) cut to its
+ * first few entries unless `verbose`, so a server that differs a lot still gives short lines.
+ */
+function formatDiff(diff: SchemaDiff, verbose: boolean): string[] {
   const lines: string[] = [];
-  if (diff.added.length > 0)
-    lines.push(`  + ${count(diff.added.length, "node")} added: ${diff.added.join(", ")}`);
+  if (diff.added.length > 0) {
+    lines.push(
+      `  + ${count(diff.added.length, "node")} added: ${listed(diff.added, verbose, SHOWN_NAMES)}`,
+    );
+  }
   if (diff.removed.length > 0) {
-    lines.push(`  - ${count(diff.removed.length, "node")} removed: ${diff.removed.join(", ")}`);
+    lines.push(
+      `  - ${count(diff.removed.length, "node")} removed: ${listed(diff.removed, verbose, SHOWN_NAMES)}`,
+    );
   }
   if (diff.changed.length > 0) {
     lines.push(`  ~ ${count(diff.changed.length, "node")} changed:`);
-    for (const change of diff.changed) lines.push(...formatChange(change, verbose));
+    const shown = verbose ? diff.changed : diff.changed.slice(0, SHOWN_NAMES);
+    for (const change of shown) lines.push(...formatChange(change, verbose));
+    if (shown.length < diff.changed.length) {
+      lines.push(`    … and ${String(diff.changed.length - shown.length)} more${MORE}`);
+    }
   }
   return lines;
 }
 
 function formatChange(change: NodeChange, verbose: boolean): string[] {
   const lines = [`    ${change.classType}`];
-  if (change.inputsAdded.length > 0)
-    lines.push(`      inputs added: ${change.inputsAdded.join(", ")}`);
-  if (change.inputsRemoved.length > 0)
-    lines.push(`      inputs removed: ${change.inputsRemoved.join(", ")}`);
+  if (change.inputsAdded.length > 0) {
+    lines.push(`      inputs added: ${listed(change.inputsAdded, verbose, SHOWN_NAMES)}`);
+  }
+  if (change.inputsRemoved.length > 0) {
+    lines.push(`      inputs removed: ${listed(change.inputsRemoved, verbose, SHOWN_NAMES)}`);
+  }
   for (const input of change.inputsChanged) {
+    const options = (values: readonly (string | number | boolean)[]): string =>
+      listed(
+        values.map((option) => JSON.stringify(option)),
+        verbose,
+        SHOWN_OPTIONS,
+      );
     const parts = [
-      ...(input.optionsAdded.length > 0 ? [`+${options(input.optionsAdded, verbose)}`] : []),
-      ...(input.optionsRemoved.length > 0 ? [`-${options(input.optionsRemoved, verbose)}`] : []),
+      ...(input.optionsAdded.length > 0 ? [`+ ${options(input.optionsAdded)}`] : []),
+      ...(input.optionsRemoved.length > 0 ? [`- ${options(input.optionsRemoved)}`] : []),
       ...(input.specChanged ? ["spec changed"] : []),
     ];
     lines.push(`      ${input.name}: ${parts.join("; ")}`);
@@ -189,10 +209,11 @@ function formatChange(change: NodeChange, verbose: boolean): string[] {
   return lines;
 }
 
-function options(values: readonly (string | number | boolean)[], verbose: boolean): string {
-  const shown = verbose ? values : values.slice(0, SHOWN_OPTIONS);
-  const rest = values.length - shown.length;
-  return ` ${shown.map((option) => JSON.stringify(option)).join(", ")}${rest > 0 ? `, … ${String(rest)} more` : ""}`;
+/** `a, b, c`, or the first `limit` and `… and 4 more (--verbose shows all)` unless `verbose`. */
+function listed(items: readonly string[], verbose: boolean, limit: number): string {
+  const shown = verbose ? items : items.slice(0, limit);
+  const rest = items.length - shown.length;
+  return rest > 0 ? `${shown.join(", ")}, … and ${String(rest)} more${MORE}` : shown.join(", ");
 }
 
 /** `a`, `a and b`, `a, b and c`. */

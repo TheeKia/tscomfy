@@ -11,6 +11,8 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+export * from "./exec.ts";
+
 const root = join(import.meta.dir, "..");
 
 /** Names of the committed mock `/object_info` responses in `mocks/object-info/`. */
@@ -31,6 +33,7 @@ export const MOCK_OBJECT_INFO_NAMES = [
   "numbers",
   "outputs",
   "sockets",
+  "ui-extensions",
   "ui-widgets",
   "widget-types",
 ] as const;
@@ -110,6 +113,51 @@ export function readMockUiExportPrompt(name: MockUiWorkflowName): Promise<string
 /** Raw JSON text of the prompt the frontend builds for one mock UI-format workflow. */
 export function readMockUiApiWorkflow(name: MockUiWorkflowName): Promise<string> {
   return Bun.file(join(MOCK_UI_API_WORKFLOW_DIR, `${name}.json`)).text();
+}
+
+/**
+ * UI workflows over the `ui-extensions` mock schema, of core classes whose widgets the frontend's
+ * core extensions make, each with the prompt the frontend builds for it.
+ */
+export const MOCK_UI_EXTENSION_WORKFLOW_NAMES = ["core-extensions"] as const;
+
+/** A name in {@link MOCK_UI_EXTENSION_WORKFLOW_NAMES}. */
+export type MockUiExtensionWorkflowName = (typeof MOCK_UI_EXTENSION_WORKFLOW_NAMES)[number];
+
+/** Where the UI workflows of {@link MOCK_UI_EXTENSION_WORKFLOW_NAMES} are. */
+export const MOCK_UI_EXTENSION_DIR: string = join(root, "mocks", "workflows", "ui-extensions");
+
+/** Where the prompts the frontend builds for them are, under the same names. */
+export const MOCK_UI_EXTENSION_API_DIR: string = join(
+  root,
+  "mocks",
+  "workflows",
+  "ui-extensions-api",
+);
+
+/** Where the prompts the frontend builds for `toUi`'s export of them are, under the same names. */
+export const MOCK_UI_EXTENSION_EXPORT_DIR: string = join(
+  root,
+  "mocks",
+  "workflows",
+  "ui-extensions-export",
+);
+
+/** A UI workflow of {@link MOCK_UI_EXTENSION_WORKFLOW_NAMES}, as raw text. */
+export function readMockUiExtensionWorkflow(name: MockUiExtensionWorkflowName): Promise<string> {
+  return Bun.file(join(MOCK_UI_EXTENSION_DIR, `${name}.json`)).text();
+}
+
+/** The prompt the frontend builds for a UI workflow of {@link MOCK_UI_EXTENSION_WORKFLOW_NAMES}. */
+export function readMockUiExtensionApiWorkflow(name: MockUiExtensionWorkflowName): Promise<string> {
+  return Bun.file(join(MOCK_UI_EXTENSION_API_DIR, `${name}.json`)).text();
+}
+
+/** The prompt the frontend builds for `toUi`'s export of one of them. */
+export function readMockUiExtensionExportPrompt(
+  name: MockUiExtensionWorkflowName,
+): Promise<string> {
+  return Bun.file(join(MOCK_UI_EXTENSION_EXPORT_DIR, `${name}.json`)).text();
 }
 
 /**

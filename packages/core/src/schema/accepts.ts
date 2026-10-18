@@ -1,7 +1,7 @@
 import type { ComboOption, InputDef, OutputDef, OutputType, SocketType } from "./types.ts";
 
 /**
- * Whether the backend accepts a link from `output` into `input` (docs/plan.md §5.2). Follows the
+ * Whether the backend accepts a link from `output` into `input`. Follows the
  * backend's non-strict `validate_node_input`:
  * - `*` on either side passes, also as a member of a comma list;
  * - MatchType passes on either side (it is checked per template instead);
@@ -54,7 +54,7 @@ export function acceptsType(input: InputDef, output: OutputType): boolean {
   }
 }
 
-/** Whether a socket of type `input` takes a link from an output of type `output` (§5.2). */
+/** Whether a socket of type `input` takes a link from an output of type `output`. */
 export function socketAccepts(input: SocketType, output: OutputType): boolean {
   if (input.kind === "any" || output.kind === "any") return true;
   // The backend lets an option list into an input typed exactly COMBO, and nothing else.

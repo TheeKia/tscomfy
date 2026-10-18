@@ -1,19 +1,10 @@
-// Frontend behavior the exporter and codegen must agree on (docs/plan.md §7.4). Sources:
-// ComfyUI_frontend 1.55.17 `src/utils/executionUtil.ts` and the widget composables in
-// `src/renderer/extensions/vueNodes/widgets/composables/`.
+// Frontend behavior the builder, the exporter and codegen must agree on (docs/plan.md §6.2, §7.4).
+// The frontend's widgets themselves are modeled in `frontend/`.
 
 import type { OutputDef } from "./types.ts";
 
-/**
- * Core widgets whose value the frontend never sends (`options.serialize === false`):
- * RESOLUTION_PREVIEW only displays, IMAGEUPLOAD is the upload button beside a combo.
- */
-const DISPLAY_ONLY_WIDGETS: ReadonlySet<string> = new Set(["RESOLUTION_PREVIEW", "IMAGEUPLOAD"]);
-
-/** Whether the frontend sends a value widget's value in a prompt. */
-export function sendsValue(widget: string): boolean {
-  return !DISPLAY_ONLY_WIDGETS.has(widget);
-}
+/** Whether the exporter sends a value for an input; see `frontend/widgets.ts`. */
+export { sendsInputValue } from "../frontend/widgets.ts";
 
 /**
  * Output names that can't become named members of a multi-output result: members of
@@ -67,7 +58,7 @@ const RESERVED_OUTPUT_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The outputs of a multi-output node that are also reachable by name (docs/plan.md §6.2), as
+ * The outputs of a multi-output node that are also reachable by name, as
  * name → slot. A name is left out when two outputs share it, when it is reserved, or when it
  * looks like an index. Codegen types these members and the builder creates them, from this one
  * rule.

@@ -1,9 +1,10 @@
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { run, systemIo } from "@tscomfy/cli";
+import { exec, REPO_DIR, TOOLS } from "@tscomfy/fixtures";
 
-const REPO = join(import.meta.dir, "..", "..", "..");
-const EXAMPLE = join(REPO, "examples", "txt2img");
+/** An example project under examples/. */
+export type ExampleName = "txt2img" | "hires-fix";
 
 /** What a command printed, and its exit code. */
 export interface Ran {
@@ -12,20 +13,32 @@ export interface Ran {
   readonly stderr: string;
 }
 
+/** What running an example gave: `tsc`, then `main` and the files it wrote, if `tsc` passed. */
+export interface ExampleRun {
+  readonly tsc: Ran;
+  readonly main?: Ran;
+  /** The `written` files, by the path given, `undefined` when `main` didn't write one. */
+  readonly files: ReadonlyMap<string, string | undefined>;
+}
+
 /**
- * examples/txt2img over the `/object_info` in `from`, instead of a server: generates into a
- * copy of the example, type-checks the copy with the example's tsconfig, and runs it.
+ * An example over the `/object_info` in `from`, instead of a server: generates into a copy of
+ * the example, type-checks the copy with the example's tsconfig, and runs its `src/main.ts` with
+ * `args`, from the copy. `written` are paths, relative to the copy, of files `main` writes.
  */
 export async function runExample(
+  name: ExampleName,
   from: string,
-  prompt: string,
-): Promise<{ readonly tsc: Ran; readonly main?: Ran }> {
+  args: readonly string[],
+  written: readonly string[] = [],
+): Promise<ExampleRun> {
+  const example = join(REPO_DIR, "examples", name);
   // Inside the example, so @tscomfy/core resolves through its node_modules; gitignored.
-  const copy = await mkdtemp(join(EXAMPLE, ".test-"));
+  const copy = await mkdtemp(join(example, ".test-"));
   try {
-    await cp(join(EXAMPLE, "src"), join(copy, "src"), {
+    await cp(join(example, "src"), join(copy, "src"), {
       recursive: true,
-      filter: (source) => !source.startsWith(join(EXAMPLE, "src", "comfy")),
+      filter: (source) => !source.startsWith(join(example, "src", "comfy")),
     });
     // `include` is resolved against the config that declares it, so the copy needs its own.
     const tsconfig = { extends: "../tsconfig.json", include: ["src"] };
@@ -37,25 +50,28 @@ export async function runExample(
       quiet,
     );
     if (generated !== 0) throw new Error(`generate exited with ${String(generated)}`);
-    const tsc = await exec(copy, [
-      join(REPO, "node_modules", "typescript", "bin", "tsc"),
-      "-p",
-      ".",
-    ]);
-    if (tsc.code !== 0) return { tsc };
-    const main = await exec(copy, ["--conditions=@tscomfy/source", join("src", "main.ts"), prompt]);
-    return { tsc, main };
+    const tsc = ran(await exec([TOOLS.tsc, "-p", "."], { cwd: copy }));
+    if (tsc.code !== 0) return { tsc, files: new Map() };
+    const main = ran(
+      await exec(
+        [process.execPath, "--conditions=@tscomfy/source", join("src", "main.ts"), ...args],
+        {
+          cwd: copy,
+        },
+      ),
+    );
+    const files = new Map<string, string | undefined>();
+    for (const path of written) {
+      const file = Bun.file(join(copy, path));
+      // oxlint-disable-next-line no-await-in-loop -- a few small files, read in order
+      files.set(path, (await file.exists()) ? await file.text() : undefined);
+    }
+    return { tsc, main, files };
   } finally {
     await rm(copy, { recursive: true, force: true });
   }
 }
 
-async function exec(cwd: string, args: readonly string[]): Promise<Ran> {
-  const child = Bun.spawn([process.execPath, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-  const [code, stdout, stderr] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
+function ran({ code, stdout, stderr }: Ran): Ran {
   return { code, stdout, stderr };
 }

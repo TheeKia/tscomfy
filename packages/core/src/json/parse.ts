@@ -3,7 +3,7 @@ import {
   type Diagnostic,
   type DiagnosticPath,
 } from "../diagnostic/diagnostic.ts";
-import type { JsonValue } from "./value.ts";
+import { isJsonArray, type JsonValue } from "./value.ts";
 
 /** The result of {@link parse}. */
 export interface ParseResult {
@@ -45,7 +45,7 @@ function probeSourceAccess(): boolean {
 
 /**
  * Parses JSON text, keeping integers beyond 2^53 exact as `bigint` wherever they occur
- * (docs/plan.md §7.5). Integer literals inside the safe range, and every literal with a fraction
+ *. Integer literals inside the safe range, and every literal with a fraction
  * or an exponent, stay `number`. The result never holds a non-finite number.
  *
  * Never throws for bad input:
@@ -144,7 +144,8 @@ function sanitize(value: JsonValue, path: DiagnosticPath, options: SanitizeOptio
     return null;
   }
   if (typeof value !== "object" || value === null) return value;
-  if (isArray(value)) return value.map((item, index) => sanitize(item, [...path, index], options));
+  if (isJsonArray(value))
+    return value.map((item, index) => sanitize(item, [...path, index], options));
   // Object.fromEntries defines own data properties, so a "__proto__" key stays an ordinary key.
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [key, sanitize(item, [...path, key], options)]),
@@ -183,9 +184,4 @@ function markPythonNonFinite(text: string): { text: string; marker: string } | u
   }
   if (copied === 0) return undefined;
   return { text: result + text.slice(copied), marker };
-}
-
-// `Array.isArray` doesn't narrow readonly arrays out of a union.
-function isArray(value: JsonValue): value is readonly JsonValue[] {
-  return Array.isArray(value);
 }

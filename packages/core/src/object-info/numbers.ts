@@ -63,8 +63,8 @@ export function toFloatBound(value: JsonValue, side: Side, inexact: boolean): nu
 }
 
 /**
- * A FLOAT default or list element. Integers beyond 2^53 become the nearest double, which is what
- * the backend's `float()` coercion produces too.
+ * A FLOAT default. Integers beyond 2^53 become the nearest double, which is what the backend's
+ * `float()` coercion produces too. (A list default is rejected: `float()` can't coerce it.)
  */
 export function toFloat(value: JsonValue): number | undefined {
   const number = typeof value === "bigint" ? Number(value) : value;

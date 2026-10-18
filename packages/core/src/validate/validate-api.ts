@@ -9,6 +9,7 @@
 // file), it is a warning, so whatever compiles passes validation.
 
 import type { ApiPrompt } from "../api/prompt.ts";
+import { unwrapWire } from "../api/wire.ts";
 import {
   createDiagnostic,
   type Diagnostic,
@@ -16,11 +17,13 @@ import {
 } from "../diagnostic/diagnostic.ts";
 import type { NodeId } from "../graph/types.ts";
 import { stringify } from "../json/stringify.ts";
-import { isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
+import { isJsonArray, type JsonObject, type JsonValue } from "../json/value.ts";
 import { acceptsType, socketAccepts } from "../schema/accepts.ts";
+import { isComboOption } from "../schema/combo.ts";
+import { definitionOf } from "../schema/lookup.ts";
+import { typeText } from "../schema/type-text.ts";
 import type {
   ComboInput,
-  ComboOption,
   DynamicComboInput,
   InputDef,
   IntValue,
@@ -32,7 +35,7 @@ import type {
 
 /**
  * Checks a prompt against a schema the way the backend would, and stricter where the generated
- * types are (docs/plan.md §8). Diagnostics come node by node in prompt order (its class, its keys
+ * types are. Diagnostics come node by node in prompt order (its class, its keys
  * as they expand, then each input in input order), then for the prompt as a whole (no output
  * node, cycles). Paths point into the prompt: `[id, "inputs", key]`, `[id, "class_type"]`, `[id]`
  * for a node or a cycle through it, and `[]` for the whole prompt.
@@ -41,7 +44,7 @@ import type {
  * reported (`E_INVALID_PROMPT`), never thrown.
  */
 export function validateApi(prompt: ApiPrompt | JsonValue, schema: Schema): readonly Diagnostic[] {
-  if (typeof prompt !== "object" || prompt === null || isArray(prompt)) {
+  if (typeof prompt !== "object" || prompt === null || isJsonArray(prompt)) {
     return [createDiagnostic("E_INVALID_PROMPT", [], "A prompt is an object of nodes by id.")];
   }
   return new PromptValidator(prompt, schema).run();
@@ -108,9 +111,7 @@ class PromptValidator {
         nodeProblems.set(id, unreadable(id));
         continue;
       }
-      const definition = Object.hasOwn(this.#schema.nodes, read.classType)
-        ? this.#schema.nodes[read.classType]
-        : undefined;
+      const definition = definitionOf(this.#schema, read.classType);
       if (definition === undefined) {
         nodeProblems.set(id, unknownClass(id, read.classType));
         continue;
@@ -152,7 +153,7 @@ class PromptValidator {
     }
     // The backend reads a dynamic combo's choice as it is: anything but a key drops the input.
     if (input.kind === "dynamicCombo") return dynamicCombo(input, value, report, where);
-    if (!isList(value)) return this.#constant(input, unwrap(value), report, where);
+    if (!isJsonArray(value)) return this.#constant(input, unwrapWire(value), report, where);
     const source = this.#source(value);
     if (typeof source === "string") {
       return report(
@@ -294,7 +295,7 @@ class PromptValidator {
       chain.add(cacheKey);
       const key = inferringKey(node.definition, template);
       const value = key === undefined ? undefined : node.byKey.get(key)?.value;
-      const located = isList(value) ? this.#locate(value) : undefined;
+      const located = isJsonArray(value) ? this.#locate(value) : undefined;
       if (typeof located !== "object") break;
       const output = located.node.definition.outputs[located.slot];
       if (output === undefined) break;
@@ -311,7 +312,7 @@ class PromptValidator {
 
   /** The resolved type of a position's link, if it is a valid one. */
   #linkedType(position: Position | undefined): OutputType | undefined {
-    if (!isList(position?.value)) return undefined;
+    if (!isJsonArray(position?.value)) return undefined;
     const source = this.#source(position.value);
     return typeof source === "object" ? source.type : undefined;
   }
@@ -327,7 +328,7 @@ class PromptValidator {
     const edges = (id: NodeId): NodeId[] => [
       ...new Set(
         (this.#expanded.get(id)?.positions ?? []).flatMap((position) => {
-          if (!isList(position.value)) return [];
+          if (!isJsonArray(position.value)) return [];
           const located = this.#locate(position.value);
           return typeof located === "object" ? [located.node.id] : [];
         }),
@@ -444,7 +445,7 @@ function dynamicCombo(
   if (typeof value !== "string") {
     return report(
       "E_INVALID_VALUE",
-      `${where} takes one of its option keys, not ${isList(value) ? "a link" : describeValue(value)}; the backend would drop it and its options' inputs.`,
+      `${where} takes one of its option keys, not ${isJsonArray(value) ? "a link" : describeValue(value)}; the backend would drop it and its options' inputs.`,
     );
   }
   return input.options.some((option) => option.key === value)
@@ -597,8 +598,8 @@ function combo(
   report: (code: DiagnosticCode, message: string) => Diagnostic[],
   where: string,
 ): Diagnostic[] {
-  const values = isList(value) ? value : [value];
-  if (isList(value) && !input.multiselect) {
+  const values = isJsonArray(value) ? value : [value];
+  if (isJsonArray(value) && !input.multiselect) {
     return report("E_INVALID_VALUE", `${where} takes one option, not a list.`);
   }
   const invalid = values.find((each) => !isComboOption(each));
@@ -665,34 +666,13 @@ function asSocket(type: OutputType): SocketType {
   return type.kind === "combo" ? { kind: "named", name: "COMBO" } : type;
 }
 
-/** The backend unwraps `{"__value__": …}`, which carries list values (§7.5). */
-function unwrap(value: JsonValue): JsonValue {
-  return isJsonObject(value) && Object.hasOwn(value, "__value__")
-    ? (value["__value__"] ?? null)
-    : value;
-}
-
 function isNamed(type: SocketType, name: string): boolean {
   return type.kind === "named" && type.name === name;
 }
 
 /** `*`, alone or in a comma list: the generated types infer nothing narrower from it. */
 function isAnyType(type: OutputType): boolean {
-  return (
-    type.kind === "any" || (type.kind !== "combo" && describeSocket(type).split(",").includes("*"))
-  );
-}
-
-function isArray(value: unknown): value is readonly unknown[] {
-  return Array.isArray(value);
-}
-
-function isList(value: JsonValue | undefined): value is readonly JsonValue[] {
-  return Array.isArray(value);
-}
-
-function isComboOption(value: JsonValue): value is ComboOption {
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+  return type.kind === "any" || (type.kind !== "combo" && typeText(type).split(",").includes("*"));
 }
 
 function linkProblem(problem: "shape" | "node" | "slot", link: readonly JsonValue[]): string {
@@ -707,29 +687,18 @@ function linkProblem(problem: "shape" | "node" | "slot", link: readonly JsonValu
 }
 
 function describeInput(input: InputDef): string {
-  if (input.kind === "matchType") return describeSocket(input.allowed);
-  if ("type" in input) return describeSocket(input.type);
+  if (input.kind === "matchType") return typeText(input.allowed);
+  if ("type" in input) return typeText(input.type);
   return input.kind;
 }
 
 function describeOutput(type: OutputType): string {
-  return type.kind === "combo" ? "an option list" : describeSocket(type);
-}
-
-function describeSocket(type: SocketType): string {
-  switch (type.kind) {
-    case "any":
-      return "*";
-    case "named":
-      return type.name;
-    case "union":
-      return type.names.join(",");
-  }
+  return type.kind === "combo" ? "an option list" : typeText(type);
 }
 
 function describeValue(value: JsonValue): string {
   if (value === null) return "null";
-  if (isList(value)) return "a list";
+  if (isJsonArray(value)) return "a list";
   if (typeof value === "object") return "an object";
   return `${typeof value === "string" ? "the string" : `the ${typeof value}`} ${typeof value === "string" ? JSON.stringify(value) : String(value)}`;
 }

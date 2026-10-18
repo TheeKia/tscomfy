@@ -10,11 +10,11 @@
 
 import { createDiagnostic, type Diagnostic } from "../diagnostic/diagnostic.ts";
 import { ValidationError } from "../diagnostic/validation-error.ts";
+import { sendsInputValue } from "../frontend/widgets.ts";
 import type { GraphNode, InputValue, Workflow } from "../graph/graph.ts";
 import { isOutputRef } from "../graph/output-ref.ts";
 import type { NodeId } from "../graph/types.ts";
 import type { JsonValue } from "../json/value.ts";
-import { sendsValue } from "../schema/frontend.ts";
 import type { InputDef, NodeDef } from "../schema/types.ts";
 import { validateApi } from "../validate/validate-api.ts";
 import { applyModes, type ModalNode } from "./modes.ts";
@@ -25,25 +25,33 @@ export interface ToApiOptions {
   /** Emit `_meta.title`, as the frontend does. Default `true`. */
   readonly meta?: boolean;
   /**
-   * Validate the prompt against the schema (docs/plan.md §8, {@link validateApi}). Default
-   * `true`. Problems building the prompt itself are reported either way.
+   * Validate the prompt against the schema, as {@link validateApi} does. Default `true`.
+   * Problems building the prompt itself are reported either way.
    */
   readonly validate?: boolean;
   /**
-   * Apply bypass and mute (docs/plan.md §12). Default `true`. With `false`, every node is sent
+   * Apply bypass and mute. Default `true`. With `false`, every node is sent
    * as if it ran, as a tool that rewrites workflows needs (the transpiler).
    */
   readonly modes?: boolean;
 }
 
+/** What {@link exportApi} returns. */
+export interface ApiExportResult {
+  /** The prompt, built even when there are errors: whatever could be sent. */
+  readonly prompt: ApiPrompt;
+  /** Problems building the prompt, then, unless `validate` is `false`, validating it. */
+  readonly diagnostics: readonly Diagnostic[];
+}
+
 /**
- * Converts a workflow into an API-format prompt (docs/plan.md §7.4, §7.5): explicit schema
+ * Converts a workflow into an API-format prompt: explicit schema
  * defaults filled in, dynamic inputs flattened to their wire keys, list values wrapped, keys in
  * the frontend's order. Serialize it with `stringify`, which keeps big integers exact.
  *
  * Throws a {@link ValidationError}, carrying every diagnostic, when there is an error: the
  * prompt can't be built faithfully (`E_INPUT_KEY_COLLISION`, `E_TOO_MANY_DYNAMIC_INPUTS`), or,
- * unless `validate` is `false`, the backend would reject it (§8). Warnings don't throw; use
+ * unless `validate` is `false`, the backend would reject it. Warnings don't throw; use
  * {@link exportApi} to see them. Throws a `TypeError` for an output reference nested inside a
  * JSON value, which no input can carry.
  */
@@ -58,10 +66,7 @@ export function toApi(workflow: Workflow, options: ToApiOptions = {}): ApiPrompt
 /**
  * {@link toApi} without throwing: the prompt, and what went wrong building and validating it.
  */
-export function exportApi(
-  workflow: Workflow,
-  options: ToApiOptions = {},
-): { readonly prompt: ApiPrompt; readonly diagnostics: readonly Diagnostic[] } {
+export function exportApi(workflow: Workflow, options: ToApiOptions = {}): ApiExportResult {
   const diagnostics: Diagnostic[] = [];
   const entries: [NodeId, ApiNode][] = [];
   const modal: ModalNode[] = [];
@@ -93,8 +98,10 @@ export function exportApi(
 }
 
 /**
- * Every problem with a workflow (docs/plan.md §8): what {@link toApi} would throw for, and the
- * warnings. Empty for a workflow the backend accepts as it is.
+ * Every problem with a workflow: the errors {@link toApi} would throw for, and
+ * the warnings, which don't stop the backend (a value outside an upload combo's listed files, for
+ * example). Empty for a workflow the backend accepts with nothing to report. Throws a `TypeError`
+ * where {@link toApi} does.
  */
 export function validate(workflow: Workflow): readonly Diagnostic[] {
   return exportApi(workflow).diagnostics;
@@ -154,16 +161,31 @@ class NodeExport {
           }
           return;
         }
+        if (!sendsInputValue(input)) {
+          if (value !== undefined) this.#passThrough(key, value, inOption);
+          return;
+        }
         this.#widget(input, value, key, inOption);
         return;
       case "int":
       case "float":
       case "string":
       case "boolean":
+        // An optional input whose widget the frontend never sends (CameraAngle's `view`) gets no
+        // default; a value given for it passes through.
+        if (!sendsInputValue(input)) {
+          if (value !== undefined) this.#passThrough(key, value, inOption);
+          return;
+        }
         this.#widget(input, value, key, inOption);
         return;
       case "value": {
-        if (!sendsValue(input.widget)) return;
+        // A display-only widget sends nothing; a value given for one passes through, and
+        // validation reports it.
+        if (!sendsInputValue(input)) {
+          if (value !== undefined) this.#passThrough(key, value, inOption);
+          return;
+        }
         const sent = value === undefined ? input.default : value;
         if (sent === undefined) return;
         const encoded = encode(sent);
@@ -213,14 +235,13 @@ class NodeExport {
       this.#add("widget", key, encode(value), inOption);
       return;
     }
-    // A bare key, or `{ option, inputs }`.
-    const chosen =
-      typeof value === "string" ? value : isRecord(value) ? value["option"] : undefined;
-    const children = isRecord(value) && isRecord(value["inputs"]) ? value["inputs"] : {};
-    if (typeof chosen !== "string") {
+    // A bare key, or `{ option, inputs? }`. Anything else passes through for validation.
+    const chosen = typeof value === "string" ? value : optionOf(value);
+    if (chosen === undefined) {
       this.#add("widget", key, encode(value), inOption);
       return;
     }
+    const children = isRecord(value) && isRecord(value["inputs"]) ? value["inputs"] : {};
     this.#add("widget", key, chosen, inOption);
     const option = input.options.find((each) => each.key === chosen);
     const known = new Set<string>();
@@ -256,6 +277,8 @@ class NodeExport {
         }
       }
       this.#unknown(value, new Set(input.slots), `${key}.`, inOption);
+    } else {
+      this.#passThrough(key, value, inOption);
     }
   }
 
@@ -265,12 +288,20 @@ class NodeExport {
     key: string,
     inOption: boolean,
   ): void {
-    if (value === undefined || !isList(value)) return;
+    if (value === undefined) return;
+    if (!isList(value)) {
+      this.#passThrough(key, value, inOption);
+      return;
+    }
     if (value.length > input.max) this.#tooMany(key, value.length, input.max);
     const names = new Set(input.fields.map((field) => field.name));
     value.slice(0, input.max).forEach((row, index) => {
-      const fields = isRecord(row) ? row : {};
       const prefix = `${key}.${String(index)}`;
+      if (!isRecord(row)) {
+        this.#passThrough(prefix, row, inOption);
+        return;
+      }
+      const fields = row;
       for (const field of input.fields) {
         this.#input(
           field,
@@ -303,6 +334,11 @@ class NodeExport {
         );
       }
     }
+  }
+
+  /** A value whose shape its input can't take: sent under `key` as given, for validation. */
+  #passThrough(key: string, value: InputValue, inOption: boolean): void {
+    this.#add(isOutputRef(value) ? "socket" : "widget", key, encode(value), inOption);
   }
 
   /** More slots or rows than the backend reads: the rest can't be sent. */
@@ -364,6 +400,17 @@ function encodedValue(value: InputValue): JsonValue {
     );
   }
   return value;
+}
+
+/** The option a `{ option, inputs? }` value chooses, or `undefined` for any other shape. */
+function optionOf(value: InputValue): string | undefined {
+  if (!isRecord(value) || typeof value["option"] !== "string") return undefined;
+  const keys = Object.keys(value);
+  const inputs = value["inputs"];
+  const shaped =
+    keys.every((each) => each === "option" || each === "inputs") &&
+    (inputs === undefined || isRecord(inputs));
+  return shaped ? value["option"] : undefined;
 }
 
 function isList(value: InputValue): value is readonly InputValue[] {

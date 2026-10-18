@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { CODEGEN_VERSION, emitSchemaModule, generate, isExportName } from "@tscomfy/codegen";
+import { CODEGEN_VERSION, exportNameProblem, generate } from "@tscomfy/codegen";
 import { normalizeObjectInfo } from "@tscomfy/core";
 import { MOCK_OBJECT_INFO_NAMES, readMockObjectInfo } from "@tscomfy/fixtures";
 import {
@@ -84,18 +84,32 @@ describe("generate", () => {
     expect(manifest).toMatchObject({ version: CODEGEN_VERSION });
   });
 
-  test.each(["my-schema", "default", "await", "Nodes", "defineSchema", "", "1st"])(
-    "rejects the export name %p",
-    async (name) => {
-      const { schema } = normalizeObjectInfo(await readMockObjectInfo("basic-pipeline"));
-      expect(isExportName(name)).toBeFalse();
-      expect(() => emitSchemaModule(schema, name, "./nodes.js")).toThrow(TypeError);
+  test.each([
+    ["my-schema", "it isn't an identifier"],
+    ["", "it isn't an identifier"],
+    ["1st", "it isn't an identifier"],
+    ["café", "it isn't an identifier"],
+    ["default", "JavaScript reserves it"],
+    ["await", "JavaScript reserves it"],
+    ["undefined", "JavaScript reserves it"],
+    // The schema module's own imports, and the transpiled module's: one rule for both.
+    ...["Nodes", "defineSchema", "TypedSchema", "workflow", "Workflow", "NodesOf", "n", "raw"].map(
+      (name) => [name, "the generated modules declare it themselves"],
+    ),
+  ])("rejects the export name %p: %s", async (name, why) => {
+    const { schema } = normalizeObjectInfo(await readMockObjectInfo("basic-pipeline"));
+    expect(exportNameProblem(name)).toStartWith(why);
+    expect(() => generate(schema, { exportName: name })).toThrow(
+      `emitSchemaModule: can't export ${JSON.stringify(name)}: ${why}`,
+    );
+  });
+
+  test.each(["local", "$comfy", "_server2", "nodes", "raw2"])(
+    "accepts the export name %p",
+    (name) => {
+      expect(exportNameProblem(name)).toBeUndefined();
     },
   );
-
-  test.each(["local", "$comfy", "_server2", "nodes"])("accepts the export name %p", (name) => {
-    expect(isExportName(name)).toBeTrue();
-  });
 });
 
 describe("diagnostics", () => {

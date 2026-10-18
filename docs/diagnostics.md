@@ -82,7 +82,7 @@ and `E_INVALID_LINK` (the input is left out).
 
 | Code | Meaning | What happens |
 |---|---|---|
-| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. From `importUi`: a linked node of a class the schema doesn't have. | The node is kept as a raw node with its wire keys, so it exports as it came. `importUi` keeps the class, the links and the values saved by name; the frontend sends such a node without a class, which the backend rejects. |
+| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. From `importUi`: a linked node of a class the schema doesn't have, or of one the frontend can't create (see `W_UNKNOWN_UI_CLASS`). | The node is kept as a raw node with its wire keys, so it exports as it came. `importUi` keeps the class, the links and the values saved by name; the frontend sends such a node without a class, which the backend rejects. |
 
 ## Importing UI workflows
 
@@ -105,19 +105,22 @@ It also reports the parser's codes and `W_IMPORTED_AS_RAW`.
 | `W_WIDGET_VALUES_MISMATCH` | A node's saved widget values don't fit its definition: a different number of values by position and none by name (a pack's own widgets, a file older than the definition), or values by name that disagree with the ones by position. | Values are read by position, as the frontend reads them; widgets without one keep their initial values. When the positions don't fit and names are saved, the names are used (that case isn't reported: frontend 1.55 saves names for pack widgets the schema can't predict). |
 | `W_FRONTEND_QUIRK` | The file relies on frontend behavior that looks unintended: a muted or bypassed subgraph inside another subgraph, whose interior the frontend still sends; a PrimitiveNode linked to a subgraph's promoted input, whose value never reaches it; or an input linked through two instances of one subgraph in a row, where the frontend's loop check refuses to build the prompt. | Reproduced as the frontend does it, so the prompt matches the frontend's; the last is resolved through both instances. |
 | `W_NODE_LEFT_OUT` | A node of a class the schema doesn't have is linked to nothing: a pack's frontend-only node (a label, a group toggle), or a missing class. | The node is left out, which changes nothing else in the prompt. |
-| `W_QUEUE_TIME_VALUE` | A save node's `filename_prefix`, or a PrimitiveNode that replaces text, holds `%date:…%`, which the frontend replaces with the time it queues the prompt. (`importUi` replaces `%Node.widget%` references, as the frontend does; `toUi` reports them too, see below.) | The pattern is sent as written. |
+| `W_QUEUE_TIME_VALUE` | A save node's `filename_prefix`, or a PrimitiveNode that replaces text, holds `%date:…%`, which the frontend replaces with the time it queues the prompt; or a widget's value is one the frontend's core extensions compute when it queues (a 3D scene from `LOAD_3D` or `LOAD_3D_ADVANCED`, a webcam frame from `WEBCAM`, a recording from `AUDIO_RECORD`). (`importUi` replaces `%Node.widget%` references, as the frontend does; `toUi` reports them too, see below.) | The pattern is sent as written; a computed value is left out. |
+| `W_EXTENSION_WIDGETS` | A node's class gets widgets from frontend JavaScript that its definition doesn't describe (CustomCombo's option fields and `index`), so its saved values and what the frontend sends for them can't be reproduced. `toUi` reports it too. | The widgets the definition declares are read and sent; the others are left out (on export, not written). |
 
 ## Exporting UI workflows
 
 `toUi` writes a workflow as a UI workflow (plan §11). Paths point into the workflow, as the
 exporter's do. It also reports `W_QUEUE_TIME_VALUE`, for a save node's `filename_prefix` holding
-`%date:…%` or `%Node.widget%`: it is written as given, and the frontend sends the replaced text.
+`%date:…%` or `%Node.widget%` (it is written as given, and the frontend sends the replaced text)
+and for a value given to a widget the frontend computes when it queues (not written), and
+`W_EXTENSION_WIDGETS`.
 
 | Code | Meaning | What happens |
 |---|---|---|
-| `W_UNKNOWN_UI_CLASS` | A node's class isn't in the schema, so its slots and widgets can't be laid out as the frontend lays them out. | Its links and its values by name are written; the frontend shows it as missing, and `importUi` reads it back raw. |
-| `W_UNSAFE_INTEGER` | A widget value is an integer beyond 2^53 (a seed up to 2^64−1). | The value is written exactly, but the frontend's JSON parser rounds it, so the frontend queues a different number. `importUi` reads it exactly. |
-| `W_UI_VALUE_LOST` | An input has nowhere to go in a UI workflow: a DynamicGroup row (frontend 1.55.17 has no widgets for them) or a widget the frontend doesn't save (IMAGECOMPARE). | The value isn't written; the frontend sends its own value for it, or nothing. |
+| `W_UNKNOWN_UI_CLASS` | A node's class isn't in the schema, or the frontend can't create a node of it (its upload combo is named `upload` or is `forceInput`, or an input asks for an upload button directly: the button's constructor throws), so its slots and widgets can't be laid out as the frontend lays them out. | Its links and its values by name are written; the frontend shows it as missing, and `importUi` reads it back raw. |
+| `W_UNSAFE_INTEGER` | A widget value holds an integer outside ±(2^53 − 1), which tscomfy keeps as a bigint (a seed up to 2^64−1). A `number`, however large, round-trips. | The value is written exactly, but the frontend's JSON parser rounds it, so the frontend queues a different number. `importUi` reads it exactly. |
+| `W_UI_VALUE_LOST` | An input has nowhere to go in a UI workflow: a DynamicGroup row (frontend 1.55.17 has no widgets for them), a widget the frontend doesn't save (IMAGECOMPARE) or doesn't send (CAMERA_ANGLE_VIEW, an upload button), an input an upload button replaces, or a widget the frontend renames because an earlier widget has its name (`width#1` after a BOUNDING_BOX), which it then sends under that name. | The value isn't written where the frontend would send it; the frontend sends its own value for it, or nothing. |
 
 ## Generating types
 

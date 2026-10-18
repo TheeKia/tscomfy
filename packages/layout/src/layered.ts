@@ -2,8 +2,12 @@
 // in each column ordered by where their sources sit, then packed from the top. Deterministic,
 // and linear apart from one sort per column.
 
-/** A box to place: its size, and the boxes its inputs come from. */
+/**
+ * A box to place: its size, and the boxes its inputs come from. Sizes and positions are in the
+ * same units, canvas units for `toUi` (the frontend's pixels at zoom 1).
+ */
 export interface LayoutBox {
+  /** Unique among the boxes laid out together. */
   readonly id: string;
   readonly width: number;
   readonly height: number;
@@ -11,11 +15,16 @@ export interface LayoutBox {
   readonly sources: readonly string[];
 }
 
-/** Spacing between columns and between boxes in a column. */
+/** Gaps between boxes, in the units of their sizes. */
 export interface LayoutSpacing {
+  /** Between a column's widest box and the next column. */
   readonly column: number;
+  /** Between one box and the next in a column. */
   readonly row: number;
 }
+
+/** The spacing unless one is given. */
+const DEFAULT_SPACING: LayoutSpacing = { column: 80, row: 40 };
 
 /** Where a box goes: its top-left corner. */
 export type Position = readonly [x: number, y: number];
@@ -24,13 +33,22 @@ export type Position = readonly [x: number, y: number];
  * Positions for boxes that flow left to right: a box sits one column right of its rightmost
  * source, boxes without sources in the first column; in each column boxes are ordered by the
  * average row of their sources (ties by input order), and each column is as wide as its widest
- * box. Boxes on a cycle go where the cycle is broken, in input order.
+ * box. Boxes on a cycle go where the cycle is broken, in input order. The first column starts at
+ * x 0 and every column at y 0; `spacing` defaults to 80 between columns and 40 between rows.
+ *
+ * Throws a `TypeError` when two boxes share an id: their positions couldn't be told apart.
  */
 export function layered(
   boxes: readonly LayoutBox[],
-  spacing: LayoutSpacing = { column: 80, row: 40 },
+  spacing: LayoutSpacing = DEFAULT_SPACING,
 ): ReadonlyMap<string, Position> {
-  const index = new Map(boxes.map((box, position) => [box.id, position]));
+  const index = new Map<string, number>();
+  for (const [position, box] of boxes.entries()) {
+    if (index.has(box.id)) {
+      throw new TypeError(`layered: two boxes have the id ${JSON.stringify(box.id)}`);
+    }
+    index.set(box.id, position);
+  }
   const columns = depths(boxes, index);
   const byColumn = new Map<number, LayoutBox[]>();
   for (const box of boxes) {

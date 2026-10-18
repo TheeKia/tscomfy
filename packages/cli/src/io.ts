@@ -1,4 +1,6 @@
-import { realpath, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { errorBodyMessage, redactUrl } from "./util.ts";
 
 /** Everything the CLI does to the outside world, so commands can be tested without it. */
 export interface Io {
@@ -6,9 +8,12 @@ export interface Io {
   readonly out: (text: string) => void;
   /** Writes to standard error. */
   readonly err: (text: string) => void;
-  /** GETs a URL's body; throws a {@link CliError} for a network error or a non-2xx status. */
+  /**
+   * GETs a URL's body; throws a {@link CliError} for a network error or a non-2xx status (with
+   * the message of an error body, such as `{"detail": "Not authenticated"}`).
+   */
   readonly fetchText: (url: string) => Promise<string>;
-  /** A file's text, or `undefined` when it doesn't exist. */
+  /** A file's text (UTF-8, without a byte order mark), or `undefined` when it doesn't exist. */
   readonly readText: (path: string) => Promise<string | undefined>;
   /** Replaces a file's contents in one step, creating its directory. */
   readonly writeText: (path: string, text: string) => Promise<void>;
@@ -29,7 +34,7 @@ export class CliError extends Error {
 
 const FETCH_TIMEOUT_MS = 60_000;
 
-/** The real world, through Bun. */
+/** The real world: the process's streams, `fetch` and `node:fs`, which Node and Bun both have. */
 export function systemIo(): Io {
   return {
     out: (text) => {
@@ -44,7 +49,12 @@ export function systemIo(): Io {
         const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
         if (!response.ok) {
           const answer = `${String(response.status)} ${response.statusText}`.trimEnd();
-          throw new CliError(`${shown} answered ${answer}`);
+          // Best effort: the status says what went wrong; the body may say why.
+          const body = await response.text().catch(() => "");
+          const detail = errorBodyMessage(body);
+          throw new CliError(
+            `${shown} answered ${answer}${detail === undefined ? "" : `: ${detail}`}`,
+          );
         }
         return await response.text();
       } catch (error) {
@@ -54,7 +64,8 @@ export function systemIo(): Io {
     },
     readText: async (path) => {
       try {
-        return await Bun.file(path).text();
+        // TextDecoder drops a byte order mark, as editors that save one expect.
+        return new TextDecoder().decode(await readFile(path));
       } catch (error) {
         if (codeOf(error) === "ENOENT") return undefined;
         throw new CliError(`Could not read ${path}: ${reason(error)}`);
@@ -67,7 +78,8 @@ export function systemIo(): Io {
       const target = await realpath(path).catch(() => path);
       const temporary = `${target}.tmp`;
       try {
-        await Bun.write(temporary, text);
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(temporary, text);
         await rename(temporary, target);
       } catch (error) {
         // Best effort: when the directory can't be made, there is nothing to remove.
@@ -76,19 +88,6 @@ export function systemIo(): Io {
       }
     },
   };
-}
-
-/**
- * A URL fit for messages and generated files: without credentials, query or fragment, which is
- * where servers expect passwords and tokens. `http://user:pw@host/api?token=t` → `http://host/api`.
- */
-export function redactUrl(url: URL): string {
-  const shown = new URL(url.href);
-  shown.username = "";
-  shown.password = "";
-  shown.search = "";
-  shown.hash = "";
-  return shown.href;
 }
 
 function reason(error: unknown): string {

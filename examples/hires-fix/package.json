@@ -1,0 +1,18 @@
+{
+  "name": "@tscomfy/example-hires-fix",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A two-pass hires-fix workflow built from reusable pieces, with an optional LoRA stack, exported as a prompt or a UI workflow.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "generate": "bun --conditions=@tscomfy/source ../../packages/cli/src/main.ts generate --url http://127.0.0.1:8188 --out src/comfy/local --import-extension .ts",
+    "check": "bun --conditions=@tscomfy/source ../../packages/cli/src/main.ts check --url http://127.0.0.1:8188 --out src/comfy/local",
+    "typecheck": "tsc -p .",
+    "start": "bun --conditions=@tscomfy/source src/main.ts"
+  },
+  "dependencies": {
+    "@tscomfy/core": "workspace:*",
+    "@tscomfy/layout": "workspace:*"
+  }
+}

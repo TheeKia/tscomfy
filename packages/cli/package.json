@@ -1,16 +1,35 @@
 {
   "name": "@tscomfy/cli",
   "version": "0.0.0",
-  "description": "Command-line interface for tscomfy: generate types from a ComfyUI server, check them for drift, transpile prompts to code.",
+  "description": "The tscomfy command: generate types from a ComfyUI server, check them for drift, and transpile API prompts and UI workflows to code.",
+  "keywords": [
+    "cli",
+    "codegen",
+    "comfyui",
+    "typescript",
+    "workflow"
+  ],
+  "homepage": "https://github.com/TheeKia/tscomfy/tree/main/packages/cli#readme",
+  "bugs": "https://github.com/TheeKia/tscomfy/issues",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheeKia/tscomfy.git",
+    "directory": "packages/cli"
+  },
   "bin": {
-    "tscomfy": "./dist/main.js"
+    "tscomfy": "dist/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.tsbuildinfo",
+    "src"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/main.js",
+    "./src/main.ts"
+  ],
   "exports": {
     ".": {
       "@tscomfy/source": "./src/index.ts",
@@ -18,11 +37,22 @@
       "default": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@tscomfy/codegen": "workspace:*",
-    "@tscomfy/core": "workspace:*"
+    "@tscomfy/codegen": "workspace:*"
   },
   "devDependencies": {
-    "@tscomfy/fixtures": "workspace:*"
+    "@tscomfy/core": "workspace:*",
+    "@tscomfy/fixtures": "workspace:*",
+    "@types/node": "24.19.2"
+  },
+  "peerDependencies": {
+    "@tscomfy/core": "workspace:^"
+  },
+  "engines": {
+    "bun": ">=1.4",
+    "node": ">=24"
   }
 }

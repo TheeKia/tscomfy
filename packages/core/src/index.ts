@@ -1,9 +1,9 @@
 /**
  * @module @tscomfy/core
  *
- * Schema model, graph builder, API-format export/import and validation for
- * type-safe ComfyUI workflow generation. Zero runtime dependencies and
- * runtime-agnostic (see docs/plan.md §4 and D3).
+ * Type-safe ComfyUI workflow generation: the `/object_info` normalizer and schema model, the
+ * workflow builder, API-format export and import, validation, bypass and mute, graph operations,
+ * the UI workflow format, and lossless JSON. Zero runtime dependencies and runtime-agnostic.
  */
 
 export {
@@ -14,8 +14,14 @@ export {
   type DiagnosticPath,
   type Severity,
 } from "./diagnostic/diagnostic.ts";
-export { exportApi, toApi, type ToApiOptions, validate } from "./api/export.ts";
-export { importApi, type ImportResult } from "./api/import.ts";
+export {
+  type ApiExportResult,
+  exportApi,
+  toApi,
+  type ToApiOptions,
+  validate,
+} from "./api/export.ts";
+export { type ApiImportResult, importApi } from "./api/import.ts";
 export type { ApiLink, ApiNode, ApiPrompt } from "./api/prompt.ts";
 export { ValidationError } from "./diagnostic/validation-error.ts";
 export type {
@@ -49,16 +55,17 @@ export {
   type NormalizeOptions,
   type NormalizeResult,
 } from "./object-info/normalize.ts";
-export { accepts, acceptsType, socketAccepts } from "./schema/accepts.ts";
-export { namedOutputs, sendsValue } from "./schema/frontend.ts";
+export { accepts } from "./schema/accepts.ts";
+export { namedOutputs, sendsInputValue } from "./schema/frontend.ts";
 export { diffSchemas, type InputChange, type NodeChange, type SchemaDiff } from "./schema/diff.ts";
 export { hashSchema } from "./schema/hash.ts";
-export { defineSchema, type NodesOf, type TypedSchema } from "./schema/typed.ts";
+export { defineSchema, type NodesOf, type TypedSchema, typedSchema } from "./schema/typed.ts";
 export type {
   AutogrowInput,
   BooleanInput,
   ComboInput,
   ComboOption,
+  ComboUpload,
   DynamicComboInput,
   DynamicComboOption,
   DynamicGroupInput,

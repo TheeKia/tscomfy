@@ -4,14 +4,7 @@
 
 import { join } from "node:path";
 import { generate, type GenerateResult, transpile, type TranspileResult } from "@tscomfy/codegen";
-import {
-  accepts,
-  defineSchema,
-  importApi,
-  importUi,
-  normalizeObjectInfo,
-  stringify,
-} from "@tscomfy/core";
+import { accepts, typedSchema, importApi, importUi, normalizeObjectInfo } from "@tscomfy/core";
 import {
   type MockApiWorkflowName,
   type MockObjectInfoName,
@@ -82,7 +75,7 @@ export const TRANSPILED_DIR: string = join(GENERATED_DIR, "transpiled");
 export async function transpileMock(name: MockApiWorkflowName): Promise<TranspileResult> {
   const schemaName = PROMPT_SCHEMAS[name];
   const { schema } = normalizeObjectInfo(await readMockObjectInfo(schemaName));
-  const { workflow } = importApi(await readMockApiWorkflow(name), defineSchema(stringify(schema)));
+  const { workflow } = importApi(await readMockApiWorkflow(name), typedSchema(schema));
   return transpile(workflow, {
     name: "prompt",
     schemaModule: `../${schemaName}/index.ts`,
@@ -97,7 +90,7 @@ export const TRANSPILED_UI_DIR: string = join(TRANSPILED_DIR, "ui");
 /** A mock UI workflow transpiled exactly as committed: `export const prompt`, over `mock`. */
 export async function transpileUiMock(name: MockUiWorkflowName): Promise<TranspileResult> {
   const { schema } = normalizeObjectInfo(await readMockObjectInfo("basic-pipeline"));
-  const { workflow } = importUi(await readMockUiWorkflow(name), defineSchema(stringify(schema)));
+  const { workflow } = importUi(await readMockUiWorkflow(name), typedSchema(schema));
   return transpile(workflow, {
     name: "prompt",
     schemaModule: "../../basic-pipeline/index.ts",

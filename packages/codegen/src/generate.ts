@@ -14,7 +14,7 @@ export interface GeneratedFile {
 
 /** Options for {@link generate}. */
 export interface GenerateOptions {
-  /** The exported schema constant, e.g. `local`. */
+  /** The exported schema constant, e.g. `local`: one `exportNameProblem` finds nothing wrong with. */
   readonly exportName: string;
   /**
    * The extension `index.ts` uses to import `nodes.ts`: `.js` (the default) works under
@@ -34,8 +34,9 @@ export interface GenerateResult {
 }
 
 /**
- * Generates the files for one schema (docs/plan.md §6.1): `nodes.ts` (types only) and
- * `index.ts` (the typed runtime schema). Pure and deterministic.
+ * Generates the files for one schema: `nodes.ts` (types only) and
+ * `index.ts` (the typed runtime schema). Pure and deterministic. Throws a `TypeError` for an
+ * export name `exportNameProblem` refuses.
  */
 export function generate(schema: Schema, options: GenerateOptions): GenerateResult {
   const header = [

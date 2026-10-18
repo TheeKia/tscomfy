@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { transpile } from "@tscomfy/codegen";
+import { transpile, transpileNameProblem } from "@tscomfy/codegen";
 import {
-  defineSchema,
+  typedSchema,
   importApi,
   normalizeObjectInfo,
   parse,
@@ -157,9 +157,7 @@ describe("transpile", () => {
   });
 
   test("leaves out cycles and dangling links, and reports them", async () => {
-    const schema = defineSchema(
-      stringify(normalizeObjectInfo(await readMockObjectInfo("sockets")).schema),
-    );
+    const schema = typedSchema(normalizeObjectInfo(await readMockObjectInfo("sockets")).schema);
     const { workflow: cyclic } = importApi(
       JSON.stringify({
         a: { class_type: "MockAnyPassthrough", inputs: { value: ["b", 0] } },
@@ -178,19 +176,29 @@ describe("transpile", () => {
   });
 
   test.each([
-    [{ name: "default" }, "options.name"],
-    [{ schemaName: "my-schema" }, "options.schemaName"],
-    [{ name: "mock" }, "must differ"],
-    [{ name: "workflow" }, "a name the module itself uses"],
-    [{ schemaName: "NodesOf" }, "a name the module itself uses"],
-    [{ name: "x".repeat(60) }, "too long for one line"],
+    [{ name: "default" }, 'the name "default" won\'t do: JavaScript reserves it'],
+    [{ schemaName: "my-schema" }, "the schema name \"my-schema\" won't do: it isn't an identifier"],
+    [{ name: "mock" }, 'the name and the schema name are both "mock"'],
+    [{ name: "workflow" }, 'the name "workflow" won\'t do: the generated modules declare it'],
+    [{ schemaName: "NodesOf" }, 'the schema name "NodesOf" won\'t do: the generated modules'],
+    [{ name: "x".repeat(57) }, "is wider than 100 columns"],
   ])("refuses options %p", (options, message) => {
+    const names = { name: "prompt", schemaName: "mock", ...options };
+    expect(transpileNameProblem(names)).toContain(message);
     expect(() =>
       transpiled(
         workflow(basic, () => {}),
         options,
       ),
-    ).toThrow(message);
+    ).toThrow(`transpile: ${transpileNameProblem(names) ?? ""}`);
+  });
+
+  test("takes names whose declaration fits on one line", () => {
+    // `export const <name>: Workflow<NodesOf<typeof mock>> =` is 47 columns besides the name.
+    expect(transpileNameProblem({ name: "x".repeat(53), schemaName: "mock" })).toBeUndefined();
+    expect(transpileNameProblem({ name: "x".repeat(54), schemaName: "mock" })).toBe(
+      `the declaration \`export const ${"x".repeat(54)}: Workflow<NodesOf<typeof mock>> =\` is wider than 100 columns`,
+    );
   });
 
   test("is deterministic", async () => {
@@ -205,7 +213,7 @@ describe("sources written as raw", () => {
     // its parameter falls back to the allowed types, which an IMAGE-only input can't take.
     const text = (await readMockObjectInfo("basic-pipeline")).trimEnd().slice(0, -1);
     const match = (await readMockObjectInfo("match-type")).trimStart().slice(1);
-    const schema = defineSchema(stringify(normalizeObjectInfo(`${text},${match}`).schema));
+    const schema = typedSchema(normalizeObjectInfo(`${text},${match}`).schema);
     const prompt = {
       "1": { class_type: "EmptyLatentImage", inputs: { width: 512, height: 512, batch_size: 1 } },
       "2": { class_type: "VAELoader", inputs: { vae_name: "pixel_space" } },
@@ -242,9 +250,7 @@ describe("what the exporter can't send", () => {
 
 describe("cycles", () => {
   test("tell nodes on a cycle from nodes that depend on one", async () => {
-    const schema = defineSchema(
-      stringify(normalizeObjectInfo(await readMockObjectInfo("sockets")).schema),
-    );
+    const schema = typedSchema(normalizeObjectInfo(await readMockObjectInfo("sockets")).schema);
     const { workflow: cyclic } = importApi(
       JSON.stringify({
         a: { class_type: "MockAnyPassthrough", inputs: { value: ["b", 0] } },
@@ -264,12 +270,10 @@ describe("cycles", () => {
 
 describe("large workflows", () => {
   test("transpile long chains and wide fans in linear time, without deep recursion", async () => {
-    const schema = defineSchema(
-      stringify(
-        normalizeObjectInfo(
-          `${(await readMockObjectInfo("sockets")).trimEnd().slice(0, -1)},${(await readMockObjectInfo("match-type")).trimStart().slice(1)}`,
-        ).schema,
-      ),
+    const schema = typedSchema(
+      normalizeObjectInfo(
+        `${(await readMockObjectInfo("sockets")).trimEnd().slice(0, -1)},${(await readMockObjectInfo("match-type")).trimStart().slice(1)}`,
+      ).schema,
     );
     const nodes: Record<string, unknown> = {
       s: { class_type: "MockSource", inputs: {} },

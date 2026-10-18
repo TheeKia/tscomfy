@@ -1,0 +1,12 @@
+{
+  "name": "@tscomfy/pack-test",
+  "version": "0.0.0",
+  "private": true,
+  "description": "test:pack: the published packages as a user installs them, packed, installed offline, run under Node and type-checked by a consumer.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@tscomfy/core": "workspace:*",
+    "@tscomfy/fixtures": "workspace:*"
+  }
+}

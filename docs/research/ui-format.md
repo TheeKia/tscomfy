@@ -3,7 +3,9 @@
 How frontend 1.55.17 (the version ComfyUI 0.41 installs) reads the workflow JSON it saves, and how
 it builds a prompt from it. Researched 2026-10-18 by reading the TypeScript embedded in the
 installed bundle's source maps, then checking each rule in the running frontend with headless
-probes (`internal/fixtures/scripts/frontend.ts` and 45 synthetic files) and against a local corpus
+probes (`internal/fixtures/scripts/frontend.ts` and 45 synthetic files; then a node of every
+widget type and of the core extension classes, created one at a time, with mock classes
+registered in the page through `app.registerNodeDef`, which runs the extensions' hooks) and against a local corpus
 of 10 real UI workflows and the prompts the frontend built for them. Paths are relative to the
 frontend repository. The frontend is GPL-3.0: this file describes behavior, it does not copy code.
 
@@ -52,34 +54,79 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
 - **Slot order** (`addInputs`, inputs ordered by `getOrderedInputSpecs`, which matches our
   normalizer's order for all 1,758 classes of the server): first the inputs that get only a
   socket (no widget for `widgetType ?? type`, `forceInput`, MatchType, Autogrow), then a slot for
-  each widget-backed input. A dynamic combo's chosen option inserts its slots right after the
-  combo's own once a value is set. **[V]**
-- **Widgets** (`widgets.ts`, `useIntWidget`, `useComboWidget`, `dynamicWidgets.ts`), in input
-  order:
-  - a value widget per input;
+  each widget-backed input, then those of the inputs core extensions add. A dynamic combo's
+  chosen option inserts its slots right after the combo's own once a value is set. `socketless`
+  is ignored: `addInputWidget` tests `widget.options.socketless`, which no core widget sets, so
+  every widget gets a slot, and a bypass picks it by index like any other (probed with a
+  socketless STRING before an IMAGE socket: output 1 into a `*` input takes the widget's slot).
+  Autogrow slots take the template's type (`COMBO` for a legacy combo, `INT` for an INT); a
+  template on a widget type without `forceInput` would get widgets, but servers always send
+  `forceInput` there (13 of 13 in the dump) and the backend forces a socket. **[V]**
+- **The registry** is the core widgets of `widgets.ts` and those core extensions register
+  (`getCustomWidgets`): AUDIO_RECORD, AUDIO_UI, AUDIOUPLOAD, CAMERA_ANGLE_VIEW, CAMERA_INFO_STATE,
+  LOAD_3D, LOAD_3D_ADVANCED, PREVIEW_3D, WEBCAM. A widget's value is saved unless
+  `widget.serialize === false` (`LGraphNode.serialize`) and sent unless
+  `widget.options.serialize === false` (`graphToPrompt`); the two are independent. Created in the
+  running frontend, one node per type: IMAGECOMPARE is sent (`{"__value__": ["", ""]}`), not
+  saved; RESOLUTION_PREVIEW, AUDIO_UI and CAMERA_INFO_STATE neither; IMAGEUPLOAD, AUDIOUPLOAD
+  (buttons) and CAMERA_ANGLE_VIEW (its view mode, `camera`) are saved, never sent; LOAD_3D,
+  LOAD_3D_ADVANCED, WEBCAM and AUDIO_RECORD are DOM widgets saved as `""` whose prompt value an
+  extension computes at queue time (a scene capture, a webcam upload, a recording); PREVIEW_3D is
+  saved and sent as `""`; every other core widget is saved and sent. DynamicGroup has no handler
+  in 1.55.17: no widgets, nothing saved or sent. **[V]**
+- **Widgets** (`widgets.ts`, `useIntWidget`, `useFloatWidget`, `useComboWidget`,
+  `dynamicWidgets.ts`, the core extensions), in input order:
+  - a value widget per input, named after it, except that CAMERA_ANGLE_VIEW names its widget
+    `view`, CAMERA_INFO_STATE `camera_info_state`, LOAD_3D `image` (`viewport_state` on the six
+    advanced 3D preview and save classes), LOAD_3D_ADVANCED `viewport_state`, PREVIEW_3D `image`;
+    a BOUNDING_BOX adds a number widget per field (`x`, `y`, `width`, `height`, saved, never
+    sent); AUDIO_RECORD adds its record button under the same name; LOAD_3D adds three buttons
+    (`upload 3d model`, `upload extra resources`, `clear`, saved and sent under those labels)
+    when a `model_file` widget comes before it; a remote combo adds an `Auto-refresh after
+    generation` toggle (saved `false`, never sent) and, with `remote.refresh_button`, a `refresh`
+    button (saved and sent as `refresh`); **[V]**
   - after an INT whose `control_after_generate` is truthy, or which is named `seed` or
     `noise_seed` with the option absent, a control widget (`fixed`, `increment`, `decrement`,
-    `randomize`); after a FLOAT or combo with the option, one too, and a combo also gets a
-    `control_filter_list` string. A string option names the control after itself (`"fixed"`
-    gives a widget named `fixed`) and is its initial value; otherwise it starts at `randomize`.
-    Controls are saved, never sent. **[V]**
+    `randomize`); after a FLOAT or combo with the option, one too, and a single-select combo also
+    gets a `control_filter_list` string. A string option names the control after itself; it is
+    the initial value too, except on a FLOAT, whose control always starts `fixed`; otherwise it
+    starts `randomize` (INT, single-select combo) or `fixed` (FLOAT, multi-select combo).
+    Controls are saved, never sent. `control_prefix` (renaming controls) isn't modeled: no server
+    in the dump sends it. **[V]**
   - a dynamic combo, then its chosen option's widgets, depth-first; **[V]**
-  - pseudo-inputs that core extensions add after every input: `upload` (saved `"image"`, never
-    sent) for the first required combo with `image_upload`, `video_upload` or
-    `animated_image_upload`, or for a required `audio` combo with `audio_upload` (saved `""`);
-    an audio player widget on audio nodes (neither saved nor sent). **[S][V]**
-  - IMAGECOMPARE is not saved but is sent (`{"__value__": ["", ""]}`); RESOLUTION_PREVIEW and
-    CAMERA_INFO_STATE are neither. DynamicGroup has no handler in 1.55.17: no widgets, nothing
-    saved or sent. **[V]**
+  - the inputs core extensions add to a definition (`beforeRegisterNodeDef`), after every
+    declared one: `image: PREVIEW_3D` on Preview3D and SaveGLB, `audioUI: AUDIO_UI` on the six
+    audio load, preview and save classes, then `upload`: an AUDIOUPLOAD button (saved `""`) for a
+    required `audio` combo with `audio_upload`, an IMAGEUPLOAD button (saved `"image"`) for the
+    first required combo with `image_upload`, `video_upload` or `animated_image_upload`. The
+    extension assigns `required.upload`, so the button replaces a required input named `upload`
+    in place (its value is never sent) and loses to an optional one (no button); Load3DAdvanced's
+    `viewport_state` is retyped LOAD_3D_ADVANCED. **[V]**
+  - the buttons extensions add once the node exists (`nodeCreated`): WebcamCapture's capture
+    button (saved `capture`, sent as nothing). **[V]**
+  - A name an earlier widget has is renamed `name#1`, `#2`, … (`ensureUniqueWidgetNames`), in
+    `widgets_values_named` and in the prompt: two controls are `control_after_generate` and
+    `control_after_generate#1`; an INT `width` after a BOUNDING_BOX is sent as `width#1`. **[V]**
+- **Nodes the frontend can't create**: the IMAGEUPLOAD button's constructor throws when its
+  file combo has no widget (the combo is named `upload`, so the button replaced it, or is
+  `forceInput`) and when a server declares an IMAGEUPLOAD or AUDIOUPLOAD input itself; the node
+  becomes a missing-node placeholder, sent without a class. **[V]**
+- **Widgets JavaScript builds**: CustomCombo grows option widgets as the user types and sends a
+  hidden `index`; nothing in its definition describes them. PreviewAny and SaveText add preview
+  widgets that are neither saved nor sent. **[V]**
 - **Restoring values** is positional over the saved widgets as they are created, and the list
   grows while it is restored, as dynamic-combo options add widgets; their links follow by name,
   and links on option inputs the chosen option lacks are dropped. Missing values keep the
   initial ones; extra values are ignored. `widgets_values_named` isn't read (an experimental
   setting); `widgets_values` saved as an object is read by name. Files from before 1.16 saved a
   placeholder for each `forceInput` input, which `migrateWidgetsValues` drops when the count
-  lines up. Then: a combo saved as `null` takes its first option,
-  KSampler's old `sample_` sampler names lose the prefix, a KSampler control saved as `true` or
-  `false` becomes `randomize` or `fixed`. **[V]**
+  lines up. Then the fixups `loadGraphData` applies by widget name and
+  type: a combo widget saved as `null` takes its first option (a control's is `fixed`, a dynamic
+  combo's its first key), KSampler's and KSamplerAdvanced's old `sample_` sampler names lose the
+  prefix, and a `control_after_generate` of KSampler, KSamplerAdvanced or PrimitiveNode saved as
+  `true` or `false` becomes `randomize` or `fixed`; on any other class (one merely named
+  `KSampler…` included) a boolean control stays a boolean. A DOM widget without a setter (the 3D
+  and webcam widgets) ignores the value restored into it. **[V]**
 - **Autogrow** shows a contiguous run of linked slots and one empty slot after it; saved slots
   outside that run stay where the merge put them, at the end. **[V]**
 - **Missing classes** become placeholder nodes with widgets `UNKNOWN`, `UNKNOWN_1`, …, and are sent
@@ -144,6 +191,9 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
 - The frontend needs only `version: 0.4`, `nodes` (with `id` and `type`) and tuple `links`;
   everything else has defaults. Writing every slot in the order above, with `target_slot` the
   slot's index, makes the by-name realignment agree. **[V]**
+- Every saved widget is written in the order above, the ones no input owns as the frontend creates
+  them (buttons with their labels' values, a BOUNDING_BOX's fields from the box), so positions
+  line up when the frontend restores them. **[V]**
 - Writing controls as `fixed` keeps the frontend from changing a value after it queues the
   prompt; its default is `randomize`. **[S]**
 - Subgraph definitions also need `inputNode` and `outputNode` with a `bounding` box and
@@ -160,4 +210,18 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
   rounded. **[V]**
 - Legacy group nodes (`extra.groupNodes`, type `workflow>Name`) are converted into subgraphs on
   load; tscomfy reports them instead (`E_LEGACY_GROUP_NODE`). **[V]**
+- Values core extensions compute when the prompt is queued: 3D scene captures (Load3D,
+  Load3DAdvanced, the advanced 3D preview and save classes), webcam frames, recordings.
+  `importUi` leaves them out and reports them (`W_QUEUE_TIME_VALUE`). Buttons the frontend sends
+  under their labels (the 3D loader's, a remote combo's `refresh`) and the 3D previews' `image`
+  aren't declared inputs, which the backend ignores; `importUi` leaves them out too.
+- CustomCombo's widgets (`W_EXTENSION_WIDGETS`).
+- A remote combo's value when the server doesn't list the saved file: the frontend fetches the
+  list when it loads the file and replaces a value the list lacks (with the first file, or
+  `Loading...` while the list is empty), so what it sends depends on the server's files at that
+  moment. `importUi` keeps the saved value, which is what the frontend sends whenever the file
+  is there (checked with the list answered by the probe, 1.55.18). **[V]**
+- A combo with only the frontend's `multi_select` flag (no backend `multiselect`) draws a
+  multi-select widget; the schema keeps only the backend's flag, so its control is modeled as a
+  single select's.
 - Not probed: legacy `proxyWidgets` beyond the simple cases, multi-select combo restore.

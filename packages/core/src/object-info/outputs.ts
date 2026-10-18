@@ -1,15 +1,8 @@
 import type { DiagnosticPath } from "../diagnostic/diagnostic.ts";
-import type { JsonObject, JsonValue } from "../json/value.ts";
+import { isJsonArray, type JsonObject, type JsonValue } from "../json/value.ts";
+import { isComboOption } from "../schema/combo.ts";
 import type { ComboOption, OutputDef, OutputType } from "../schema/types.ts";
-import {
-  type Context,
-  describe,
-  isArray,
-  isBoolean,
-  isString,
-  preview,
-  report,
-} from "./context.ts";
+import { type Context, describe, isBoolean, isString, preview, report } from "./context.ts";
 import { MATCH_TYPE } from "./frontend-widgets.ts";
 import { parseSocketType } from "./socket-type.ts";
 
@@ -24,7 +17,7 @@ export function readOutputs(
   path: DiagnosticPath,
 ): OutputDef[] | undefined {
   const types = node["output"];
-  if (types === undefined || !isArray(types)) {
+  if (types === undefined || !isJsonArray(types)) {
     report(
       context,
       "E_INVALID_NODE",
@@ -81,15 +74,11 @@ function readOutputType(
     }
     return type;
   }
-  if (isArray(raw)) {
+  if (isJsonArray(raw)) {
     // A legacy combo input matches this list in full (§5.2), so it can't be kept partially.
     const options: ComboOption[] = [];
     for (const [index, option] of raw.entries()) {
-      if (
-        typeof option !== "string" &&
-        typeof option !== "boolean" &&
-        (typeof option !== "number" || !Number.isFinite(option))
-      ) {
+      if (!isComboOption(option)) {
         report(
           context,
           "E_INVALID_NODE",
@@ -125,7 +114,7 @@ function readParallel<T extends JsonValue>(
 ): readonly (T | undefined)[] | undefined {
   const raw = node[key];
   if (raw === undefined || raw === null) return undefined;
-  if (!isArray(raw)) {
+  if (!isJsonArray(raw)) {
     report(
       context,
       "W_INVALID_NODE_FIELD",

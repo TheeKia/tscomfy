@@ -1,12 +1,8 @@
-/** How bad a diagnostic is. Every code has exactly one severity (docs/plan.md §5.4, D14). */
+/** How bad a diagnostic is. Every code has exactly one severity. */
 export type Severity = "error" | "warning";
 
-/**
- * Every diagnostic code with its severity. The prefix names the severity: `E_` for errors (the
- * item was dropped, or the backend would reject the result), `W_` for warnings (the item was
- * kept but degraded, or can't be verified). Each code is documented in docs/diagnostics.md.
- */
-export const DIAGNOSTIC_CODES = {
+/** The registry behind {@link DIAGNOSTIC_CODES}. */
+const CODES = {
   E_INVALID_JSON: "error",
   W_PRECISION_LOSS: "warning",
   W_NON_FINITE_NUMBER: "warning",
@@ -51,11 +47,20 @@ export const DIAGNOSTIC_CODES = {
   W_UI_VALUE_LOST: "warning",
   W_NODE_LEFT_OUT: "warning",
   W_QUEUE_TIME_VALUE: "warning",
+  W_EXTENSION_WIDGETS: "warning",
   E_LEGACY_GROUP_NODE: "error",
   W_EMPTY_COMBO: "warning",
   W_UNTYPED_INPUT: "warning",
   W_TRANSPILED_AS_RAW: "warning",
 } as const;
+
+/**
+ * Every diagnostic code with its severity. The prefix names the severity: `E_` for errors (the
+ * item was dropped, or the backend would reject the result), `W_` for warnings (the item was
+ * kept but degraded, or can't be verified). Each code is documented in docs/diagnostics.md.
+ * Frozen.
+ */
+export const DIAGNOSTIC_CODES: typeof CODES = Object.freeze(CODES);
 
 /** A stable diagnostic code. Codes are never reused for a different meaning. */
 export type DiagnosticCode = keyof typeof DIAGNOSTIC_CODES;

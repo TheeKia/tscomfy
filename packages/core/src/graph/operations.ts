@@ -6,7 +6,7 @@ import type { NodeId, Out } from "./types.ts";
 import { type AssembledNode, assembleWorkflow } from "./workflow.ts";
 
 /**
- * The workflow without the nodes no output node needs (§12): what remains are the output nodes
+ * The workflow without the nodes no output node needs: what remains are the output nodes
  * that run (not bypassed or muted) and everything they link to, through bypassed and muted
  * nodes too, so the result is a workflow the builder could make (no link to a node left out).
  * Nodes of classes the schema doesn't know are kept only when something kept links to them.
@@ -18,7 +18,7 @@ export function prune<N>(workflow: Workflow<N>): Workflow<N> {
 
 /**
  * One workflow per output node that runs, in graph order, each holding that node and everything
- * it depends on (§12), as `prune` keeps them. An output node another one depends on is in both.
+ * it depends on, as `prune` keeps them. An output node another one depends on is in both.
  */
 export function splitOutputs<N>(workflow: Workflow<N>): readonly Workflow<N>[] {
   return outputNodes(workflow).map((root) => subset(workflow, needed(workflow, [root])));

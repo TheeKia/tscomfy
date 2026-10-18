@@ -1,0 +1,157 @@
+{
+  "1": {
+    "inputs": { "image": "example.png" },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Image" }
+  },
+  "2": {
+    "inputs": {
+      "crop_region": { "x": 8, "y": 16, "width": 256, "height": 128 },
+      "image": ["1", 0]
+    },
+    "class_type": "ImageCropV2",
+    "_meta": { "title": "Crop Image" }
+  },
+  "3": {
+    "inputs": { "horizontal_angle": 30, "vertical_angle": 15, "zoom": 4.5, "image": ["2", 0] },
+    "class_type": "CameraAngle",
+    "_meta": { "title": "Compose Camera Angle Prompt" }
+  },
+  "4": {
+    "inputs": {
+      "mode": "look_at",
+      "mode.position_x": 1,
+      "mode.position_y": 2,
+      "mode.position_z": 3,
+      "target_x": 0.5,
+      "target_y": 0,
+      "target_z": 0,
+      "roll": 10,
+      "fov": 50,
+      "zoom": 2,
+      "camera_type": "orthographic"
+    },
+    "class_type": "CreateCameraInfo",
+    "_meta": { "title": "Create Camera Info" }
+  },
+  "5": {
+    "inputs": {
+      "model_file": "none",
+      "upload 3d model": "upload3dmodel",
+      "upload extra resources": "uploadExtraResources",
+      "clear": "clear",
+      "image": {
+        "image": "threed/undefined [temp]",
+        "mask": "threed/undefined [temp]",
+        "normal": "threed/undefined [temp]",
+        "camera_info": {
+          "position": { "x": 10, "y": 10, "z": 10.000000000000002 },
+          "target": { "x": 0, "y": 0, "z": 0 },
+          "zoom": 1,
+          "cameraType": "perspective",
+          "quaternion": {
+            "x": -0.2798481423331213,
+            "y": 0.3647051996310008,
+            "z": 0.11591689595929511,
+            "w": 0.8804762392171493
+          },
+          "fov": 35,
+          "aspect": 1.333333333333333,
+          "near": 0.01,
+          "far": 10000,
+          "frustum": { "left": -5, "right": 5, "top": 5, "bottom": -5 }
+        },
+        "recording": "",
+        "model_3d_info": []
+      },
+      "width": 640,
+      "height": 480
+    },
+    "class_type": "Load3D",
+    "_meta": { "title": "Load 3D & Animation" }
+  },
+  "6": {
+    "inputs": {
+      "model_file": "none",
+      "viewport_state": {
+        "camera_info": {
+          "position": { "x": 10, "y": 10, "z": 10.000000000000002 },
+          "target": { "x": 0, "y": 0, "z": 0 },
+          "zoom": 1,
+          "cameraType": "perspective",
+          "quaternion": {
+            "x": -0.2798481423331213,
+            "y": 0.3647051996310008,
+            "z": 0.11591689595929511,
+            "w": 0.8804762392171493
+          },
+          "fov": 35,
+          "aspect": 1.333333333333333,
+          "near": 0.01,
+          "far": 10000,
+          "frustum": { "left": -5, "right": 5, "top": 5, "bottom": -5 }
+        },
+        "model_3d_info": []
+      },
+      "width": 320,
+      "height": 240
+    },
+    "class_type": "Load3DAdvanced",
+    "_meta": { "title": "Load 3D (Advanced)" }
+  },
+  "7": {
+    "inputs": { "model_file": "models/a.glb", "image": "" },
+    "class_type": "Preview3D",
+    "_meta": { "title": "Preview 3D & Animation (DEPRECATED)" }
+  },
+  "8": {
+    "inputs": { "filename_prefix": "3d/mock", "image": "" },
+    "class_type": "SaveGLB",
+    "_meta": { "title": "Save 3D Model" }
+  },
+  "9": {
+    "inputs": { "audio": "voice.wav" },
+    "class_type": "LoadAudio",
+    "_meta": { "title": "Load Audio" }
+  },
+  "10": {
+    "inputs": { "filename_prefix": "audio/mock", "audio": ["9", 0] },
+    "class_type": "SaveAudio",
+    "_meta": { "title": "Save Audio (FLAC) (DEPRECATED)" }
+  },
+  "11": {
+    "inputs": { "image": "out.png [output]", "refresh": "refresh" },
+    "class_type": "LoadImageOutput",
+    "_meta": { "title": "Load Image (from Outputs)" }
+  },
+  "12": {
+    "inputs": { "choice": "b", "index": -1, "option1": "" },
+    "class_type": "CustomCombo",
+    "_meta": { "title": "Custom Combo" }
+  },
+  "13": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 42,
+      "steps": 20,
+      "cfg": 8,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "start_at_step": 0,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable"
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": { "title": "KSampler (Advanced)" }
+  },
+  "14": {
+    "inputs": { "filename_prefix": "ks_randomize_camera" },
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Image" }
+  },
+  "15": {
+    "inputs": { "audio": "" },
+    "class_type": "RecordAudio",
+    "_meta": { "title": "Record Audio" }
+  }
+}

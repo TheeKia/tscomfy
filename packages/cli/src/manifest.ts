@@ -1,8 +1,14 @@
+import { createHash } from "node:crypto";
 import { join } from "node:path";
+import type { Schema } from "@tscomfy/core";
 import { CliError, type Io } from "./io.ts";
+import { loadSchema } from "./source.ts";
 
-/** The record `generate` writes last, next to the files, for `check`. */
+/** The record `generate` writes last, next to the files, for `check` and `transpile`. */
 export const MANIFEST = "tscomfy.json";
+
+/** The raw snapshot written next to the generated files, for `--from` and `check`. */
+export const SNAPSHOT = "object_info.json";
 
 /**
  * What one `generate` run wrote: the codegen version, the schema hash, the options needed to
@@ -15,18 +21,22 @@ export interface Manifest {
   readonly schema: string;
   readonly exportName: string;
   readonly importExtension: ".js" | ".ts";
-  /** The `--comfy-version` given with `--from`, to suggest again. */
+  /**
+   * The ComfyUI version of the snapshot, when known: the server's with `--url`, the
+   * `--comfy-version` given with `--from`. For regenerating from the snapshot, and for the
+   * command `check` suggests with `--from`.
+   */
   readonly comfyVersion?: string;
   /** `sha256:<hex>` of each file, by its name in the output directory: exactly {@link FILES}. */
   readonly files: { readonly [file: string]: string };
 }
 
 /** The files a manifest covers, in the order `check` reports them. */
-export const FILES: readonly string[] = ["nodes.ts", "index.ts", "object_info.json"];
+export const FILES: readonly string[] = ["nodes.ts", "index.ts", SNAPSHOT];
 
 /** `sha256:<hex>` of a text's UTF-8 bytes. */
 export function contentHash(text: string): string {
-  return `sha256:${new Bun.CryptoHasher("sha256").update(text).digest("hex")}`;
+  return `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`;
 }
 
 /** The manifest's file contents: stable key order, one trailing newline. */
@@ -69,4 +79,27 @@ function isManifest(value: unknown): value is Manifest {
     Object.keys(files).toSorted().join("\n") === FILES.toSorted().join("\n") &&
     Object.values(files).every((hash) => typeof hash === "string")
   );
+}
+
+/** A directory `tscomfy generate` wrote: its manifest, and the snapshot normalized. */
+export interface Generated {
+  readonly manifest: Manifest;
+  readonly snapshotPath: string;
+  /** The snapshot's text, exactly as written. */
+  readonly snapshotText: string;
+  readonly schema: Schema;
+}
+
+/** The manifest and snapshot in `dir`; fails when either is missing, or isn't ours. */
+export async function readGenerated(io: Io, dir: string): Promise<Generated> {
+  const manifest = await readManifest(io, dir);
+  const snapshotPath = join(dir, SNAPSHOT);
+  const snapshotText = await io.readText(snapshotPath);
+  if (manifest === undefined || snapshotText === undefined) {
+    throw new CliError(
+      `There is no ${manifest === undefined ? MANIFEST : SNAPSHOT} in ${dir}; run tscomfy generate first.`,
+    );
+  }
+  const { schema } = loadSchema({ text: snapshotText, label: snapshotPath, flag: "" });
+  return { manifest, snapshotPath, snapshotText, schema };
 }

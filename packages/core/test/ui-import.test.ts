@@ -1,106 +1,30 @@
 import { describe, expect, test } from "bun:test";
+import { importUi, parse, stringify, toApi } from "@tscomfy/core";
 import {
-  type Diagnostic,
-  importApi,
-  importUi,
-  parse,
-  stringify,
-  toApi,
-  toUi,
-  uiNodeSizes,
-  workflow,
-} from "@tscomfy/core";
-import {
-  MOCK_API_WORKFLOW_NAMES,
   MOCK_UI_WORKFLOW_NAMES,
-  type MockApiWorkflowName,
-  type MockObjectInfoName,
   type MockUiWorkflowName,
-  readMockApiWorkflow,
   readMockObjectInfo,
   readMockUiApiWorkflow,
-  readMockUiExportPrompt,
   readMockUiWorkflow,
 } from "@tscomfy/fixtures";
-import { isJsonObject } from "../src/json/value.ts";
 import { looseSchema } from "./loose.ts";
-import { renumbered } from "./prompts.ts";
+import {
+  schema,
+  found,
+  queued,
+  file,
+  object,
+  patched,
+  objects,
+  reroute,
+  ckpt,
+  encode,
+  ckptPrompt,
+  encodePrompt,
+  widgets,
+} from "./ui-helpers.ts";
 
-// The UI format (docs/plan.md §11). The mock UI workflows' expected prompts were captured from
-// frontend 1.55.17 itself (internal/fixtures/scripts/frontend.ts); the inline cases below follow
-// probes run the same way.
-
-const schema = looseSchema(await readMockObjectInfo("basic-pipeline"));
-
-const found = (diagnostics: readonly Diagnostic[]): [string, (string | number)[]][] =>
-  diagnostics.map((diagnostic) => [diagnostic.code, [...diagnostic.path]]);
-
-/** The prompt the frontend builds for a UI workflow, through `importUi`. */
-function queued(text: string): {
-  readonly prompt: unknown;
-  readonly found: [string, (string | number)[]][];
-} {
-  const { workflow: imported, diagnostics } = importUi(text, schema);
-  return { prompt: toApi(imported, { validate: false }), found: found(diagnostics) };
-}
-
-/** A format 0.4 file around nodes and tuple links. */
-const file = (
-  nodes: readonly unknown[],
-  links: readonly unknown[] = [],
-  rest: object = {},
-): string =>
-  JSON.stringify({ last_node_id: 100, last_link_id: 100, nodes, links, version: 0.4, ...rest });
-
-/** An object read back from a file, or a failed test. */
-function object(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("expected an object");
-  }
-  return Object.fromEntries(Object.entries(value));
-}
-
-/** A record with some fields replaced, key order kept. */
-function patched(record: Record<string, unknown>, changes: Record<string, unknown>): object {
-  return Object.fromEntries(
-    Object.entries(record).map(([key, value]) => [
-      key,
-      Object.hasOwn(changes, key) ? changes[key] : value,
-    ]),
-  );
-}
-
-/** The objects of a list read back from a file. */
-function objects(value: unknown): Record<string, unknown>[] {
-  if (!Array.isArray(value)) throw new Error("expected a list");
-  return value.map((each: unknown) => object(each));
-}
-
-/** A Reroute fed by `link`. */
-const reroute = (id: number, link: number, mode = 0): object => ({
-  id,
-  type: "Reroute",
-  mode,
-  inputs: [{ name: "", type: "*", link }],
-});
-
-const ckpt = { id: 1, type: "CheckpointLoaderSimple", widgets_values: ["model-a.safetensors"] };
-const encode = (id: number, text: string, link: number | null): object => ({
-  id,
-  type: "CLIPTextEncode",
-  inputs: [{ name: "clip", type: "CLIP", link }],
-  widgets_values: [text],
-});
-const ckptPrompt = {
-  inputs: { ckpt_name: "model-a.safetensors" },
-  class_type: "CheckpointLoaderSimple",
-  _meta: { title: "Load Checkpoint" },
-};
-const encodePrompt = (text: string, clip?: readonly [string, number]): object => ({
-  inputs: { text, ...(clip === undefined ? {} : { clip }) },
-  class_type: "CLIPTextEncode",
-  _meta: { title: "CLIP Text Encode (Prompt)" },
-});
+// importUi (docs/plan.md §11): what the frontend queues for a UI workflow.
 
 describe("importUi: the frontend's prompt", () => {
   const warnings: Record<MockUiWorkflowName, [string, (string | number)[]][]> = {
@@ -325,8 +249,6 @@ describe("importUi: reading the file", () => {
     expect(codes).toEqual([["E_INVALID_WORKFLOW", ["nodes", 1]]]);
   });
 });
-
-const widgets = looseSchema(await readMockObjectInfo("ui-widgets"));
 
 /** A KSampler of the basic-pipeline mock, with saved inputs. */
 const samplerNode = (inputs: readonly object[]): object => ({
@@ -673,238 +595,81 @@ describe("importUi: size", () => {
   });
 });
 
-describe("the widgets the frontend saves", () => {
-  const built = workflow(widgets, ({ n }) => {
-    n["MockControls"]?.({ seed: 1, noise_seed: 2, value: 3, steps: 4, strength: 0.5, mode: "b" });
-    n["MockUploads"]?.({ image: "b.png", video: "a.mp4" });
-    n["MockUploadOptional"]?.({ image: "a.png" });
-    n["MockAnimatedUpload"]?.({ image: "a.webp" });
-    n["MockAudioUpload"]?.({ audio: "a.wav" });
-    n["MockAudioUploadOtherName"]?.({ clip: "a.wav" });
-  });
-  const { workflow: ui } = toUi(built);
-  const saved = objects(ui["nodes"]).map((node) => [
-    node["type"],
-    node["widgets_values"],
-    node["widgets_values_named"],
-  ]);
+const extensions = looseSchema(await readMockObjectInfo("ui-extensions"));
 
-  test("controls, filters and upload buttons, in the frontend's order", () => {
-    expect(saved).toEqual([
-      [
-        "MockControls",
-        [1, "fixed", 2, 3, "fixed", 4, 0.5, "fixed", "b", "fixed", ""],
-        {
-          // On by default for `seed`; off for `noise_seed` with an explicit false; named after
-          // a string option; one shared name, so the last control's value stands.
-          seed: 1,
-          control_after_generate: "fixed",
-          noise_seed: 2,
-          value: 3,
-          fixed: "fixed",
-          steps: 4,
-          strength: 0.5,
-          mode: "b",
-          control_filter_list: "",
-        },
-      ],
-      // One button, for the first required upload combo.
-      [
-        "MockUploads",
-        ["b.png", "a.mp4", "image"],
-        { image: "b.png", video: "a.mp4", upload: "image" },
-      ],
-      ["MockUploadOptional", ["a.png"], { image: "a.png" }],
-      ["MockAnimatedUpload", ["a.webp", "image"], { image: "a.webp", upload: "image" }],
-      ["MockAudioUpload", ["a.wav", ""], { audio: "a.wav", upload: "" }],
-      ["MockAudioUploadOtherName", ["a.wav"], { clip: "a.wav" }],
+/** A save node whose file name references widgets. */
+const named = (prefix: string): object => ({
+  id: 9,
+  type: "SaveImage",
+  properties: {},
+  widgets_values: [prefix],
+});
+
+describe("importUi: load-time fixups, as the frontend applies them", () => {
+  test("a control saved as a boolean: only KSampler, KSamplerAdvanced and PrimitiveNode's", () => {
+    // Probed: KSamplerAdvanced's `true` reads back as `randomize`; a class merely starting with
+    // `KSampler` keeps `true` (the frontend's file name then says `true`).
+    const text = file([
+      {
+        id: 1,
+        type: "KSamplerAdvanced",
+        widgets_values: ["enable", 42, true, 20, 8, "euler", "normal", 0, 10000, "disable"],
+      },
+      { id: 2, type: "KSamplerMockVariant", widgets_values: [1, true, 20] },
+      { id: 3, type: "PrimitiveNode", title: "P", widgets_values: [5, false] },
+      named(
+        "%KSamplerAdvanced.control_after_generate%_%KSamplerMockVariant.control_after_generate%_%P.control_after_generate%",
+      ),
     ]);
+    const { workflow: imported } = importUi(text, extensions);
+    expect(imported.graph.nodes.get("9")?.inputs["filename_prefix"]).toBe("randomize_true_fixed");
   });
 
-  test("positional values are read back past every one of them", () => {
-    const nodes = objects(ui["nodes"]).map((node) =>
-      Object.fromEntries(Object.entries(node).filter(([key]) => key !== "widgets_values_named")),
-    );
-    const back = importUi(JSON.stringify({ ...ui, nodes }), widgets);
-    expect(back.diagnostics).toEqual([]);
-    expect(toApi(back.workflow, { validate: false })).toEqual(toApi(built, { validate: false }));
+  test("a control saved as null takes its first option, fixed; a dynamic combo its first key", () => {
+    const text = file([
+      { id: 1, type: "KSamplerMockVariant", widgets_values: [1, null, 20] },
+      { id: 2, type: "CreateCameraInfo", widgets_values: [null, 1, 2, 3, 0, 0, 0, 0, 35, 1, null] },
+      named("%KSamplerMockVariant.control_after_generate%"),
+    ]);
+    const { workflow: imported } = importUi(text, extensions);
+    expect(imported.graph.nodes.get("9")?.inputs["filename_prefix"]).toBe("fixed");
+    expect(toApi(imported, { validate: false })["2"]?.inputs).toMatchObject({
+      mode: "orbit",
+      "mode.yaw": 1,
+      camera_type: "perspective",
+    });
   });
 });
 
-describe("toUi", () => {
-  test.each(MOCK_UI_WORKFLOW_NAMES)(
-    "the frontend loads the export of %s to the prompt its import gives",
-    async (name) => {
-      const { workflow: ui } = toUi(importUi(await readMockUiWorkflow(name), schema).workflow);
-      const ours = toApi(importUi(stringify(ui), schema).workflow, { validate: false });
-      const theirs = parse(await readMockUiExportPrompt(name)).value;
-      if (!isJsonObject(theirs)) throw new Error("expected a prompt");
-      expect(Object.keys(ours)).toEqual(Object.keys(theirs));
-      // MockSeed isn't a server class: the frontend sends it without one.
-      const declared = name === "txt2img" ? ["2"] : [];
-      for (const id of Object.keys(theirs)) {
-        if (declared.includes(id)) continue;
-        expect(stringify(ours[id] ?? null)).toBe(stringify(theirs[id] ?? null));
-      }
-    },
-  );
-
-  test.each(MOCK_UI_WORKFLOW_NAMES)(
-    "loading the export of %s reproduces its prompt",
-    async (name) => {
-      const first = importUi(await readMockUiWorkflow(name), schema).workflow;
-      const { workflow: ui, ids } = toUi(first);
-      const second = toApi(importUi(stringify(ui), schema).workflow, { validate: false });
-      // Subgraph interiors come back flat, under the numbers `toUi` gave them.
-      expect(stringify(second)).toBe(stringify(renumbered(toApi(first, { validate: false }), ids)));
-    },
-  );
-
-  /** The mock schema each mock prompt was written for. */
-  const schemas: Record<MockApiWorkflowName, MockObjectInfoName> = {
-    autogrow: "autogrow",
-    "dynamic-combo": "dynamic-combo",
-    "dynamic-group": "dynamic-group",
-    lists: "combos",
-    txt2img: "basic-pipeline",
-    "value-widgets": "widget-types",
-  };
-  /** Nodes whose prompt the UI format changes, all reported or documented on `toUi`. */
-  const changed: Record<MockApiWorkflowName, readonly string[]> = {
-    autogrow: [],
-    // An optional dynamic combo left out: the frontend sends its first option.
-    "dynamic-combo": ["8"],
-    // DynamicGroup rows: no widgets in the frontend (W_UI_VALUE_LOST).
-    "dynamic-group": ["2", "3", "4"],
-    // An unknown class linked to nothing: dropped on import.
-    lists: ["4"],
-    txt2img: [],
-    // IMAGECOMPARE: a widget the frontend doesn't save (W_UI_VALUE_LOST).
-    "value-widgets": ["2"],
-  };
-
-  test.each(MOCK_API_WORKFLOW_NAMES)("%s survives the round trip", async (name) => {
-    const local = looseSchema(await readMockObjectInfo(schemas[name]));
-    const text = await readMockApiWorkflow(name);
-    const { workflow: ui } = toUi(importApi(text, local).workflow);
-    const back = toApi(importUi(stringify(ui), local).workflow, { validate: false });
-    const original = parse(text).value;
-    if (!isJsonObject(original)) throw new Error("expected a prompt");
-    for (const id of Object.keys(original)) {
-      if (changed[name].includes(id)) {
-        expect(stringify(back[id] ?? null)).not.toBe(stringify(original[id] ?? null));
-      } else {
-        expect(stringify(back[id] ?? null)).toBe(stringify(original[id] ?? null));
-      }
-    }
-  });
-
-  test("reports what the format can't carry", async () => {
-    const local = looseSchema(await readMockObjectInfo("widget-types"));
-    const { workflow: imported } = importApi(await readMockApiWorkflow("value-widgets"), local);
-    expect(found(toUi(imported).diagnostics)).toEqual([
-      ["W_UNKNOWN_UI_CLASS", ["1"]],
-      ["W_UI_VALUE_LOST", ["2", "inputs", "compare"]],
-    ]);
-    const { workflow: seeded } = importUi(await readMockUiWorkflow("txt2img"), schema);
-    expect(found(toUi(seeded).diagnostics)).toEqual([
-      ["W_UNSAFE_INTEGER", ["2", "inputs", "seed"]],
-    ]);
-  });
-
-  test("writes the frontend's layout: ids, slots, widget values, links, modes", () => {
-    const built = workflow(schema, ({ n }) => {
-      const [model, clip] = n["CheckpointLoaderSimple"]?.(
-        { ckpt_name: "model-b.safetensors" },
-        { id: "ckpt" },
-      ) ?? [undefined, undefined];
-      const positive = n["CLIPTextEncode"]?.({ text: "a cat", clip }, { id: "3" });
-      n["KSampler"]?.(
-        {
-          model,
-          seed: 7,
-          steps: 20,
-          cfg: 8,
-          sampler_name: "euler",
-          scheduler: "normal",
-          positive,
-          negative: positive,
-          latent_image: n["EmptyLatentImage"]?.({}, { mode: "mute" }),
-          denoise: 1,
-        },
-        { id: "sampler", mode: "bypass", title: "Sample" },
-      );
-    });
-    const { workflow: ui, diagnostics } = toUi(built);
-    expect(diagnostics).toEqual([]);
-    const nodes = objects(ui["nodes"]);
-    expect(nodes.map((node) => [node["id"], node["type"], node["mode"]])).toEqual([
-      // Integer ids stay; the others get the next free numbers, in graph order.
-      [4, "CheckpointLoaderSimple", 0],
-      [3, "CLIPTextEncode", 0],
-      [1, "EmptyLatentImage", 2],
-      [5, "KSampler", 4],
-    ]);
-    const sampler = nodes[3] ?? {};
-    expect(sampler["title"]).toBe("Sample");
-    expect(sampler["widgets_values"]).toEqual([7, "fixed", 20, 8, "euler", "normal", 1]);
-    expect(sampler["widgets_values_named"]).toEqual({
-      seed: 7,
-      control_after_generate: "fixed",
-      steps: 20,
-      cfg: 8,
-      sampler_name: "euler",
-      scheduler: "normal",
-      denoise: 1,
-    });
-    // Sockets first, then the widgets' slots, as the frontend creates them.
-    expect(objects(sampler["inputs"]).map((slot) => slot["name"])).toEqual([
-      "model",
-      "positive",
-      "negative",
-      "latent_image",
-      "seed",
-      "steps",
-      "cfg",
-      "sampler_name",
-      "scheduler",
-      "denoise",
-    ]);
-    expect(ui["links"]).toEqual([
-      [1, 4, 1, 3, 0, "CLIP"],
-      [2, 4, 0, 5, 0, "MODEL"],
-      [3, 3, 0, 5, 1, "CONDITIONING"],
-      [4, 3, 0, 5, 2, "CONDITIONING"],
-      [5, 1, 0, 5, 3, "LATENT"],
-    ]);
-    expect(objects(nodes[0]?.["outputs"]).map((out) => out["links"])).toEqual([[2], [1], null]);
-    expect(ui["last_node_id"]).toBe(5);
-    expect(ui["last_link_id"]).toBe(5);
-    expect(ui["version"]).toBe(0.4);
-  });
-
-  test("is deterministic, and places nodes where it is told", async () => {
-    const { workflow: imported } = importUi(await readMockUiWorkflow("txt2img"), schema);
-    const first = stringify(toUi(imported).workflow);
-    expect(stringify(toUi(imported).workflow)).toBe(first);
-    expect(toUi(imported).workflow["id"]).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+describe("importUi: links the frontend refuses", () => {
+  test("each link from a missing node is named in its own warning", () => {
+    const text = file(
+      [encode(2, "a", 11), encode(3, "b", 12)],
+      [
+        [11, 9, 0, 2, 0, "CLIP"],
+        [12, 9, 0, 3, 0, "CLIP"],
+      ],
     );
-    const placed = toUi(imported, { positions: new Map([["6", [400, 120]]]) }).workflow;
-    const sampler = objects(placed["nodes"]).find((node) => node["id"] === 6);
-    expect(sampler?.["pos"]).toEqual([400, 120]);
+    const { diagnostics } = importUi(text, schema);
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Link 11 comes from node 9, which the graph doesn't have; dropping it.",
+      "Link 12 comes from node 9, which the graph doesn't have; dropping it.",
+    ]);
   });
 
-  test("sizes nodes for their sockets, widgets and text boxes, as written", async () => {
-    const { workflow: imported } = importUi(await readMockUiWorkflow("txt2img"), schema);
-    const sizes = uiNodeSizes(imported);
-    // KSampler: 4 sockets, 7 widgets (the seed's control among them).
-    expect(sizes.get("6")).toEqual([320, 310]);
-    // CLIPTextEncode: 1 socket and 1 output, a multiline text widget.
-    expect(sizes.get("3")).toEqual([320, 190]);
-    const written = objects(toUi(imported).workflow["nodes"]);
-    expect(written.map((node) => node["size"])).toEqual(
-      [...imported.graph.nodes.keys()].map((id) => sizes.get(id)),
+  test("through a shared Reroute, the link into the missing node is named for both", () => {
+    const text = file(
+      [reroute(5, 13), encode(2, "a", 11), encode(3, "b", 12)],
+      [
+        [13, 9, 0, 5, 0, "CLIP"],
+        [11, 5, 0, 2, 0, "CLIP"],
+        [12, 5, 0, 3, 0, "CLIP"],
+      ],
     );
+    const { diagnostics } = importUi(text, schema);
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Link 13 comes from node 9, which the graph doesn't have; dropping it.",
+      "Link 13 comes from node 9, which the graph doesn't have; dropping it.",
+    ]);
   });
 });
