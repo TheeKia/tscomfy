@@ -89,6 +89,7 @@ exports[`snapshots accepts 1`] = `
             },
           },
           {
+            "forceInput": true,
             "kind": "socket",
             "lazy": false,
             "name": "combo_socket",
@@ -3985,6 +3986,7 @@ exports[`snapshots names 1`] = `
             },
           },
           {
+            "forceInput": true,
             "kind": "socket",
             "lazy": false,
             "name": "seed",
@@ -4792,6 +4794,7 @@ exports[`snapshots outputs 1`] = `
             },
           },
           {
+            "forceInput": true,
             "kind": "socket",
             "lazy": false,
             "name": "labels",
@@ -5233,6 +5236,7 @@ exports[`snapshots sockets 1`] = `
             },
           },
           {
+            "forceInput": true,
             "kind": "socket",
             "lazy": false,
             "name": "forced_int",
@@ -5244,6 +5248,7 @@ exports[`snapshots sockets 1`] = `
             },
           },
           {
+            "forceInput": true,
             "kind": "socket",
             "lazy": false,
             "name": "forced_string",
@@ -5590,6 +5595,194 @@ exports[`snapshots ui-widgets 1`] = `
         ],
         "pythonModule": "custom_nodes.mock-pack",
       },
+      "MockLegacyForceInput": {
+        "category": "mock/ui",
+        "classType": "MockLegacyForceInput",
+        "deprecated": false,
+        "displayName": "Mock Legacy Force Input",
+        "experimental": false,
+        "inputs": [
+          {
+            "default": "a",
+            "dynamicPrompts": false,
+            "kind": "string",
+            "lazy": false,
+            "multiline": false,
+            "name": "prefix",
+            "rawLink": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "STRING",
+            },
+          },
+          {
+            "forceInput": true,
+            "kind": "socket",
+            "lazy": false,
+            "name": "forced",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "named",
+              "name": "INT",
+            },
+          },
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "format",
+            "options": [
+              "csv",
+              "json",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "STRING",
+            "type": {
+              "kind": "named",
+              "name": "STRING",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
+      "MockResize": {
+        "category": "mock/ui",
+        "classType": "MockResize",
+        "deprecated": false,
+        "displayName": "Mock Resize",
+        "experimental": false,
+        "inputs": [
+          {
+            "kind": "socket",
+            "lazy": false,
+            "name": "input",
+            "rawLink": false,
+            "required": true,
+            "type": {
+              "kind": "named",
+              "name": "IMAGE",
+            },
+          },
+          {
+            "kind": "dynamicCombo",
+            "lazy": false,
+            "name": "resize_type",
+            "options": [
+              {
+                "inputs": [
+                  {
+                    "default": 512,
+                    "kind": "int",
+                    "lazy": false,
+                    "max": 16384,
+                    "min": 0,
+                    "name": "width",
+                    "rawLink": false,
+                    "required": true,
+                    "socketless": false,
+                    "type": {
+                      "kind": "named",
+                      "name": "INT",
+                    },
+                  },
+                  {
+                    "default": 512,
+                    "kind": "int",
+                    "lazy": false,
+                    "max": 16384,
+                    "min": 0,
+                    "name": "height",
+                    "rawLink": false,
+                    "required": true,
+                    "socketless": false,
+                    "type": {
+                      "kind": "named",
+                      "name": "INT",
+                    },
+                  },
+                ],
+                "key": "scale dimensions",
+              },
+              {
+                "inputs": [
+                  {
+                    "default": 512,
+                    "kind": "int",
+                    "lazy": false,
+                    "max": 16384,
+                    "min": 0,
+                    "name": "width",
+                    "rawLink": false,
+                    "required": true,
+                    "socketless": false,
+                    "type": {
+                      "kind": "named",
+                      "name": "INT",
+                    },
+                  },
+                ],
+                "key": "scale width",
+              },
+            ],
+            "rawLink": false,
+            "required": true,
+          },
+          {
+            "form": "legacy",
+            "kind": "combo",
+            "lazy": false,
+            "multiselect": false,
+            "name": "scale_method",
+            "options": [
+              "nearest",
+              "area",
+            ],
+            "rawLink": false,
+            "remote": false,
+            "required": true,
+            "socketless": false,
+            "type": {
+              "kind": "named",
+              "name": "COMBO",
+            },
+            "upload": false,
+          },
+        ],
+        "isInputList": false,
+        "outputNode": false,
+        "outputs": [
+          {
+            "index": 0,
+            "isList": false,
+            "name": "IMAGE",
+            "type": {
+              "kind": "named",
+              "name": "IMAGE",
+            },
+          },
+        ],
+        "pythonModule": "custom_nodes.mock-pack",
+      },
       "MockUploadOptional": {
         "category": "mock/ui",
         "classType": "MockUploadOptional",
@@ -5842,6 +6035,7 @@ exports[`snapshots widget-types 1`] = `
             "widget": "IMAGECOMPARE",
           },
           {
+            "forceInput": true,
             "kind": "socket",
             "lazy": false,
             "name": "curve",

@@ -82,25 +82,36 @@ and `E_INVALID_LINK` (the input is left out).
 
 | Code | Meaning | What happens |
 |---|---|---|
-| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. From `importUi`: a node of a class the schema doesn't have. | The node is kept as a raw node with its wire keys, so it exports as it came. `importUi` keeps a node of an unknown class raw, with its links and its values by name, while it is linked; one linked to nothing (a pack's frontend-only node, such as a label) is left out. |
+| `W_IMPORTED_AS_RAW` | A node of a known class whose wire keys don't fold back into structured inputs: a DynamicGroup with rows missing in between or at or past its `max`, keys under a dynamic combo set to a key it doesn't have, a group key that isn't `<group>.<row>.<field>`, a key two inputs would send, a display-only widget's key. From `importUi`: a linked node of a class the schema doesn't have. | The node is kept as a raw node with its wire keys, so it exports as it came. `importUi` keeps the class, the links and the values saved by name; the frontend sends such a node without a class, which the backend rejects. |
 
 ## Importing UI workflows
 
-`importUi` reads a UI workflow (plan §11) into the workflow the frontend would queue. Paths
-point into the file: `["links", <link id>]`, or the node's id, after the ids of the subgraph
-instances it sits in (`["40", "31"]`). It also reports the parser's codes and `W_IMPORTED_AS_RAW`.
+`importUi` reads a UI workflow (plan §11) into the workflow the frontend would queue. Its paths
+use two conventions:
+- **A node as sent**, and its inputs, by its id in the imported workflow, which joins the ids of
+  the subgraph instances it sits in: `["40:31"]`, `["5", "inputs", "positive"]`.
+- **A node of the file**, which every instance of a definition shares, by its id in its graph:
+  `["5", "widgets_values"]` at the root, and `["definitions", "subgraphs", <definition id>, <node
+  id>, …]` inside a definition, with inner ids as reminted (see `E_INVALID_WORKFLOW`). An entry
+  that can't be read is named by its position: `[…, "nodes", <index>]`, `[…, "links", <index>]`.
+
+It also reports the parser's codes and `W_IMPORTED_AS_RAW`.
 
 | Code | Meaning | What happens |
 |---|---|---|
-| `E_INVALID_WORKFLOW` | The file isn't an object with a `nodes` list, or a node or link can't be read: no id, an id taken twice, a link that isn't a tuple (format 0.4) or an object (format 1). | An unreadable file gives an empty workflow; an unreadable node or link is left out. A tuple link in a format 1 file is left out, as the frontend drops it. |
-| `W_UNRESOLVED_LINK` | A link comes from a node the graph doesn't have, or loops back on itself through Reroutes or subgraph boundaries. The frontend refuses to build a prompt for either. | The link is left out. |
-| `W_WIDGET_VALUES_MISMATCH` | A node saves a different number of positional widget values than its definition has widgets, and no values by name: a pack's own widgets, or a file older than the definition. | Values are read by position, as the frontend reads them; widgets without one keep their initial values. |
-| `W_FRONTEND_QUIRK` | The file relies on frontend behavior that looks unintended: a muted or bypassed subgraph inside another subgraph, whose interior the frontend still sends, or a PrimitiveNode linked to a subgraph's promoted input, whose value never reaches it. | Reproduced as the frontend does it, so the prompt matches the frontend's. |
+| `E_INVALID_WORKFLOW` | The file isn't an object with a `nodes` list; a node or link can't be read (a node needs an id, an integer or a string, and a type; a link is a tuple in format 0.4 and an object otherwise); or a subgraph contains itself, directly or through others. | An unreadable file gives an empty workflow, and so does a subgraph that contains itself, which the frontend refuses to load. An unreadable node or link is left out; a tuple link in a format 1 file too, as the frontend drops it. A repeated node id is not an error: as in the frontend, the later node gets the next free id at the root and is dropped inside a definition. |
+| `E_LEGACY_GROUP_NODE` | A node is a legacy group node (`workflow>Name`, defined in `extra.groupNodes`), which the frontend converts into a subgraph when it loads the file. | The conversion isn't supported: the node is kept raw, so the prompt differs from the frontend's. |
+| `W_UNRESOLVED_LINK` | An input is linked from a node the graph doesn't have, or through Reroutes or subgraph boundaries that loop back on themselves. The frontend refuses to build a prompt for either. | The input is left out. |
+| `W_WIDGET_VALUES_MISMATCH` | A node's saved widget values don't fit its definition: a different number of values by position and none by name (a pack's own widgets, a file older than the definition), or values by name that disagree with the ones by position. | Values are read by position, as the frontend reads them; widgets without one keep their initial values. When the positions don't fit and names are saved, the names are used (that case isn't reported: frontend 1.55 saves names for pack widgets the schema can't predict). |
+| `W_FRONTEND_QUIRK` | The file relies on frontend behavior that looks unintended: a muted or bypassed subgraph inside another subgraph, whose interior the frontend still sends; a PrimitiveNode linked to a subgraph's promoted input, whose value never reaches it; or an input linked through two instances of one subgraph in a row, where the frontend's loop check refuses to build the prompt. | Reproduced as the frontend does it, so the prompt matches the frontend's; the last is resolved through both instances. |
+| `W_NODE_LEFT_OUT` | A node of a class the schema doesn't have is linked to nothing: a pack's frontend-only node (a label, a group toggle), or a missing class. | The node is left out, which changes nothing else in the prompt. |
+| `W_QUEUE_TIME_VALUE` | A save node's `filename_prefix`, or a PrimitiveNode that replaces text, holds `%date:…%`, which the frontend replaces with the time it queues the prompt. (`importUi` replaces `%Node.widget%` references, as the frontend does; `toUi` reports them too, see below.) | The pattern is sent as written. |
 
 ## Exporting UI workflows
 
 `toUi` writes a workflow as a UI workflow (plan §11). Paths point into the workflow, as the
-exporter's do.
+exporter's do. It also reports `W_QUEUE_TIME_VALUE`, for a save node's `filename_prefix` holding
+`%date:…%` or `%Node.widget%`: it is written as given, and the frontend sends the replaced text.
 
 | Code | Meaning | What happens |
 |---|---|---|

@@ -24,27 +24,33 @@ missing class is sent without `class_type`.
   raw, with its class, its links and its values by name (`W_IMPORTED_AS_RAW`); the backend
   rejects the frontend's version anyway. One linked to nothing (a pack's frontend-only label) is
   left out.
-- **Values by name win.** `widgets_values_named` (1.55 and later) is used when present: it is
-  exact even for pack widgets the schema can't predict. The frontend restores by position, but
-  the two agree in every file 1.55 writes. Without names, values are read by position over the
-  layout the frontend creates, and a count that doesn't fit is reported.
+- **Values by position, as the frontend reads them.** When the positions don't fit the layout
+  the schema predicts (a pack's own widgets), the frontend's own layout still fits them, and
+  `widgets_values_named` (1.55 and later) names them exactly, so names are used then. Names that
+  disagree with positions are reported. (This replaces "values by name win", which the Phase 8
+  review showed diverges from the frontend for files whose two lists disagree, or whose names are
+  partial.)
 - **Big integers stay exact**, which is better than parity: the frontend's parser rounds them.
 - **`toUi` writes a flat graph**, format 0.4 with tuple links, every slot in the frontend's order,
   controls set to `fixed` so the frontend doesn't change a seed after queueing. Subgraph
   interiors come back as plain nodes. What the format can't carry is reported
-  (`W_UI_VALUE_LOST`, `W_UNKNOWN_UI_CLASS`, `W_UNSAFE_INTEGER`).
+  (`W_UI_VALUE_LOST`, `W_UNKNOWN_UI_CLASS`, `W_UNSAFE_INTEGER`, `W_QUEUE_TIME_VALUE`). One
+  difference is not reported, since it is what the frontend does for any node added by hand:
+  optional widgets left out of the workflow are sent with their initial values.
 - **Layout is a separate package**, `@tscomfy/layout`, so `core` stays small: `toUi` takes
   positions, and puts nodes without one in a column.
 
 ## Consequences
 
-- The importer must know the frontend's widget layout per input kind, which needed three schema
-  fields the normalizer used to drop: `control_after_generate` (INT, FLOAT, COMBO) and the upload
-  kinds of a combo.
+- The importer must know the frontend's widget layout per input kind, which needed schema fields
+  the normalizer used to drop: `control_after_generate` (INT, FLOAT, COMBO, and `forceInput`
+  sockets), the upload kinds of a combo, and `forceInput` on sockets (for old files' placeholder
+  values).
 - Pack JavaScript that changes the prompt at queue time (date substitutions, injected links,
   extra widgets) can't be reproduced from the schema. The corpus test declares such nodes in a
   local file instead of hiding them.
-- Exporting subgraph definitions, legacy `proxyWidgets` and legacy group nodes are not supported.
+- Exporting subgraph definitions, legacy `proxyWidgets`, and importing legacy group nodes
+  (reported, `E_LEGACY_GROUP_NODE`) are not supported.
 
 ## Evidence
 

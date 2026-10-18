@@ -11,7 +11,13 @@ import { sha256Hex, utf8 } from "../hash/sha256.ts";
 import { stringify } from "../json/stringify.ts";
 import { isJsonObject, type JsonObject, type JsonValue } from "../json/value.ts";
 import type { InputDef, NodeDef, OutputDef } from "../schema/types.ts";
-import { frontendSlots, frontendWidgets, initialValue } from "./frontend.ts";
+import {
+  frontendSlots,
+  frontendWidgets,
+  initialValue,
+  replacesText,
+  SAVE_NODES,
+} from "./frontend.ts";
 
 /** Options for {@link toUi}. */
 export interface ToUiOptions {
@@ -40,8 +46,9 @@ export interface ToUiResult {
  * carry, which is reported: `W_UI_VALUE_LOST` for a value with no widget to hold it (DynamicGroup
  * rows, widgets the frontend doesn't save), `W_UNKNOWN_UI_CLASS` for a node of a class the schema
  * doesn't have (written with its links and its values by name) and `W_UNSAFE_INTEGER` for an
- * integer the frontend's parser would round. Optional widgets and dynamic combos left out are
- * sent by the frontend with their initial values, as for a node added by hand.
+ * integer the frontend's parser would round, `W_QUEUE_TIME_VALUE` for a file name the frontend
+ * rewrites when it queues (`%date:…%`, `%Node.widget%`). Optional widgets and dynamic combos
+ * left out are sent by the frontend with their initial values, as for a node added by hand.
  */
 export function toUi(workflow: Workflow, options: ToUiOptions = {}): ToUiResult {
   return new UiWriter(workflow, options).write();
@@ -145,7 +152,7 @@ class UiWriter {
       };
     }
     const body: JsonObject = {
-      last_node_id: Math.max(0, ...this.#ids.values()),
+      last_node_id: largest(this.#ids.values()),
       last_link_id: links.length,
       nodes: written,
       links: links.map((link) => [
@@ -177,7 +184,7 @@ class UiWriter {
         taken.add(Number(node.id));
       }
     }
-    let next = Math.max(0, ...taken) + 1;
+    let next = largest(taken) + 1;
     for (const node of nodes) {
       if (this.#ids.has(node.id)) continue;
       while (taken.has(next)) next++;
@@ -218,7 +225,9 @@ class UiWriter {
         type: this.#sourceType(value) ?? type,
       });
       const byOutput = outputs.get(origin) ?? new Map<number, number[]>();
-      byOutput.set(value[1], [...(byOutput.get(value[1]) ?? []), linkId]);
+      const ids = byOutput.get(value[1]);
+      if (ids === undefined) byOutput.set(value[1], [linkId]);
+      else ids.push(linkId);
       outputs.set(origin, byOutput);
       return linkId;
     };
@@ -320,6 +329,16 @@ class UiWriter {
           : unwrap(given),
       );
     }
+    const prefix = inputs["filename_prefix"];
+    if (SAVE_NODES.has(node.classType) && typeof prefix === "string" && replacesText(prefix)) {
+      this.#diagnostics.push(
+        createDiagnostic(
+          "W_QUEUE_TIME_VALUE",
+          [node.id, "inputs", "filename_prefix"],
+          `Input filename_prefix of node ${node.id} holds %…%, which the frontend replaces (with the time, or another node's widget value) when it queues the prompt.`,
+        ),
+      );
+    }
     for (const key of Object.keys(inputs)) {
       if (carried.has(key)) continue;
       this.#diagnostics.push(
@@ -414,6 +433,13 @@ function isLinkValue(value: JsonValue | undefined): value is readonly [NodeId, n
     typeof value[0] === "string" &&
     typeof value[1] === "number"
   );
+}
+
+/** The largest of some numbers, or 0; without spreading them into one call. */
+function largest(numbers: Iterable<number>): number {
+  let most = 0;
+  for (const number of numbers) if (number > most) most = number;
+  return most;
 }
 
 /** A version-4-shaped uuid from a hash of the content: the same workflow, the same id. */

@@ -31,8 +31,18 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
 
 - **Connectivity is the `links` array.** A link connects even when no input mentions it; an
   `inputs[].link` whose id the array lacks connects nothing; `outputs[].links` is never read.
-  After loading, each link that a saved input references by id moves to the input of that name
-  (`realignInputLinkSlots`), so a wrong `target_slot` is harmless when the input is listed. **[V]**
+  **[V]**
+- **Competing links** (`normalizeConfiguredTopology`): of links to one target slot the first in
+  the array survives, unless only a later one is referenced by an input; references to a dropped
+  link move to the survivor. **[V]**
+- **Placement.** A link lands on `target_slot` of the node as created. A link that a saved input
+  of its own target references then moves to the slot of that name (`realignInputLinkSlots`):
+  among several names the current slot if it is one, else the first; a move onto a slot another
+  link keeps is skipped. An input naming another node's link moves nothing; a link past the
+  node's slots still moves by name. **[V]**
+- **Node ids** are strings internally (`toNodeId`), so `4` and `"4"` are one node. A repeated id
+  at the root gets the next free number when the node is added, its links staying with the
+  first; inside a definition the later node is dropped (`dropSameOwnerDuplicates`). **[V][S]**
 - **A node is created from its definition, then the saved node is merged in**
   (`ComfyNode.configure`): inputs by name, with saved inputs the definition lacks kept after the
   others; outputs by index. **[V]**
@@ -59,8 +69,12 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
     CAMERA_INFO_STATE are neither. DynamicGroup has no handler in 1.55.17: no widgets, nothing
     saved or sent. **[V]**
 - **Restoring values** is positional over the saved widgets as they are created, and the list
-  grows while it is restored, as dynamic-combo options add widgets. Missing values keep the
-  initial ones; extra values are ignored. Then: a combo saved as `null` takes its first option,
+  grows while it is restored, as dynamic-combo options add widgets; their links follow by name,
+  and links on option inputs the chosen option lacks are dropped. Missing values keep the
+  initial ones; extra values are ignored. `widgets_values_named` isn't read (an experimental
+  setting); `widgets_values` saved as an object is read by name. Files from before 1.16 saved a
+  placeholder for each `forceInput` input, which `migrateWidgetsValues` drops when the count
+  lines up. Then: a combo saved as `null` takes its first option,
   KSampler's old `sample_` sampler names lose the prefix, a KSampler control saved as `true` or
   `false` becomes `randomize` or `fixed`. **[V]**
 - **Autogrow** shows a contiguous run of linked slots and one empty slot after it; saved slots
@@ -86,6 +100,12 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
   the prompt is built, whatever its mode; its link then resolves to nothing, so the widget's
   (now the primitive's) value is sent. **[V]**
 - **Note** and **MarkdownNote** are never sent. **[V]**
+- **File names** (`saveImageExtraOutput.ts`, `searchAndReplace.ts`): the core save nodes'
+  `filename_prefix` goes through `%…%` replacement when the prompt is built: `%Node.widget%`
+  becomes that widget's value (node found by its `Node name for S&R` property, which every node of
+  a server class but the save nodes gets at creation, else by title; interiors before their
+  instance), with path-unsafe characters replaced by `_`; `%date:…%` becomes the time. A
+  PrimitiveNode with `Run widget replace on values` replaces its value the same way. **[V]**
 
 ## Subgraphs
 
@@ -104,6 +124,9 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
   one keeps the interior widget's value. The value is sent to every inner widget the input
   links to, unless the instance input is linked outside, in which case the link is followed.
   **[V]**
+- **Loops.** The loop guard of `resolveInput`/`resolveOutput` keys steps by definition, not
+  instance, so an input linked through two instances of one subgraph in a row makes the frontend
+  refuse the prompt. A definition that contains itself makes it refuse the whole file. **[V]**
 - **Modes.** A muted or bypassed instance at the root isn't expanded; its outputs resolve as a
   muted or bypassed node over the definition's inputs. A muted or bypassed instance nested in
   another **still sends its interior**, since the expansion doesn't check modes; only resolution
@@ -124,11 +147,13 @@ Marks: **[V]** verified in the running frontend or the corpus; **[S]** read in t
 
 ## Out of reach
 
-- Pack JavaScript changes prompts at queue time: date substitutions in file names, links that
-  "everywhere" nodes inject, inputs that switch nodes drop, extra widgets, values serialized by
-  code. None of it follows from `/object_info`; `widgets_values_named` at least names pack
+- The queue time in `%date:…%` file names.
+- Pack JavaScript changes prompts at queue time: date substitutions in its own file names, links
+  that "everywhere" nodes inject, inputs that switch nodes drop, extra widgets, values serialized
+  by code. None of it follows from `/object_info`; `widgets_values_named` at least names pack
   widgets' values. **[V]**
 - The frontend's JSON parser rounds integers beyond 2⁵³, so a saved seed of 2⁶⁴−1 is queued
   rounded. **[V]**
-- Not probed: legacy group nodes (`extra.groupNodes`), legacy `proxyWidgets` beyond the simple
-  cases, multi-select combo restore.
+- Legacy group nodes (`extra.groupNodes`, type `workflow>Name`) are converted into subgraphs on
+  load; tscomfy reports them instead (`E_LEGACY_GROUP_NODE`). **[V]**
+- Not probed: legacy `proxyWidgets` beyond the simple cases, multi-select combo restore.

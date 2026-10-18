@@ -277,8 +277,33 @@ describe("widgets", () => {
       lazy: false,
       rawLink: false,
       type: { kind: "named", name: "INT" },
+      forceInput: true,
     });
     expect(inputOf(node, "socketless")).toMatchObject({ kind: "string", socketless: true });
+  });
+
+  test("keeps the control a forceInput socket's widget would have had", () => {
+    const { schema, diagnostics } = normalizeObjectInfo(
+      JSON.stringify({
+        MockForced: {
+          input: {
+            required: { seed: ["INT", { forceInput: true, control_after_generate: true }] },
+          },
+          output: [],
+          name: "MockForced",
+          display_name: "Mock Forced",
+          python_module: "nodes",
+          category: "test",
+          output_node: false,
+        },
+      }),
+    );
+    expect(diagnostics).toEqual([]);
+    expect(schema.nodes["MockForced"]?.inputs[0]).toMatchObject({
+      kind: "socket",
+      forceInput: true,
+      control: true,
+    });
   });
 
   test("treats TYPE:name as a socket type of its own", async () => {

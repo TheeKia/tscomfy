@@ -60,6 +60,13 @@ type WidgetBase = InputBase & {
 export type SocketInput = InputBase & {
   readonly kind: "socket";
   readonly type: SocketType;
+  /**
+   * The server marks it `forceInput`: files from frontends before 1.16 saved a placeholder value
+   * for it in `widgets_values`, which the frontend drops on load (docs/plan.md §11).
+   */
+  readonly forceInput?: true;
+  /** `control_after_generate` as the server states it, for a `forceInput` input. */
+  readonly control?: boolean | string;
 };
 
 /** An INT widget. */

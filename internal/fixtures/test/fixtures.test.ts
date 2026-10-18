@@ -7,6 +7,7 @@ import {
   MOCK_OBJECT_INFO_DIR,
   MOCK_OBJECT_INFO_NAMES,
   MOCK_UI_API_WORKFLOW_DIR,
+  MOCK_UI_EXPORT_DIR,
   MOCK_UI_WORKFLOW_DIR,
   MOCK_UI_WORKFLOW_NAMES,
   readMockApiWorkflow,
@@ -47,7 +48,7 @@ describe("mock API workflows", () => {
 });
 
 describe("mock UI workflows", () => {
-  test.each([MOCK_UI_WORKFLOW_DIR, MOCK_UI_API_WORKFLOW_DIR])(
+  test.each([MOCK_UI_WORKFLOW_DIR, MOCK_UI_API_WORKFLOW_DIR, MOCK_UI_EXPORT_DIR])(
     "the name list matches the files in %s",
     async (dir) => {
       const onDisk = (await readdir(dir))

@@ -342,7 +342,7 @@ function readInput(
     if (isPrimitiveWidget(widget)) return reader.primitive(widget, type, widgetType);
     if (isValueWidget(widget)) return reader.value(widget, type);
   }
-  return { kind: "socket", ...reader.base(), type };
+  return { kind: "socket", ...reader.base(), type, ...(forced ? reader.forced() : {}) };
 }
 
 /** Reads the options of one spec, reporting fields it has to ignore. */
@@ -650,7 +650,11 @@ class SpecReader {
     return { kind: "matchType", ...this.base(), templateId, allowed };
   }
 
-  /** A boolean flag; absent means false. */
+  /** What a `forceInput` socket keeps for the frontend's migration of old widget values. */
+  forced(): { readonly forceInput?: true; readonly control?: boolean | string } {
+    return this.flag("forceInput") ? { forceInput: true, ...this.#control() } : {};
+  }
+
   /**
    * `control_after_generate`, kept as given: the frontend adds a control widget when it is truthy
    * (or, for INT, when absent and the input is a seed), names it after a string, and an explicit
@@ -669,6 +673,7 @@ class SpecReader {
     return {};
   }
 
+  /** A boolean flag; absent means false. */
   flag(key: string): boolean {
     return (
       readOptional(

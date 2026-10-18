@@ -19,6 +19,7 @@ import {
   readMockApiWorkflow,
   readMockObjectInfo,
   readMockUiApiWorkflow,
+  readMockUiExportPrompt,
   readMockUiWorkflow,
 } from "@tscomfy/fixtures";
 import { isJsonObject } from "../src/json/value.ts";
@@ -59,6 +60,16 @@ function object(value: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value));
 }
 
+/** A record with some fields replaced, key order kept. */
+function patched(record: Record<string, unknown>, changes: Record<string, unknown>): object {
+  return Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [
+      key,
+      Object.hasOwn(changes, key) ? changes[key] : value,
+    ]),
+  );
+}
+
 /** The objects of a list read back from a file. */
 function objects(value: unknown): Record<string, unknown>[] {
   if (!Array.isArray(value)) throw new Error("expected a list");
@@ -94,7 +105,7 @@ const encodePrompt = (text: string, clip?: readonly [string, number]): object =>
 describe("importUi: the frontend's prompt", () => {
   const warnings: Record<MockUiWorkflowName, [string, (string | number)[]][]> = {
     modes: [],
-    "subgraph-modes": [["W_FRONTEND_QUIRK", ["40", "31"]]],
+    "subgraph-modes": [["W_FRONTEND_QUIRK", ["40:31"]]],
     // A PrimitiveNode feeding a promoted input: the frontend loses its value.
     "subgraph-primitive": [["W_FRONTEND_QUIRK", ["90"]]],
     subgraphs: [],
@@ -146,9 +157,52 @@ describe("importUi: reading the file", () => {
     expect(tuples.found).toEqual([["E_INVALID_WORKFLOW", ["links", 0]]]);
   });
 
-  test("named values win over positional ones", () => {
+  test("values by position win over names, as in the frontend, with a warning if they disagree", () => {
     const named = { ...encode(2, "positional", null), widgets_values_named: { text: "named" } };
-    expect(queued(file([named])).prompt).toEqual({ "2": encodePrompt("named") });
+    expect(queued(file([named]))).toEqual({
+      prompt: { "2": encodePrompt("positional") },
+      found: [["W_WIDGET_VALUES_MISMATCH", ["2", "widgets_values"]]],
+    });
+  });
+
+  test("names are read when the positions don't fit the layout (a pack's own widgets)", () => {
+    const sampler = {
+      id: 5,
+      type: "KSampler",
+      widgets_values: [9, "fixed", "pack widget", 30, 6, "dpmpp_2m", "karras", 0.5],
+      widgets_values_named: {
+        seed: 9,
+        control_after_generate: "fixed",
+        steps: 30,
+        cfg: 6,
+        sampler_name: "dpmpp_2m",
+        scheduler: "karras",
+        denoise: 0.5,
+      },
+    };
+    const { prompt, found: codes } = queued(file([sampler]));
+    expect(object(object(prompt)["5"])["inputs"]).toEqual({
+      seed: 9,
+      steps: 30,
+      cfg: 6,
+      sampler_name: "dpmpp_2m",
+      scheduler: "karras",
+      denoise: 0.5,
+    });
+    expect(codes).toEqual([]);
+  });
+
+  test("values saved as an object are read by name", () => {
+    const latent = {
+      id: 4,
+      type: "EmptyLatentImage",
+      widgets_values: { width: 640, height: 768, batch_size: 2 },
+    };
+    expect(object(object(queued(file([latent])).prompt)["4"])["inputs"]).toEqual({
+      width: 640,
+      height: 768,
+      batch_size: 2,
+    });
   });
 
   test("too few positional values: the rest keep their defaults", () => {
@@ -238,7 +292,7 @@ describe("importUi: reading the file", () => {
       },
     });
     expect(codes).toEqual([
-      ["W_IMPORTED_AS_RAW", ["4"]],
+      ["W_NODE_LEFT_OUT", ["4"]],
       ["W_IMPORTED_AS_RAW", ["3"]],
     ]);
   });
@@ -246,7 +300,7 @@ describe("importUi: reading the file", () => {
   test("a link from a node the graph doesn't have is dropped", () => {
     const { prompt, found: codes } = queued(file([encode(2, "a", 1)], [[1, 9, 0, 2, 0, "CLIP"]]));
     expect(prompt).toEqual({ "2": encodePrompt("a") });
-    expect(codes).toEqual([["W_UNRESOLVED_LINK", ["links", 1]]]);
+    expect(codes).toEqual([["W_UNRESOLVED_LINK", ["2", "inputs", "clip"]]]);
   });
 
   test("a loop of Reroutes is dropped", () => {
@@ -267,15 +321,292 @@ describe("importUi: reading the file", () => {
     expect(found(importUi("{", schema).diagnostics).map(([code]) => code)).toEqual([
       "E_INVALID_JSON",
     ]);
-    const { found: codes } = queued(file([ckpt, { id: 1, type: "VAEDecode" }, "node"]));
-    expect(codes).toEqual([
-      ["E_INVALID_WORKFLOW", ["nodes", 1]],
-      ["E_INVALID_WORKFLOW", ["nodes", 2]],
-    ]);
+    const { found: codes } = queued(file([ckpt, "node"]));
+    expect(codes).toEqual([["E_INVALID_WORKFLOW", ["nodes", 1]]]);
   });
 });
 
 const widgets = looseSchema(await readMockObjectInfo("ui-widgets"));
+
+/** A KSampler of the basic-pipeline mock, with saved inputs. */
+const samplerNode = (inputs: readonly object[]): object => ({
+  id: 5,
+  type: "KSampler",
+  inputs,
+  widgets_values: [5, "fixed", 20, 8, "euler", "normal", 1],
+});
+const conditioning = (name: string, link: number): object => ({
+  name,
+  type: "CONDITIONING",
+  link,
+});
+const encoders = [ckpt, encode(2, "a", 2), encode(3, "b", 3)];
+const encoderLinks = [
+  [2, 1, 1, 2, 0, "CLIP"],
+  [3, 1, 1, 3, 0, "CLIP"],
+];
+const inputsOf = (prompt: unknown, id: string): Record<string, unknown> =>
+  object(object(object(prompt)[id])["inputs"]);
+
+// Cases settled in the frontend itself (docs/plan.md §16), rebuilt over the mocks.
+describe("importUi: where links land", () => {
+  test("links competing for one slot keep the first (normalizeConfiguredTopology)", () => {
+    const text = file(
+      [...encoders, samplerNode([conditioning("positive", 5), conditioning("negative", 6)])],
+      [...encoderLinks, [5, 2, 0, 5, 1, "CONDITIONING"], [6, 3, 0, 5, 1, "CONDITIONING"]],
+    );
+    const inputs = inputsOf(queued(text).prompt, "5");
+    expect(inputs["positive"]).toEqual(["2", 0]);
+    expect(Object.hasOwn(inputs, "negative")).toBeFalse();
+  });
+
+  test("an input naming another node's link doesn't move it", () => {
+    const latent = { id: 4, type: "EmptyLatentImage", widgets_values: [512, 512, 1] };
+    const text = file(
+      [...encoders, latent, samplerNode([conditioning("negative", 6)])],
+      [...encoderLinks, [6, 3, 0, 4, 0, "CONDITIONING"]],
+    );
+    const { prompt } = queued(text);
+    expect(inputsOf(prompt, "4")["width"]).toEqual(["3", 0]);
+    expect(Object.hasOwn(inputsOf(prompt, "5"), "negative")).toBeFalse();
+  });
+
+  test("a link two inputs name stays on its own slot", () => {
+    const text = file(
+      [...encoders, samplerNode([conditioning("positive", 5), conditioning("negative", 5)])],
+      [...encoderLinks, [5, 2, 0, 5, 1, "CONDITIONING"]],
+    );
+    const inputs = inputsOf(queued(text).prompt, "5");
+    expect(inputs["positive"]).toEqual(["2", 0]);
+    expect(Object.hasOwn(inputs, "negative")).toBeFalse();
+  });
+
+  test("a link past the node's slots moves to the input that names it", () => {
+    const text = file(
+      [...encoders, samplerNode([conditioning("positive", 5)])],
+      [...encoderLinks, [5, 2, 0, 5, 14, "CONDITIONING"]],
+    );
+    expect(inputsOf(queued(text).prompt, "5")["positive"]).toEqual(["2", 0]);
+  });
+
+  test("an instance input saved under an old name keeps its link by slot", async () => {
+    const base = object(JSON.parse(await readMockUiWorkflow("subgraphs")));
+    const nodes = objects(base["nodes"]).map((node) =>
+      node["id"] === 40
+        ? patched(node, {
+            inputs: objects(node["inputs"]).map((input) =>
+              input["name"] === "clip" ? patched(input, { name: "clip_old" }) : input,
+            ),
+          })
+        : node,
+    );
+    const { workflow: imported } = importUi(JSON.stringify({ ...base, nodes }), schema);
+    expect(stringify(toApi(imported, { validate: false }))).toBe(
+      stringify(parse(await readMockUiApiWorkflow("subgraphs")).value ?? null),
+    );
+  });
+
+  test("a link by slot onto an option input the chosen option lacks is dropped", () => {
+    const controls = {
+      id: 22,
+      type: "MockControls",
+      widgets_values: [1, "fixed", 2, 3, "fixed", 4, 0.5, "fixed", "b", "fixed", ""],
+    };
+    // As created, slot 2 is the first option's `resize_type.height`; "scale width" has none.
+    const resize = { id: 20, type: "MockResize", widgets_values: ["scale width", 300, "area"] };
+    const { workflow: imported } = importUi(
+      file([controls, resize], [[23, 22, 0, 20, 2, "INT"]]),
+      widgets,
+    );
+    expect(toApi(imported, { validate: false })["20"]?.inputs).toEqual({
+      resize_type: "scale width",
+      "resize_type.width": 300,
+      scale_method: "area",
+    });
+  });
+});
+
+describe("importUi: values and ids", () => {
+  test("positional values settle afresh as dynamic combos add widgets", async () => {
+    const local = looseSchema(await readMockObjectInfo("dynamic-combo"));
+    const nested = {
+      id: 4,
+      type: "MockDynamicComboNested",
+      widgets_values: ["mp4", "h264", "custom"],
+    };
+    const { workflow: imported } = importUi(file([nested]), local);
+    expect(toApi(imported, { validate: false })["4"]?.inputs).toEqual({
+      format: "mp4",
+      "format.codec": "h264",
+      "format.codec.encoding": "custom",
+      "format.codec.encoding.crf": 23,
+      // Not "custom", which an earlier layout put here.
+      codec: "auto",
+    });
+  });
+
+  test("placeholders old files saved for forceInput inputs are dropped (migrateWidgetsValues)", () => {
+    const legacy = { id: 7, type: "MockLegacyForceInput", widgets_values: ["myprefix", 0, "json"] };
+    const { workflow: imported, diagnostics } = importUi(file([legacy]), widgets);
+    expect(diagnostics).toEqual([]);
+    expect(toApi(imported, { validate: false })["7"]?.inputs).toEqual({
+      prefix: "myprefix",
+      format: "json",
+    });
+  });
+
+  test("a promoted value saved as null is sent as null", async () => {
+    const base = object(JSON.parse(await readMockUiWorkflow("subgraphs")));
+    const nodes = objects(base["nodes"]).map((node) =>
+      node["id"] === 40 ? patched(node, { widgets_values: [null] }) : node,
+    );
+    expect(
+      inputsOf(queued(JSON.stringify({ ...base, nodes })).prompt, "40:31:21")["text"],
+    ).toBeNull();
+  });
+
+  test("string ids are ids; a repeated id is reminted, its links staying with the first", () => {
+    const first = { id: "4", type: "EmptyLatentImage", widgets_values: [640, 512, 1] };
+    const second = { id: 4, type: "EmptyLatentImage", widgets_values: [768, 512, 1] };
+    const decode = {
+      id: 6,
+      type: "VAEDecode",
+      inputs: [{ name: "samples", type: "LATENT", link: 9 }],
+    };
+    const { prompt, found: codes } = queued(
+      file([first, second, decode], [[9, 4, 0, 6, 0, "LATENT"]]),
+    );
+    expect(codes).toEqual([]);
+    expect(inputsOf(prompt, "4")["width"]).toBe(640);
+    expect(inputsOf(prompt, "101")["width"]).toBe(768);
+    expect(inputsOf(prompt, "6")["samples"]).toEqual(["4", 0]);
+  });
+});
+
+const latent = { id: 4, type: "EmptyLatentImage", widgets_values: [1024, 512, 1] };
+const save = (prefix: string): object => ({
+  id: 8,
+  type: "SaveImage",
+  inputs: [{ name: "images", type: "IMAGE", link: null }],
+  widgets_values: [prefix],
+});
+
+describe("importUi: file names", () => {
+  test("%Node.widget% is replaced, by search name or title (applyTextReplacements)", () => {
+    const { prompt } = queued(
+      file([samplerNode([]), latent, save("img_%KSampler.steps%_%Empty Latent Image.width%_%x%")]),
+    );
+    expect(inputsOf(prompt, "8")["filename_prefix"]).toBe("img_20_1024_%x%");
+  });
+
+  test("%date:…% can't be reproduced and is reported", () => {
+    const { prompt, found: codes } = queued(file([save("d_%date:yyyy-MM-dd%")]));
+    expect(inputsOf(prompt, "8")["filename_prefix"]).toBe("d_%date:yyyy-MM-dd%");
+    expect(codes).toEqual([["W_QUEUE_TIME_VALUE", ["8", "filename_prefix"]]]);
+  });
+
+  test("a PrimitiveNode replaces before it writes, when its property says so", () => {
+    const primitive = {
+      id: 12,
+      type: "PrimitiveNode",
+      properties: { "Run widget replace on values": true },
+      widgets_values: ["p_%KSampler.steps%"],
+      outputs: [{ name: "STRING", type: "STRING", widget: { name: "text" }, links: [5] }],
+    };
+    const target = {
+      ...encode(2, "own", null),
+      inputs: [{ name: "text", type: "STRING", widget: { name: "text" }, link: 5 }],
+    };
+    const { prompt } = queued(
+      file([samplerNode([]), primitive, target], [[5, 12, 0, 2, 1, "STRING"]]),
+    );
+    expect(inputsOf(prompt, "2")["text"]).toBe("p_20");
+  });
+});
+
+describe("importUi: what the frontend refuses or can't express", () => {
+  /** A definition passing CONDITIONING through an inner Reroute. */
+  const passThrough = {
+    id: "00000000-0000-4000-8000-000000000001",
+    name: "Pass",
+    inputNode: { id: -10, bounding: [0, 0, 1, 1] },
+    outputNode: { id: -20, bounding: [0, 0, 1, 1] },
+    inputs: [{ id: "a", name: "conditioning", type: "CONDITIONING", linkIds: [1] }],
+    outputs: [{ id: "b", name: "CONDITIONING", type: "CONDITIONING", linkIds: [2] }],
+    nodes: [{ id: 1, type: "Reroute", inputs: [{ name: "", type: "*", link: 1 }] }],
+    links: [
+      { id: 1, origin_id: -10, origin_slot: 0, target_id: 1, target_slot: 0, type: "*" },
+      { id: 2, origin_id: 1, origin_slot: 0, target_id: -20, target_slot: 0, type: "*" },
+    ],
+  };
+  const instance = (id: number, link: number): object => ({
+    id,
+    type: passThrough.id,
+    inputs: [conditioning("conditioning", link)],
+  });
+
+  test("two instances of one subgraph in a row: resolved, and the frontend's refusal reported", () => {
+    const text = file(
+      [
+        ...encoders,
+        instance(10, 20),
+        instance(11, 21),
+        samplerNode([conditioning("positive", 22)]),
+      ],
+      [
+        ...encoderLinks,
+        [20, 2, 0, 10, 0, "CONDITIONING"],
+        [21, 10, 0, 11, 0, "CONDITIONING"],
+        [22, 11, 0, 5, 1, "CONDITIONING"],
+      ],
+      { definitions: { subgraphs: [passThrough] } },
+    );
+    const { prompt, found: codes } = queued(text);
+    expect(inputsOf(prompt, "5")["positive"]).toEqual(["2", 0]);
+    expect(codes).toEqual([["W_FRONTEND_QUIRK", ["5", "inputs", "positive"]]]);
+  });
+
+  test("a subgraph that contains itself: the frontend loads nothing", () => {
+    const looping = { ...passThrough, nodes: [{ id: 1, type: passThrough.id }], links: [] };
+    const { prompt, found: codes } = queued(
+      file([instance(10, 20)], [], { definitions: { subgraphs: [looping] } }),
+    );
+    expect(prompt).toEqual({});
+    expect(codes).toEqual([["E_INVALID_WORKFLOW", ["definitions", "subgraphs", passThrough.id]]]);
+  });
+
+  test("a legacy group node is reported", () => {
+    const group = { id: 4, type: "workflow>Latent" };
+    const { found: codes } = queued(
+      file([group], [], { extra: { groupNodes: { Latent: { nodes: [], links: [] } } } }),
+    );
+    expect(codes).toEqual([["E_LEGACY_GROUP_NODE", ["4"]]]);
+  });
+});
+
+describe("importUi: size", () => {
+  test("a long Reroute chain into many consumers imports in linear time, without recursion", () => {
+    const count = 50_000;
+    const nodes: object[] = [{ id: 1, type: "EmptyLatentImage", widgets_values: [512, 512, 1] }];
+    const links: unknown[] = [];
+    for (let id = 2; id <= count; id++) {
+      nodes.push({ id, type: "Reroute", inputs: [{ name: "", type: "*", link: id }] });
+      links.push([id, id - 1, 0, id, 0, "*"]);
+    }
+    for (let id = count + 1; id <= count + 1000; id++) {
+      nodes.push({
+        id,
+        type: "VAEDecode",
+        inputs: [{ name: "samples", type: "LATENT", link: id }],
+      });
+      links.push([id, count, 0, id, 0, "LATENT"]);
+    }
+    const started = performance.now();
+    const { prompt } = queued(file(nodes, links, { last_node_id: count + 1000 }));
+    expect(performance.now() - started).toBeLessThan(5000);
+    expect(inputsOf(prompt, String(count + 1000))["samples"]).toEqual(["1", 0]);
+  });
+});
 
 describe("the widgets the frontend saves", () => {
   const built = workflow(widgets, ({ n }) => {
@@ -337,13 +668,30 @@ describe("the widgets the frontend saves", () => {
 
 describe("toUi", () => {
   test.each(MOCK_UI_WORKFLOW_NAMES)(
+    "the frontend loads the export of %s to the prompt its import gives",
+    async (name) => {
+      const { workflow: ui } = toUi(importUi(await readMockUiWorkflow(name), schema).workflow);
+      const ours = toApi(importUi(stringify(ui), schema).workflow, { validate: false });
+      const theirs = parse(await readMockUiExportPrompt(name)).value;
+      if (!isJsonObject(theirs)) throw new Error("expected a prompt");
+      expect(Object.keys(ours)).toEqual(Object.keys(theirs));
+      // MockSeed isn't a server class: the frontend sends it without one.
+      const declared = name === "txt2img" ? ["2"] : [];
+      for (const id of Object.keys(theirs)) {
+        if (declared.includes(id)) continue;
+        expect(stringify(ours[id] ?? null)).toBe(stringify(theirs[id] ?? null));
+      }
+    },
+  );
+
+  test.each(MOCK_UI_WORKFLOW_NAMES)(
     "loading the export of %s reproduces its prompt",
     async (name) => {
       const first = importUi(await readMockUiWorkflow(name), schema).workflow;
       const { workflow: ui, ids } = toUi(first);
       const second = toApi(importUi(stringify(ui), schema).workflow, { validate: false });
       // Subgraph interiors come back flat, under the numbers `toUi` gave them.
-      expect(second).toEqual(renumbered(toApi(first, { validate: false }), ids));
+      expect(stringify(second)).toBe(stringify(renumbered(toApi(first, { validate: false }), ids)));
     },
   );
 

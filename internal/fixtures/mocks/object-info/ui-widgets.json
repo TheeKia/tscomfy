@@ -206,5 +206,107 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "MockLegacyForceInput": {
+    "input": {
+      "required": {
+        "prefix": [
+          "STRING",
+          {
+            "default": "a"
+          }
+        ],
+        "forced": [
+          "INT",
+          {
+            "forceInput": true
+          }
+        ],
+        "format": [["csv", "json"]]
+      }
+    },
+    "input_order": {
+      "required": ["prefix", "forced", "format"]
+    },
+    "is_input_list": false,
+    "output": ["STRING"],
+    "output_is_list": [false],
+    "output_name": ["STRING"],
+    "name": "MockLegacyForceInput",
+    "display_name": "Mock Legacy Force Input",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MockResize": {
+    "input": {
+      "required": {
+        "input": ["IMAGE"],
+        "resize_type": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              {
+                "key": "scale dimensions",
+                "inputs": {
+                  "required": {
+                    "width": [
+                      "INT",
+                      {
+                        "default": 512,
+                        "min": 0,
+                        "max": 16384
+                      }
+                    ],
+                    "height": [
+                      "INT",
+                      {
+                        "default": 512,
+                        "min": 0,
+                        "max": 16384
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "key": "scale width",
+                "inputs": {
+                  "required": {
+                    "width": [
+                      "INT",
+                      {
+                        "default": 512,
+                        "min": 0,
+                        "max": 16384
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "scale_method": [["nearest", "area"]]
+      }
+    },
+    "input_order": {
+      "required": ["input", "resize_type", "scale_method"]
+    },
+    "is_input_list": false,
+    "output": ["IMAGE"],
+    "output_is_list": [false],
+    "output_name": ["IMAGE"],
+    "name": "MockResize",
+    "display_name": "Mock Resize",
+    "description": "",
+    "python_module": "custom_nodes.mock-pack",
+    "category": "mock/ui",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
   }
 }

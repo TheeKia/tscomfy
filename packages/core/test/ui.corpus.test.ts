@@ -69,8 +69,8 @@ describe("our export of each corpus UI workflow imports to the same prompt", () 
         const second = importUi(stringify(ui), schema);
         expect(second.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
         // Subgraph interiors come back flat, under the numbers `toUi` gave them.
-        expect(toApi(second.workflow, { validate: false })).toEqual(
-          renumbered(toApi(first, { validate: false }), ids),
+        expect(stringify(toApi(second.workflow, { validate: false }))).toBe(
+          stringify(renumbered(toApi(first, { validate: false }), ids)),
         );
       });
     }

@@ -151,7 +151,7 @@ const PRODUCERS: Record<CoreCode, Producer> = {
         }),
         looseSchema(await readMockObjectInfo("basic-pipeline")),
       ).diagnostics,
-    path: ["links", 1],
+    path: ["2", "inputs", "samples"],
   },
   W_WIDGET_VALUES_MISMATCH: {
     produce: async () =>
@@ -171,7 +171,39 @@ const PRODUCERS: Record<CoreCode, Producer> = {
         await readMockUiWorkflow("subgraph-modes"),
         looseSchema(await readMockObjectInfo("basic-pipeline")),
       ).diagnostics,
-    path: ["40", "31"],
+    path: ["40:31"],
+  },
+  W_NODE_LEFT_OUT: {
+    produce: async () =>
+      importUi(
+        JSON.stringify({ version: 0.4, nodes: [{ id: 3, type: "PackLabel" }], links: [] }),
+        looseSchema(await readMockObjectInfo("basic-pipeline")),
+      ).diagnostics,
+    path: ["3"],
+  },
+  W_QUEUE_TIME_VALUE: {
+    produce: async () => {
+      const schema = looseSchema(await readMockObjectInfo("basic-pipeline"));
+      const built = workflow(schema, ({ n, raw }) => {
+        const images = raw("MockImageSource").output(0);
+        n["SaveImage"]?.({ images, filename_prefix: "%date:yyyy-MM-dd%" }, { id: "8" });
+      });
+      return toUi(built).diagnostics;
+    },
+    path: ["8", "inputs", "filename_prefix"],
+  },
+  E_LEGACY_GROUP_NODE: {
+    produce: async () =>
+      importUi(
+        JSON.stringify({
+          version: 0.4,
+          nodes: [{ id: 4, type: "workflow>G" }],
+          links: [],
+          extra: { groupNodes: { G: { nodes: [], links: [] } } },
+        }),
+        looseSchema(await readMockObjectInfo("basic-pipeline")),
+      ).diagnostics,
+    path: ["4"],
   },
   W_UNKNOWN_UI_CLASS: {
     produce: async () => {

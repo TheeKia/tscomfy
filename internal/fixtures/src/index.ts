@@ -91,9 +91,20 @@ export const MOCK_UI_WORKFLOW_DIR: string = join(root, "mocks", "workflows", "ui
 /** Absolute path of the directory holding the prompts the frontend builds for them. */
 export const MOCK_UI_API_WORKFLOW_DIR: string = join(root, "mocks", "workflows", "ui-api");
 
+/**
+ * Absolute path of the directory holding, for each mock UI workflow, the prompt the frontend
+ * builds when it loads `toUi`'s export of it (the import, exported again).
+ */
+export const MOCK_UI_EXPORT_DIR: string = join(root, "mocks", "workflows", "ui-export");
+
 /** Raw JSON text of one mock UI-format workflow. */
 export function readMockUiWorkflow(name: MockUiWorkflowName): Promise<string> {
   return Bun.file(join(MOCK_UI_WORKFLOW_DIR, `${name}.json`)).text();
+}
+
+/** Raw JSON text of the prompt the frontend builds for `toUi`'s export of one mock UI workflow. */
+export function readMockUiExportPrompt(name: MockUiWorkflowName): Promise<string> {
+  return Bun.file(join(MOCK_UI_EXPORT_DIR, `${name}.json`)).text();
 }
 
 /** Raw JSON text of the prompt the frontend builds for one mock UI-format workflow. */

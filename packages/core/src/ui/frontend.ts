@@ -6,6 +6,33 @@
 import type { JsonValue } from "../json/value.ts";
 import type { InputDef, NodeDef, SocketType } from "../schema/types.ts";
 
+/**
+ * The save nodes whose `filename_prefix` the frontend runs through `%…%` replacement when it
+ * builds a prompt (`saveImageExtraOutput.ts`).
+ */
+export const SAVE_NODES: ReadonlySet<string> = new Set([
+  "SaveImage",
+  "SaveImageAdvanced",
+  "SaveSVGNode",
+  "SaveVideo",
+  "SaveAnimatedWEBP",
+  "SaveWEBM",
+  "SaveAudio",
+  "SaveAudioMP3",
+  "SaveAudioOpus",
+  "SaveAudioAdvanced",
+  "SaveGLB",
+  "Save3DAdvanced",
+  "SaveGaussianSplat",
+  "SavePointCloud",
+  "SaveAnimatedPNG",
+  "CLIPSave",
+  "VAESave",
+  "ModelSave",
+  "LoraSave",
+  "SaveLatent",
+]);
+
 /** One widget of a node, in the frontend's widget order. */
 export interface FrontendWidget {
   /** The widget's name: an input's name, a control's, or a pseudo-input's (`upload`). */
@@ -50,14 +77,15 @@ export function frontendWidgets(
         case "int":
         case "float": {
           widgets.push({ name: key, key, input, persisted: true, initial: initialValue(input) });
+          // The frontend tests the option for truthiness: `false` and `""` add no control.
           const control = input.kind === "int" ? intControl(input) : input.control;
-          if (control !== undefined && control !== false) widgets.push(controlWidget(control));
+          if (controlOn(control)) widgets.push(controlWidget(control));
           break;
         }
         case "combo": {
           if (input.forceInput === true) break;
           widgets.push({ name: key, key, input, persisted: true, initial: initialValue(input) });
-          if (input.control !== undefined && input.control !== false) {
+          if (controlOn(input.control)) {
             widgets.push(controlWidget(input.control));
             if (!input.multiselect) {
               widgets.push({ name: "control_filter_list", persisted: true, initial: "" });
@@ -107,18 +135,23 @@ export function frontendWidgets(
  * the slots of widgets in input order, a chosen dynamic-combo option's slots right after the
  * combo's own. `autogrowSlots` gives how many slots of an Autogrow are listed (the frontend shows
  * the linked ones and one more).
+ *
+ * `fresh` gives the layout of a node just created, before any value is set: every dynamic combo
+ * on its first option, whose slots come before the combo's own (the frontend adds them while it
+ * creates the combo's widget). Links that name no input land on this layout.
  */
 export function frontendSlots(
   definition: NodeDef,
   chosen: (key: string) => JsonValue | undefined,
   autogrowSlots: (key: string, input: Extract<InputDef, { kind: "autogrow" }>) => number,
+  fresh = false,
 ): FrontendSlot[] {
   const sockets: FrontendSlot[] = [];
   const widgets: FrontendSlot[] = [];
   /** A dynamic combo's chosen option, slot by slot in declaration order. */
   const option = (input: InputDef, key: string): FrontendSlot[] => {
     if (input.kind !== "dynamicCombo") return [];
-    const selected = chosen(key) ?? input.options[0]?.key;
+    const selected = (fresh ? undefined : chosen(key)) ?? input.options[0]?.key;
     const found = input.options.find((each) => each.key === selected);
     const slots: FrontendSlot[] = [];
     for (const child of found?.inputs ?? []) {
@@ -128,8 +161,10 @@ export function frontendSlots(
         continue;
       }
       const own = slotOf(child, childKey);
+      const options = option(child, childKey);
+      if (fresh) slots.push(...options);
       if (own !== undefined) slots.push(own);
-      slots.push(...option(child, childKey));
+      if (!fresh) slots.push(...options);
     }
     return slots;
   };
@@ -149,7 +184,8 @@ export function frontendSlots(
     }
     const own = slotOf(input, input.name);
     if (own === undefined) continue;
-    (own.widget ? widgets : sockets).push(own, ...option(input, input.name));
+    const options = option(input, input.name);
+    (own.widget ? widgets : sockets).push(...(fresh ? [...options, own] : [own, ...options]));
   }
   return [...sockets, ...widgets];
 }
@@ -194,6 +230,14 @@ const NOT_PERSISTED: ReadonlySet<string> = new Set([
   "RESOLUTION_PREVIEW",
   "CAMERA_INFO_STATE",
 ]);
+
+/**
+ * Whether a `control_after_generate` adds a control: the frontend tests it for truthiness, so
+ * `false` and `""` add none.
+ */
+export function controlOn(control: boolean | string | undefined): control is true | string {
+  return control === true || (typeof control === "string" && control !== "");
+}
 
 /** An INT's control: as stated, or on by default for inputs named `seed` or `noise_seed`. */
 function intControl(input: Extract<InputDef, { kind: "int" }>): boolean | string {
@@ -279,4 +323,16 @@ function unknownType(spec: JsonValue): string {
 
 function isList(value: JsonValue): value is readonly JsonValue[] {
   return Array.isArray(value);
+}
+
+/**
+ * Whether the frontend changes a file name when it builds a prompt (`applyTextReplacements`):
+ * `%date:…%`, or a `%Node.widget%` reference.
+ */
+export function replacesText(text: string): boolean {
+  for (const [, pattern = ""] of text.matchAll(/%([^%]+)%/g)) {
+    const split = pattern.split(".");
+    if (split.length === 2 || split[0]?.startsWith("date:") === true) return true;
+  }
+  return false;
 }

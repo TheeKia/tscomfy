@@ -57,6 +57,10 @@ name to `MOCK_UI_WORKFLOW_NAMES`; a test enforces this.
 | `subgraph-modes.json` | A muted subgraph inside another: its interior is still sent, its output resolves to nothing (`W_FRONTEND_QUIRK`) |
 | `subgraph-primitive.json` | A PrimitiveNode linked to a promoted subgraph input: the value never arrives, and the instance's order changes (`W_FRONTEND_QUIRK`) |
 
+`mocks/workflows/ui-export/` holds, under the same names, the prompt the frontend builds when it
+loads `toUi`'s export of each import: the oracle for the export. The export is deterministic, so
+a change to `toUi` that fails `ui.test.ts` there means capturing them again with the script below.
+
 ## `scripts/frontend.ts`
 
 `bun internal/fixtures/scripts/frontend.ts --out DIR UI.json…` loads UI workflows into the local
@@ -87,7 +91,7 @@ Node class names start with `Mock` unless the name itself is the thing being tes
 | `hidden.json` | Hidden inputs in every observed shape: server-filled names, tuple specs, `*`, empty string, plain widget type, object |
 | `numbers.json` | Integer bounds beyond 2⁵³ (exact in the file), also as FLOAT bounds, beyond the double range and on an `INT:seed` type, defaults outside the bounds, widgets with no default, list-valued defaults, every widget option variant |
 | `malformed.json` | Inputs that must produce diagnostics instead of crashes: null, string, numeric type, empty tuple, bad options, V3 types missing their payload, unknown V3 type, non-record section, mismatched output arrays, dangling `input_order`, missing fields, `name` disagreeing with its key, an input declared in two sections, null options, a legacy combo or output list with an unrepresentable option, out-of-range Autogrow and DynamicGroup counts, duplicate dynamic-combo keys and nested inputs, a MatchType output without a template, an incomplete `input_order` |
-| `ui-widgets.json` | Widgets the frontend adds without an input of their own (docs/plan.md §11): controls after INT (on by default for `seed`, off with an explicit `false`, named after a string option), FLOAT and combo (with its filter) inputs; the `upload` button for the first required image or video upload combo, an animated-image upload, a required `audio` upload combo, and none for an optional one or another name |
+| `ui-widgets.json` | Widgets the frontend adds without an input of their own (docs/plan.md §11): controls after INT (on by default for `seed`, off with an explicit `false`, named after a string option), FLOAT and combo (with its filter) inputs; the `upload` button for the first required image or video upload combo, an animated-image upload, a required `audio` upload combo, and none for an optional one or another name; a `forceInput` socket, whose placeholder value old files saved; a dynamic combo whose first option has inputs (links by slot land on those) |
 | `widget-types.json` | Core frontend value widgets (COLOR, BOUNDING_BOX, COLORS, IMAGECOMPARE, CURVE with `forceInput`, a CURVE value, display-only RESOLUTION_PREVIEW); `widgetType` (FLOAT on a `FLOAT,INT` socket, PAINTER on STRING, pack-registered widgets, COMBO on a pack type and on INT); a pack type with a default that stays a socket |
 | `nulls.json` | `null` where the server means "not set": `display_name`, `description`, `default`, `tooltip`, an input section, an `output_is_list` entry |
 | `legacy-and-flags.json` | Older servers: no `input_order`, `output_name` or `output_is_list`; empty `input`; `deprecated`, `experimental`, `dev_only`, `advanced`, `essentials_category` |
