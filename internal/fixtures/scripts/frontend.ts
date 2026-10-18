@@ -13,23 +13,15 @@
 // capture never depends on, or holds, the files on the server: with `--remote-files '["a.png"]'`,
 // or an empty list. The frontend replaces a saved remote-combo value the list lacks.
 //
-// Needs a Chromium (or its headless shell): TSCOMFY_CHROME, or the one Playwright caches.
+// Needs a Chromium (or its headless shell): TSCOMFY_CHROME, or the one Playwright caches
+// (`src/chromium.ts`).
 // Development tooling: not part of any package, and not run by `check` or `test:corpus`.
 
 /* oxlint-disable no-await-in-loop -- it polls the browser, and loads one workflow at a time */
 /* oxlint-disable typescript/no-unsafe-type-assertion -- DevTools protocol messages, read as such */
 
-import { readdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, join } from "node:path";
-
-interface Message {
-  readonly id?: number;
-  readonly method?: string;
-  readonly params?: Record<string, unknown>;
-  readonly result?: Record<string, unknown>;
-  readonly error?: { readonly message: string };
-}
+import { launchChromium } from "../src/chromium.ts";
 
 const args = process.argv.slice(2);
 const option = (name: string): string | undefined => {
@@ -50,54 +42,14 @@ if (out === undefined || files.length === 0) {
   process.exit(2);
 }
 
-/** A Chromium: TSCOMFY_CHROME, or the newest headless shell Playwright has cached. */
-async function chrome(): Promise<string> {
-  const given = process.env["TSCOMFY_CHROME"];
-  if (given !== undefined) return given;
-  const cache = join(homedir(), ".cache", "ms-playwright");
-  const shells = (await readdir(cache).catch(() => []))
-    .filter((name) => name.startsWith("chromium_headless_shell-"))
-    .toSorted();
-  const newest = shells.at(-1);
-  if (newest === undefined) throw new Error("No Chromium: set TSCOMFY_CHROME.");
-  return join(cache, newest, "chrome-headless-shell-linux64", "chrome-headless-shell");
-}
-
-const port = 9300 + Math.floor(Math.random() * 600);
-const browser = Bun.spawn(
-  [await chrome(), `--remote-debugging-port=${String(port)}`, "--no-sandbox", "about:blank"],
-  { stdout: "ignore", stderr: "ignore" },
-);
+const browser = await launchChromium();
 
 try {
-  const socket = await connect(port);
-  const pending = new Map<number, (message: Message) => void>();
-  const listeners: ((message: Message) => void)[] = [];
-  let next = 1;
-  socket.addEventListener("message", (event) => {
-    const message = JSON.parse(String(event.data)) as Message;
-    if (message.id === undefined) for (const listener of listeners) listener(message);
-    else pending.get(message.id)?.(message);
-  });
-  const send = (method: string, params: object = {}): Promise<Message> => {
-    const id = next++;
-    socket.send(JSON.stringify({ id, method, params }));
-    return new Promise((resolve) => pending.set(id, resolve));
-  };
-  const evaluate = async (expression: string): Promise<unknown> => {
-    const { result } = await send("Runtime.evaluate", {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-    });
-    const details = result?.["exceptionDetails"];
-    if (details !== undefined) throw new Error(JSON.stringify(details).slice(0, 1000));
-    return (result?.["result"] as { value?: unknown } | undefined)?.value;
-  };
+  const { send, evaluate } = browser;
 
   // Every request but a GET is answered here: the frontend thinks it saved, the server sees nothing.
   const answered: string[] = [];
-  listeners.push((message) => {
+  browser.on((message) => {
     if (message.method !== "Fetch.requestPaused") return;
     const { requestId, request } = message.params as {
       requestId: string;
@@ -126,7 +78,6 @@ try {
     });
   });
   await send("Fetch.enable", { patterns: [{ urlPattern: "*" }] });
-  await send("Runtime.enable");
   await send("Page.navigate", { url: server });
 
   const app = "window.comfyAPI?.app?.app";
@@ -163,30 +114,6 @@ try {
   console.error(
     `Answered without sending: ${answered.length === 0 ? "nothing" : answered.join(", ")}`,
   );
-  socket.close();
 } finally {
-  browser.kill();
-}
-
-async function connect(debugPort: number): Promise<WebSocket> {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    try {
-      const targets = (await (
-        await fetch(`http://127.0.0.1:${String(debugPort)}/json`)
-      ).json()) as {
-        readonly type: string;
-        readonly webSocketDebuggerUrl: string;
-      }[];
-      const page = targets.find((each) => each.type === "page");
-      if (page !== undefined) {
-        const socket = new WebSocket(page.webSocketDebuggerUrl);
-        await new Promise((resolve) => socket.addEventListener("open", resolve));
-        return socket;
-      }
-    } catch {
-      // Not listening yet.
-    }
-    await Bun.sleep(200);
-  }
-  throw new Error("Chromium didn't start");
+  browser.close();
 }

@@ -21,7 +21,7 @@ Everything runs from source: tests and the CLI resolve the packages to `src/` th
 | `bun run check` | `tsc -b`, lint, format check, `api:check`, tests. Must pass before any change is done |
 | `bun run test` | The tests, against source; skips corpus tests |
 | `bun run test:corpus` | The corpus tests, over your local real data (below) |
-| `bun run test:live` | The client against your ComfyUI (`TSCOMFY_LIVE_URL`, default `http://127.0.0.1:8188`). It queues model-free prompts (empty images, blurs, text): no GPU time, a few files in the server's `output/tscomfy-live/` and temp directory. Never in `check` or CI |
+| `bun run test:live` | The client against your ComfyUI (`TSCOMFY_LIVE_URL`, default `http://127.0.0.1:8188`), about 15 s: runs, reconnects through a TCP proxy, every output kind, a 40-job soak, and a run in headless Chromium (it needs the server started with `--enable-cors-header` and a Chromium, `TSCOMFY_CHROME` or Playwright's; it skips without CORS). It queues model-free prompts (empty images, blurs, audio, text): no GPU time, a few files in the server's `output/tscomfy-live/` and temp directory. Never in `check` or CI |
 | `bun run build` | Type-check and emit every package (`tsc -b`) |
 | `bun run format` | Format and sort imports (oxfmt) |
 | `bun run lint` | oxlint with type-aware rules |

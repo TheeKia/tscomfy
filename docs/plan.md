@@ -2,7 +2,7 @@
 
 > Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`), `@tscomfy/layout`;
 > `@tscomfy/client` (Phase 10, §17). MIT.
-> Status: revision 8, 2026-10-18. **Phases 0–9 complete**; 0.1.2 is published on npm, from CI (D12; 0.1.0 by hand).
+> Status: revision 9, 2026-10-19. **Phases 0–10 complete**; 0.2.0 is published on npm, from CI (D12; 0.1.0, and the client's 0.1.2, by hand).
 > Phase 10, the execution client (D23–D25, §17), is complete.
 > This is the design reference: what was decided and why (§3, with an ADR per decision in
 > `docs/decisions/`), how it is built (§4–§13, §17), how it got there (§14) and the evidence (§16).
@@ -956,6 +956,8 @@ tscomfy/
       src/exec.ts          #   process and scratch-project helpers for tests and scripts
       src/protocol.ts      #   readMockProtocol(name), for the protocol mocks
       src/fake-server.ts   #   FakeServer: a fake ComfyUI (HTTP and websocket) playing them (Phase 10)
+      src/tcp-proxy.ts     #   TcpProxy: cuts connections as a network does, for live tests
+      src/chromium.ts      #   launchChromium: a headless Chromium over DevTools (frontend.ts, browser test)
     bench/                 # @tscomfy/bench: bench:types, synthetic schemas from the mocks
     api-report/            # @tscomfy/api-report: docs/api/ from the declarations (D22)
     pack-test/             # @tscomfy/pack-test: test:pack, the published packages as a user installs them
@@ -994,7 +996,7 @@ Configs per package:
 - `clean`: remove the `dist` directories, `internal/*/tsconfig.tsbuildinfo` and `internal/bench/.out` (tsc never deletes stale outputs)
 - `test`: `bun test --conditions=@tscomfy/source`, skipping corpus and live tests
 - `test:corpus`: only the corpus tests (`*.corpus.test.ts`)
-- `test:live` (Phase 10): the client against the owner's server; queues model-free prompts; local only
+- `test:live` (Phase 10): the client against the owner's server, in Bun and in headless Chromium; queues model-free prompts; local only
 - `lint`: `oxlint --type-aware`
 - `format`: `oxfmt` (format and sort imports); `format:check`: `oxfmt --check`
 - `bench:types`: the type-check budget (§6.6)
@@ -1271,6 +1273,8 @@ Checked from 2026-10-17 to 2026-10-18 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and
 | Client packaging (D23) | `test:pack`: the client tarball installs offline, its declarations type-check in a consumer with `lib: ["es2024", "dom"]` and `skipLibCheck: false`, and the consumer runs a workflow on the fake server under Node 26.11.1 and Bun 1.4.3 (`client success 8 run_00001_.png image/png`). The public declarations name no internal module (`docs/api/client.md`) |
 | Phase 10 review | An independent review found 10 bugs, each reproduced, all fixed with tests (`lifecycle.test.ts`, `parts.test.ts`): `close()` while the socket was down or reopening still posted the prompt and left a socket open; concurrent submits after a drop opened several sockets with one client id; reconnect backoff, poll chains (one more per reconnect) and record-read retries kept timers that outlived `close()` by up to 30 s (a subprocess test now checks the process exits at once); progress text was coalesced and coalescing reordered events; a second `next()` before the first settled was lost; a 200 with a non-JSON body made the job uncancellable; `connect` checked for 0.6, not 0.26. Also from it: `supports_progress_text_metadata` announced, a 404 after start is a `ClientError`, live outputs win over the record's, outputs frozen, and `Server.fetch` typed as a call (a wrapper failed against Bun's `typeof fetch`) |
 | Sampler capture (§17) | `capture.ts sampler` on ComfyUI 0.41.0 with a local SD checkpoint, 6 steps at 512², `preview_method: latent2rgb`: per step a `progress_state`, then a type-4 JPEG preview (36–47 KB, 512 px), then `progress`, as the hand-written mock had it; the 2⁶⁴−1 seed was accepted and echoed exactly in the history. It replaced the hand-written `sampler.json`; the blocked node and progress text stay hand-written (`blocked.json`) |
+| Release 0.2.0 (2026-10-18) | `@tscomfy/client` 0.1.2 published by hand so its trusted publisher could be set up, then deprecated (it needs core's handles and codes, which 0.1.2 lacks); 0.2.0 of all five packages released from CI (`v0.2.0`) |
+| Live reliability tests (2026-10-19) | `test:live` grew to 18 tests (about 13 s), all on ComfyUI 0.41.0, model-free. **Reconnects:** a clean close mid-run; a network cut through a TCP proxy (`TcpProxy` in fixtures) that the server sees at once; and one it notices two seconds late, followed by another job on the same connection. That last case hung the next job until its timeout, reproducing the deaf socket of ADR-0024 §7. Fixed with a fresh client id per socket and a 30 s poll of every open job; now it passes. **Output kinds:** animated WEBP and PNG (`image`, animated), MP4 with audio and WEBM (`video`, listed under `images`, 64×48 measured), FLAC and previewed audio (`audio`), each downloaded with the right MIME type and signature (`RIFF…WEBP` with `ANIM`, PNG with `acTL`, `ftyp`, EBML, `fLaC`). **Browser:** headless Chromium on another origin, against a server started with `--enable-cors-header`: core normalizes `/object_info` and builds the workflow; the client runs it with events and a decodable preview; `fetchFile`, `fileUrl` in an `<img>` and `uploadFile` all work. **Soak:** 40 jobs on one connection through the proxy (successes, node errors, rejections, long jobs, cancels while queued and running, aborts), with two cuts, one noticed late. Every outcome is what was asked and agrees with the server's record; aborted jobs are cancelled on the server; the process exits at once after `close()` |
 
 ## 17. Execution client (`@tscomfy/client`)
 
@@ -1323,7 +1327,8 @@ await comfy.close();
   - `fetch` replaces the global: the global itself, or a wrapper.
   - Credentials in the URL are refused with a `TypeError`, because runtimes disagree on them.
 - **`connect(server, { signal? }) → Promise<Connection>`**:
-  - opens the socket with a fresh client id (a UUID from `getRandomValues`);
+  - opens the socket with a fresh client id (a UUID from `getRandomValues`); every socket gets
+    one, so `connection.clientId` changes after a reconnect;
   - sets `binaryType` to `"arraybuffer"`;
   - sends `supports_preview_metadata` and `supports_progress_text_metadata` as the first message
     and waits for the server's flags;
@@ -1443,11 +1448,14 @@ type Outcome =
 5. **Reading the record at other times.**
    - On queue changes while the job hasn't started, at most once a second; a change inside the
      second is read at its end, not dropped.
-   - After every reconnect, then polled (1 s growing to 10 s) until the job settles: events sent
-     while the socket was down are gone, and the same-id hazard can leave the new socket deaf.
+   - After every reconnect, then polled (1 s growing to 10 s) until the job settles: the job's
+     events went to the old socket's client id.
+   - Every 30 s while the job is open, from its acceptance: no outcome depends on the socket
+     alone.
 6. **Reconnecting.** A dropped socket reconnects only while jobs are open, with jittered
    exponential backoff:
-   - it waits for the old socket's `close` before reusing the id;
+   - with a fresh client id: a reused one goes deaf when the server closes the old socket late
+     (ADR-0024 §7);
    - it re-sends the flags first;
    - it gives up with a `ClientError` after the budget, while the server stays unreachable.
 7. **`job.cancel()`** posts `/api/jobs/{id}/cancel`; the outcome then settles from the record,

@@ -11,9 +11,11 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+export * from "./chromium.ts";
 export * from "./exec.ts";
 export * from "./fake-server.ts";
 export * from "./protocol.ts";
+export * from "./tcp-proxy.ts";
 
 const root = join(import.meta.dir, "..");
 

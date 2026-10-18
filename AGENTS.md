@@ -16,7 +16,7 @@ scope until ADR-0023: `@tscomfy/client` (plan §17) runs prompts on one server's
 **Status:** all phases (0–9 in `docs/plan.md` §14) are done: the normalizer and schema model,
 the type emitter, the builder and API export, the CLI (`generate`, `check`, `transpile`),
 validation, API import and the transpiler, bypass, mute and graph operations, the UI format and
-`@tscomfy/layout`, and the polish phase (guides, examples, API reports, packaging). 0.1.2 is
+`@tscomfy/layout`, and the polish phase (guides, examples, API reports, packaging). 0.2.0 is
 published on npm. Phase 10 added `@tscomfy/client` (plan §17, ADR-0023 to ADR-0025). New work
 starts from a decision in the plan and its ADR.
 
@@ -31,7 +31,7 @@ starts from a decision in the plan and its ADR.
 | `docs/diagnostics.md` | Every diagnostic code; a test keeps it in sync with `DIAGNOSTIC_CODES` |
 | `docs/research/` | Ground-truth notes on ComfyUI's serialization, UI format and execution protocol, and the prior-art review, with source citations |
 | `packages/{core,codegen,cli,layout,client}` | The publishable packages, `@tscomfy/<folder>` |
-| `internal/fixtures` | `@tscomfy/fixtures` (private): mocks (protocol runs included), the local corpus, `FakeServer` (a fake ComfyUI for the client's tests), `scripts/frontend.ts`, which asks the server's own frontend what it would queue for a UI workflow, and `scripts/capture.ts`, which records real runs |
+| `internal/fixtures` | `@tscomfy/fixtures` (private): mocks (protocol runs included), the local corpus, `FakeServer` (a fake ComfyUI for the client's tests), `TcpProxy` and `launchChromium` (for the live tests), `scripts/frontend.ts`, which asks the server's own frontend what it would queue for a UI workflow, and `scripts/capture.ts`, which records real runs |
 | `internal/bench` | `@tscomfy/bench` (private): `bench:types`, synthetic schemas built from the mocks |
 | `internal/api-report` | `@tscomfy/api-report` (private): writes and checks `docs/api/` from the packages' declarations |
 | `internal/pack-test` | `@tscomfy/pack-test` (private): `test:pack`, the packages packed and installed as a user gets them |
@@ -95,7 +95,7 @@ bun install
 bun run check     # tsc -b, lint, format check, API reports, tests: run before declaring work done
 bun run test      # tests against source, no build needed (skips corpus tests)
 bun run test:corpus  # corpus tests against your local real data
-bun run test:live  # the client against your ComfyUI: queues model-free prompts; never in CI
+bun run test:live  # the client against your ComfyUI (in Bun and headless Chromium): queues model-free prompts; never in CI
 bun run generate:fixtures  # after changing codegen: regenerate packages/codegen/test/generated (types and transpiled prompts)
 bun run generate:widths  # after updating oxfmt: remeasure the text widths codegen breaks lines by
 bun run bench:types  # type-check budget of generated types (plan §6.6)

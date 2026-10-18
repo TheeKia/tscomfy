@@ -1,56 +1,34 @@
 // The client against a real ComfyUI server: `bun run test:live`, never in `check` or CI (plan
 // §17, ADR-0023). It queues model-free prompts (empty images, blurs, text), so it costs no GPU
-// time; set TSCOMFY_LIVE_URL for a server other than http://127.0.0.1:8188. Saved files go to
-// the server's output/tscomfy-live/, uploads to its temp directory.
+// time (helpers in live.ts). Saved files go to the server's output/tscomfy-live/, uploads to its
+// temp directory.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   type Connection,
   connect,
   fetchFile,
-  type JobEvent,
   type Outcome,
   outputFiles,
   outputOf,
   submit,
   uploadFile,
 } from "@tscomfy/client";
-import { type ApiPrompt, normalizeObjectInfo, typedSchema, workflow } from "@tscomfy/core";
+import { type ApiPrompt, type TypedSchema, workflow } from "@tscomfy/core";
+import { collect, fresh, LIVE_URL, liveSchema, slow } from "./live.ts";
 import type { LooseNodes } from "./loose.ts";
 
-const url = process.env["TSCOMFY_LIVE_URL"] ?? "http://127.0.0.1:8188";
 let comfy: Connection;
-let schema: ReturnType<typeof typedSchema<LooseNodes>>;
+let schema: TypedSchema<LooseNodes>;
 
 beforeAll(async () => {
-  comfy = await connect({ url });
-  const text = await (await fetch(`${url}/object_info`)).text();
-  schema = typedSchema<LooseNodes>(normalizeObjectInfo(text).schema);
+  comfy = await connect({ url: LIVE_URL });
+  schema = await liveSchema();
 });
 
 afterAll(async () => {
   await comfy.close();
 });
-
-async function collect(events: AsyncIterable<JobEvent>): Promise<JobEvent[]> {
-  const seen: JobEvent[] = [];
-  for await (const event of events) seen.push(event);
-  return seen;
-}
-
-/** A color no earlier run used, so nothing is cached. */
-const fresh = (): number => Math.floor(Math.random() * 0xffffff);
-
-/** A chain of blurs over a large image: long enough to cancel, with node boundaries to stop at. */
-function slow(): ReturnType<typeof workflow<LooseNodes>> {
-  return workflow(schema, ({ n }) => {
-    let image = n["EmptyImage"]!({ width: 2048, height: 2048, batch_size: 1, color: fresh() });
-    for (let step = 0; step < 12; step++) {
-      image = n["ImageBlur"]!({ image, blur_radius: 31, sigma: 10 });
-    }
-    n["PreviewImage"]!({ images: image });
-  });
-}
 
 function statusOf(outcome: Outcome): string {
   return outcome.status;
@@ -143,8 +121,8 @@ describe("against a real server", () => {
   });
 
   test("cancel() interrupts a running job; a queued one is cancelled before it starts", async () => {
-    const running = submit(comfy, slow());
-    const queued = submit(comfy, slow());
+    const running = submit(comfy, slow(schema));
+    const queued = submit(comfy, slow(schema));
     for await (const event of running.events) {
       if (event.type === "executing") {
         await queued.cancel();
