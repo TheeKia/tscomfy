@@ -1,6 +1,6 @@
 {
   "name": "@tscomfy/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Type-safe ComfyUI workflows: the /object_info normalizer and schema model, the workflow builder, API and UI format export and import, validation and graph operations.",
   "keywords": [
     "api",
