@@ -1,5 +1,7 @@
 # Publishes every package when a `v<version>` tag is pushed. npm trusted publishing (OIDC): no
 # token is stored, and npm attaches provenance. Each package's trusted publisher names this file.
+# Two jobs, so that only the one that runs npm can mint the publishing token: `build` checks and
+# packs with read-only permissions, `publish` publishes its tarballs.
 name: Release
 
 on:
@@ -8,18 +10,18 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  # In dependency order, so no package is published before what it depends on.
+  PACKAGES: core codegen layout cli
+
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    env:
-      # In dependency order, so no package is published before what it depends on.
-      PACKAGES: core codegen layout cli
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -28,7 +30,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
 
       - name: The tag matches every package's version
@@ -41,25 +42,48 @@ jobs:
               exit 1
             fi
           done
-          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - run: bun run check
       # Cleans and builds dist/, then checks the packed packages as a user installs them.
       - run: bun run test:pack
 
-      # `bun pm pack` rewrites `workspace:` ranges; npm publishes the tarballs over OIDC. A
-      # version already on npm is skipped, so a release that failed halfway can be re-run.
+      # `bun pm pack` rewrites `workspace:` ranges.
+      - name: Pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          for name in $PACKAGES; do
+            (cd "packages/$name" && bun pm pack --quiet --destination "$RUNNER_TEMP/release")
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: ${{ runner.temp }}/release
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: ${{ runner.temp }}/release
+
+      # A version already on npm is skipped, so a release that failed halfway can be re-run.
       - name: Publish
         run: |
-          out="$RUNNER_TEMP/release"
-          mkdir -p "$out"
+          version="${GITHUB_REF_NAME#v}"
           for name in $PACKAGES; do
-            (cd "packages/$name" && bun pm pack --quiet --destination "$out")
-          done
-          for name in $PACKAGES; do
-            if npm view "@tscomfy/$name@$VERSION" version > /dev/null 2>&1; then
-              echo "@tscomfy/$name@$VERSION is already published"
+            if npm view "@tscomfy/$name@$version" version > /dev/null 2>&1; then
+              echo "@tscomfy/$name@$version is already published"
             else
-              npm publish "$out/tscomfy-$name-$VERSION.tgz"
+              npm publish "$RUNNER_TEMP/release/tscomfy-$name-$version.tgz"
             fi
           done

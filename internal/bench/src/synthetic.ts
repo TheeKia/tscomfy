@@ -4,14 +4,21 @@
 import { type InputDef, type NodeDef, normalizeObjectInfo, type Schema } from "@tscomfy/core";
 import { MOCK_OBJECT_INFO_NAMES, readMockObjectInfo } from "@tscomfy/fixtures";
 
-/** Every node of every mock, as templates for copies. */
+/**
+ * Every node class of the mocks, as templates for copies. A class two mocks define is taken from
+ * the first, so each copy gets a class type of its own.
+ */
 export async function mockNodes(): Promise<readonly NodeDef[]> {
   const schemas = await Promise.all(
     MOCK_OBJECT_INFO_NAMES.map(
       async (name) => normalizeObjectInfo(await readMockObjectInfo(name)).schema,
     ),
   );
-  return schemas.flatMap((schema) => Object.values(schema.nodes));
+  const nodes = new Map<string, NodeDef>();
+  for (const node of schemas.flatMap((schema) => Object.values(schema.nodes))) {
+    if (!nodes.has(node.classType)) nodes.set(node.classType, node);
+  }
+  return [...nodes.values()];
 }
 
 /**
@@ -29,7 +36,13 @@ export function syntheticSchema(templates: readonly NodeDef[], size: number): Sc
       { ...template, classType, inputs: template.inputs.map((input) => rename(input, copy)) },
     ];
   });
-  return { formatVersion: 1, nodes: Object.fromEntries(entries) };
+  const nodes = Object.fromEntries(entries);
+  if (Object.keys(nodes).length !== size) {
+    throw new Error(
+      `syntheticSchema: ${String(size)} copies made only ${String(Object.keys(nodes).length)} classes`,
+    );
+  }
+  return { formatVersion: 1, nodes };
 }
 
 function rename(input: InputDef, copy: number): InputDef {

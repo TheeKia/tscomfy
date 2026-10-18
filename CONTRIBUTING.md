@@ -83,8 +83,9 @@ The four packages share one version and are released together, from CI only:
 3. `git tag v<version> && git push origin main v<version>`.
 
 `.github/workflows/release.yml` checks that the tag matches every package, runs `check` and
-`test:pack`, packs each package with `bun pm pack` (which rewrites `workspace:` ranges; npm
-doesn't) and publishes the tarballs with npm trusted publishing: no token is stored, and npm adds
+`test:pack` and packs each package with `bun pm pack` (which rewrites `workspace:` ranges; npm
+doesn't), all with read-only permissions; a second job, the only one allowed to mint the token,
+publishes the tarballs with npm trusted publishing: no token is stored, and npm adds
 provenance. Versions already on npm are skipped, so a failed release can be re-run. Each
 package's trusted publisher on npmjs.com names `TheeKia/tscomfy` and `release.yml`; a new
 package needs one, which npm only allows once the package exists, so its first version is
