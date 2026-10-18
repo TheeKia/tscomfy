@@ -24,6 +24,15 @@ const OBJECT_MEMBERS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Whether every input the types have may be left out: those the frontend never sends a value
+ * for have no property to require. An object of such inputs, or a dynamic-combo option, may be
+ * left out too (its key alone, for an option).
+ */
+export function mayAllBeLeftOut(inputs: readonly InputDef[]): boolean {
+  return inputs.filter(sendsInputValue).every((input) => !isRequired(input));
+}
+
+/**
  * The field a DynamicGroup row's type requires beyond the required ones (§7.2): a row is counted
  * only when one of its keys is sent, so when no field is required or has a default, the first
  * one must be given, or `{}` would send no row at all.

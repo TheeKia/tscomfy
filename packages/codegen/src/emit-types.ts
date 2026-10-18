@@ -24,6 +24,7 @@ import {
 } from "@tscomfy/core";
 import {
   assignment,
+  bracketed,
   type Doc,
   group,
   hardline,
@@ -40,11 +41,13 @@ import {
   commentText,
   headerLines,
   NameRegistry,
+  numberText,
   pascal,
   propertyKey,
   quote,
+  untagged,
 } from "./names.ts";
-import { forcedRowField, isObjectMember, isRequired } from "./rules.ts";
+import { forcedRowField, isObjectMember, isRequired, mayAllBeLeftOut } from "./rules.ts";
 
 /** The result of {@link emitTypes}. */
 export interface EmitTypesResult {
@@ -82,6 +85,16 @@ const RESERVED = [...CORE_TYPES, "NoInfer", "Nodes"];
 /** A type expression: a union of atoms. */
 type Atoms = readonly Doc[];
 
+/**
+ * The types of a list's elements: `first` for the first, `rest` for the others. They differ when
+ * the first infers a MatchType template (`inferring`) that the others must agree with.
+ */
+interface Slots {
+  readonly first: Atoms;
+  readonly rest: Atoms;
+  readonly inferring: boolean;
+}
+
 /** A built type, and the MatchType templates it mentions. */
 interface Built {
   readonly atoms: Atoms;
@@ -115,7 +128,10 @@ const NO_TEMPLATES: ReadonlySet<string> = new Set();
 
 class TypesEmitter {
   readonly #schema: Schema;
-  /** Shared aliases and type parameters. Node-derived names contain `$`, so never clash. */
+  /**
+   * Shared aliases. Node-derived names contain `$`, so never clash; type parameters are kept
+   * apart from them through `#parameterNames`.
+   */
   readonly #names = new NameRegistry(RESERVED);
   readonly #bases = new NameRegistry();
   /** Every type parameter name in use; shared aliases avoid them, since parameters shadow. */
@@ -151,15 +167,7 @@ class TypesEmitter {
     const body = [
       ...(imports.length === 0
         ? []
-        : [
-            group([
-              "import type {",
-              indent([line, join([",", line], imports)]),
-              ifBreak(","),
-              line,
-              '} from "@tscomfy/core";',
-            ]),
-          ]),
+        : [bracketed("import type {", imports, '} from "@tscomfy/core";', { spaced: true })]),
       nodes,
       ...declarations,
       ...shared,
@@ -361,7 +369,6 @@ class TypesEmitter {
   } {
     const members: Doc[] = [];
     const templates = new Set<string>();
-    let optional = true;
     const forced = sendsSomething ? forcedRowField(inputs) : undefined;
     for (const input of inputs) {
       // Inputs the frontend never sends a value for (display-only widgets) take none (§7.4).
@@ -372,7 +379,6 @@ class TypesEmitter {
       ]);
       for (const template of built.templates) templates.add(template);
       const required = isRequired(input) || input === forced;
-      if (required) optional = false;
       members.push([
         docComment(inputDocLines(input)),
         "readonly ",
@@ -394,7 +400,7 @@ class TypesEmitter {
     ]);
     return {
       reference: reference(name, this.#arguments(scope, templates)),
-      optional,
+      optional: forced === undefined && mayAllBeLeftOut(inputs),
       templates,
     };
   }
@@ -454,14 +460,19 @@ class TypesEmitter {
           true,
         );
         return {
-          atoms: [this.#repeated(row.reference, row.reference, input.min, input.max)],
+          atoms: [
+            this.#repeated(
+              { first: [row.reference], rest: [row.reference], inferring: false },
+              input.min,
+              input.max,
+            ),
+          ],
           templates: row.templates,
         };
       }
       case "matchType": {
-        const template = scope.templates.get(input.templateId);
+        const template = inputTemplate(scope, input);
         this.#imports.add("Out");
-        if (template === undefined) return { atoms: ["Out<string>"], templates: NO_TEMPLATES };
         return { atoms: [this.#matchAtom(scope, template)], templates: new Set([template.id]) };
       }
       case "unknown":
@@ -530,34 +541,33 @@ class TypesEmitter {
     const { template } = input;
     // A MatchType template: the first slot infers it and the others must agree, so a list of
     // mixed types can't infer a union (§6.3).
-    let first: Doc;
-    let rest: Doc;
+    let slot: Slots;
     let templates: ReadonlySet<string>;
-    const matched =
-      template.kind === "matchType" ? scope.templates.get(template.templateId) : undefined;
-    if (matched !== undefined) {
+    if (template.kind === "matchType") {
+      const matched = inputTemplate(scope, template);
       this.#imports.add("Out");
-      first = this.#matchAtom(scope, matched);
-      rest = this.#matchAtom(scope, matched);
+      slot = {
+        first: [this.#matchAtom(scope, matched)],
+        rest: [this.#matchAtom(scope, matched)],
+        inferring: true,
+      };
       templates = new Set([matched.id]);
     } else {
-      const slot = this.#inputType(scope, template, `${name}$Slot`, path);
-      first =
-        slot.atoms.length === 1 ? (slot.atoms[0] ?? "never") : ["(", join(" | ", slot.atoms), ")"];
-      rest = first;
-      templates = slot.templates;
+      const built = this.#inputType(scope, template, `${name}$Slot`, path);
+      slot = { first: built.atoms, rest: built.atoms, inferring: false };
+      templates = built.templates;
     }
     // The backend has exactly `slots.length` slots; those before `min` are required when the
     // template is, whatever section the Autogrow itself is in.
     const required = template.required ? Math.min(input.min, input.slots.length) : 0;
     if (input.form === "prefix") {
-      return { atoms: [this.#repeated(first, rest, required, input.slots.length)], templates };
+      return { atoms: [this.#repeated(slot, required, input.slots.length)], templates };
     }
     const members = input.slots.map((slotName, index) => [
       "readonly ",
       propertyKey(slotName),
-      index < required || isObjectMember(slotName) ? ": " : "?: ",
-      index === 0 ? first : rest,
+      index < required || isObjectMember(slotName) ? ":" : "?:",
+      unionDoc(index === 0 ? slot.first : slot.rest),
       ";",
     ]);
     const slots = scope.names.claim(name);
@@ -655,19 +665,21 @@ class TypesEmitter {
 
   /**
    * A list of `minimum` to `maximum` elements (§6.2): the backend reads no more slots or rows
-   * than exist, so neither may the types. `first` types the first element and `rest` the others,
-   * so a MatchType slot list infers from its first only. The length is bounded with a shared
-   * `Length<min>To<max>` alias rather than a long tuple, which costs far more to type-check.
+   * than exist, so neither may the types. A MatchType slot list infers from its first element
+   * only, so that one is typed apart. The length is bounded with a shared `Length<min>To<max>`
+   * alias rather than a long tuple, which costs far more to type-check.
    */
-  #repeated(first: Doc, rest: Doc, minimum: number, maximum: number): Doc {
+  #repeated({ first, rest, inferring }: Slots, minimum: number, maximum: number): Doc {
     const elements: Doc[] =
       minimum === 0
-        ? first === rest
-          ? []
-          : [[first, "?"]]
-        : [first, ...Array.from({ length: minimum - 1 }, () => rest)];
+        ? inferring
+          ? [[suffixedUnion(first), "?"]]
+          : []
+        : [join(" | ", first), ...Array.from({ length: minimum - 1 }, () => join(" | ", rest))];
     const list: Doc =
-      elements.length === 0 ? ["readonly ", rest, "[]"] : tuple([...elements, ["...", rest, "[]"]]);
+      elements.length === 0
+        ? ["readonly ", suffixedUnion(rest), "[]"]
+        : tuple([...elements, ["...", suffixedUnion(rest), "[]"]]);
     this.#imports.add("Bounded");
     return reference("Bounded", [list, this.#lengths(minimum, maximum)]);
   }
@@ -747,23 +759,38 @@ class TypesEmitter {
 }
 
 function literal(option: ComboOption): string {
-  return typeof option === "string" ? quote(option) : String(option);
+  if (typeof option === "string") return quote(option);
+  return typeof option === "number" ? numberText(option) : String(option);
+}
+
+/**
+ * A MatchType input's template. `#scope` collects the template of every MatchType input of the
+ * node, nested ones included, so a missing one is a bug, not a type to guess.
+ */
+function inputTemplate(
+  scope: NodeScope,
+  input: Extract<InputDef, { kind: "matchType" }>,
+): Template {
+  const template = scope.templates.get(input.templateId);
+  if (template === undefined) {
+    throw new Error(`codegen: template ${input.templateId} of ${input.name} wasn't collected`);
+  }
+  return template;
 }
 
 /** `Name` or `Name<A, B>`, breaking the arguments the way oxfmt does when they don't fit. */
 function reference(name: string, args: readonly Doc[]): Doc {
   if (args.length === 0) return name;
-  return group([name, "<", indent([softline, join([",", line], args)]), softline, ">"]);
+  return bracketed([name, "<"], args, ">", { trailingComma: false });
 }
 
 function tuple(elements: readonly Doc[]): Doc {
-  return group([
-    "readonly [",
-    indent([softline, join([",", line], elements)]),
-    ifBreak(","),
-    softline,
-    "]",
-  ]);
+  return bracketed("readonly [", elements, "]");
+}
+
+/** A union a suffix (`?`, `[]`) follows: in parentheses unless it has one member, as oxfmt has it. */
+function suffixedUnion(atoms: Atoms): Doc {
+  return atoms.length === 1 ? (atoms[0] ?? "never") : ["(", join(" | ", atoms), ")"];
 }
 
 /** A union after a `:`: flat, or one `| atom` per line. */
@@ -773,14 +800,7 @@ function unionDoc(atoms: Atoms): Doc {
 }
 
 function typeParameters(parameters: readonly string[]): Doc {
-  if (parameters.length === 0) return "";
-  return group([
-    "<",
-    indent([softline, join([",", line], parameters)]),
-    ifBreak(","),
-    softline,
-    ">",
-  ]);
+  return parameters.length === 0 ? "" : bracketed("<", parameters, ">");
 }
 
 function aliasDoc(name: string, parameters: readonly string[], atoms: Atoms, comment: string): Doc {
@@ -814,7 +834,7 @@ function interfaceDoc(
 
 /** A one-line doc comment holding server text. */
 function inlineComment(text: string): string {
-  return `/** ${commentText(text)} */`;
+  return `/** ${commentText(untagged(text))} */`;
 }
 
 /** A JSDoc comment from text lines; nothing when there are none. */
@@ -833,10 +853,12 @@ function docComment(lines: readonly string[]): Doc {
 
 function nodeDocLines(node: NodeDef): string[] {
   const lines = [
-    node.category === "" ? node.displayName : `${node.displayName} · ${node.category}`,
+    untagged(node.category === "" ? node.displayName : `${node.displayName} · ${node.category}`),
   ];
-  if (node.description !== undefined) lines.push("", node.description);
-  const lists = node.outputs.filter((output) => output.isList).map((output) => output.name);
+  if (node.description !== undefined) lines.push("", untagged(node.description));
+  const lists = node.outputs
+    .filter((output) => output.isList)
+    .map((output) => untagged(output.name));
   if (lists.length > 0) {
     lines.push("", `List outputs (run what they feed once per item): ${lists.join(", ")}.`);
   }
@@ -846,18 +868,18 @@ function nodeDocLines(node: NodeDef): string[] {
 }
 
 function inputDocLines(input: InputDef): string[] {
-  const lines = input.tooltip === undefined ? [] : [input.tooltip];
+  const lines = input.tooltip === undefined ? [] : [untagged(input.tooltip)];
   const facts: string[] = [];
   if ("default" in input) {
-    facts.push(`Default: \`${stringify(input.default)}\`.`);
+    facts.push(`Default: \`${untagged(stringify(input.default))}\`.`);
   }
   if (input.kind === "int" || input.kind === "float") {
     if (input.min !== undefined && input.max !== undefined) {
-      facts.push(`Range: \`${numberText(input.min)}\` to \`${numberText(input.max)}\`.`);
+      facts.push(`Range: \`${docNumber(input.min)}\` to \`${docNumber(input.max)}\`.`);
     } else if (input.min !== undefined) {
-      facts.push(`Minimum: \`${numberText(input.min)}\`.`);
+      facts.push(`Minimum: \`${docNumber(input.min)}\`.`);
     } else if (input.max !== undefined) {
-      facts.push(`Maximum: \`${numberText(input.max)}\`.`);
+      facts.push(`Maximum: \`${docNumber(input.max)}\`.`);
     }
     if (input.step !== undefined) facts.push(`Step: \`${String(input.step)}\`.`);
   }
@@ -873,7 +895,7 @@ function inputDocLines(input: InputDef): string[] {
 }
 
 /** A number as written in docs: integers beyond 2^53 in full, not JavaScript's short form. */
-function numberText(value: number | bigint): string {
+function docNumber(value: number | bigint): string {
   return typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value)
     ? BigInt(value).toString()
     : String(value);

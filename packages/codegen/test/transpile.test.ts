@@ -103,6 +103,20 @@ function transpiled(built: Workflow, options: Partial<Parameters<typeof transpil
   return transpile(built, { ...OPTIONS, ...options });
 }
 
+/** A raw node definition with inputs and named IMAGE outputs. */
+const nodeOf = (name: string, outputs: readonly string[], inputs: object): object => ({
+  [name]: {
+    input: { required: inputs },
+    output: outputs.map(() => "IMAGE"),
+    output_name: outputs,
+    name,
+    display_name: name,
+    category: "test",
+    python_module: "nodes",
+    output_node: outputs.length === 0,
+  },
+});
+
 describe("transpile", () => {
   test("inlines single-use nodes one level deep, and names the rest after their outputs", () => {
     const built = workflow(basic, ({ n }) => {
@@ -154,6 +168,84 @@ describe("transpile", () => {
       ["W_TRANSPILED_AS_RAW", ["2"]],
     ]);
     expect(result.code).toContain('raw(\n    "MockComboForms",');
+  });
+
+  test("writes an option by its key when only inputs the types lack are required", () => {
+    // The option's one input is a display-only widget: the types have no property for it, so
+    // they take the option by its key alone, and so must the transpiler.
+    const schema = typedSchema(
+      normalizeObjectInfo(
+        JSON.stringify({
+          Previewed: {
+            input: {
+              required: {
+                mode: [
+                  "COMFY_DYNAMICCOMBO_V3",
+                  {
+                    options: [
+                      {
+                        key: "preview",
+                        inputs: { required: { size: ["RESOLUTION_PREVIEW", {}] } },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+            output: [],
+            name: "Previewed",
+            display_name: "Previewed",
+            category: "test",
+            python_module: "nodes",
+            output_node: true,
+          },
+        }),
+      ).schema,
+    );
+    const imported = importApi(
+      '{"1": {"class_type": "Previewed", "inputs": {"mode": "preview"}}}',
+      schema,
+    );
+    const result = transpiled(imported.workflow);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.code).toContain('n.Previewed({ mode: "preview" }, { id: "1" });');
+  });
+
+  test("claims no name for a destructuring too wide to write", () => {
+    const names = [
+      "a_rather_long_output_name_for_the_very_first_output_of_this_node",
+      "a_rather_long_output_name_for_the_very_second_output_of_this_node",
+    ];
+    const schema = typedSchema(
+      normalizeObjectInfo(
+        JSON.stringify({
+          ...nodeOf(
+            "Wide",
+            [...names, "a_rather_long_output_name_for_the_very_third_output_of_this_node"],
+            {},
+          ),
+          ...nodeOf("Single", [names[0] ?? ""], {}),
+          ...nodeOf("Sink", [], { a: ["IMAGE"], b: ["IMAGE"], c: ["IMAGE"], d: ["IMAGE"] }),
+        }),
+      ).schema,
+    );
+    const built = workflow(schema, ({ raw }) => {
+      const wide = raw("Wide", {});
+      const single = raw("Single", {});
+      raw("Sink", {
+        a: wide.output(0),
+        b: wide.output(2),
+        c: single.output(0),
+        d: single.output(0),
+      });
+    });
+    const { code } = transpiled(
+      importApi(stringify(toApi(built, { validate: false })), schema).workflow,
+    );
+    expect(code).toContain("const wide = n.Wide(");
+    expect(code).toContain(
+      "const aRatherLongOutputNameForTheVeryFirstOutputOfThisNode = n.Single(",
+    );
   });
 
   test("leaves out cycles and dangling links, and reports them", async () => {

@@ -622,14 +622,20 @@ The diagnostic model is §5.4.
   - Nodes are sorted by class type (D15).
 - **emitTypes** (codegen): builds documents for a small Wadler-style printer (`codegen/src/doc.ts`)
   with Prettier's group/indent/line/ifBreak/indentIfBreak semantics, at 100 columns measured as
-  display width (East Asian wide characters and emoji count two). It follows oxfmt's choices:
+  oxfmt measures them (`codegen/src/text-width.ts`: unicode-width 0.2's string width, with the
+  character classes measured from oxfmt itself into `text-width-tables.ts` and emoji sequences
+  and Lam-Alef folded as it folds them; `text-width.test.ts` checks every code point and the
+  sequences against the installed oxfmt, so an oxfmt update that changes widths fails until
+  `bun run generate:widths` runs). It follows oxfmt's choices:
   quotes that need fewer escapes, unquoted Unicode identifier keys, assignments that break after
   `=` only when the right side's head doesn't fit, breakable type arguments and `extends` lists.
   Output is deterministic and exactly what oxfmt produces: the committed mock fixtures pass
   `format:check`, `format.test.ts` runs crafted hostile and long names through oxfmt and `tsc`, and
   the corpus test feeds the real dump's output through oxfmt and expects no change.
-  Server text in comments is split at every line terminator and has `*/` escaped, and header
-  lines (ComfyUI version, command) are flattened to one line, so no name can inject code. To keep the layout rules few,
+  Server text in comments is split at every line terminator and has `*/` escaped, so no name can
+  inject code, and an `@` that would start a JSDoc tag (`@deprecated`, `{@link}`) is written
+  `\@`, so no tooltip can mark an input deprecated. Header lines (ComfyUI version, command) are
+  `//` comments, flattened to one line and otherwise as given. To keep the layout rules few,
   every type expression is a union of short atoms; anything bigger gets a named declaration
   (§6.2). Generated files are excluded from linting. Identifiers:
   - derived from input names, sanitized
@@ -1139,6 +1145,7 @@ Checked from 2026-10-17 to 2026-10-18 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and
 | Tuple-extending result interfaces (§6.2) | `interface X$Out extends X$Outputs, NodeHandle` keeps destructuring types and `length`; neither it nor an intersection makes an out-of-range index an error under TS 7.0.2, and the interface lays out more simply |
 | Phase 2 review | An independent review found 10 issues, each proven with a failing snippet or input, among them: option-list and loose-`*` outputs fitting inputs `accepts()` rejects, optional Autogrow/DynamicGroup minimums the backend still enforces, INT/FLOAT list defaults, comment injection through names, and eight printer layouts that differed from oxfmt. All fixed, with mocks and tests; the type-level `accepts` matrix now proves soundness for all 108 pairs |
 | oxfmt layout rules (§9) | Probed on crafted code: `extends` breaks to its own line with one parent per line; type arguments break one per line without a trailing comma; assignments break after `=` when the head of the right side doesn't fit; strings use single quotes only when that needs fewer escapes; Unicode identifier keys are unquoted; CJK and fullwidth characters count as two columns |
+| Text width (§9) | oxfmt 0.73.0 links unicode-width 0.2.2 and measures string width with its sequence rules: probed, `❤️` (U+2764 U+FE0F) and `1️⃣` take two columns, `⌚︎` one, `👍🏽` and a ZWJ family two, `🖼` (text presentation) one, `لا` one. The earlier table (East Asian Wide plus emoji blocks, per character) disagreed on 406 of 12,539 sampled code points and on every sequence. `textWidth` now agrees on all 264,031 code points it probes (planes 0 to 3 and 14, past ASCII) and on 5,987 sequences |
 | Exported key order (§7.4) | `graphToPrompt` writes widgets first (`node.widgets` order), then links (`node.inputs` order); assigning an existing key keeps its position. `dynamicWidgets.ts` inserts option widgets after their combo and option sockets after its socket; Autogrow slots after the previous slot. Six hand-written parity prompts (`mocks/workflows/api/`) export byte for byte |
 | Combo defaults (§7.2) | `useComboWidget.ts`: a multi-select starts at `ref([])`; `getDefaultValue` returns `default` if truthy, else `options[0]` |
 | Phase 3 review | An independent review found 15 issues, each reproduced: explicit `null` replaced by defaults, references from another workflow silently mis-wired, sparse arrays, multi-select flags, frontend initial values (IMAGECOMPARE), row and slot maximums missing from the types, async builds, proxy and builder edge cases, doc mismatches. All fixed with tests; it also rebuilt the corpus Anima export through `workflow()` byte for byte |

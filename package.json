@@ -14,6 +14,7 @@
     "test": "bun test --conditions=@tscomfy/source --path-ignore-patterns='**/*.corpus.test.ts' packages internal",
     "test:corpus": "bun test --conditions=@tscomfy/source .corpus.test",
     "generate:fixtures": "bun --conditions=@tscomfy/source packages/codegen/test/update-generated.ts",
+    "generate:widths": "bun --conditions=@tscomfy/source packages/codegen/test/update-widths.ts",
     "bench:types": "bun --conditions=@tscomfy/source internal/bench/src/bench-types.ts",
     "test:pack": "bun run clean && tsc -b && bun --conditions=@tscomfy/source internal/pack-test/src/pack-test.ts",
     "api:update": "tsc -b && bun internal/api-report/src/api-report.ts",

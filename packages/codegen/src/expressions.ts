@@ -3,21 +3,21 @@
 
 import { type InputValue, isOutputRef, type JsonValue } from "@tscomfy/core";
 import {
+  bracketed,
   type Doc,
   fill,
   group,
   groupId,
   hardline,
-  ifBreak,
   indent,
   indentIfBreak,
   join,
   line,
   PRINT_WIDTH,
   softline,
-  textWidth,
 } from "./doc.ts";
-import { propertyKey, quote } from "./names.ts";
+import { numberText, propertyKey, quote } from "./names.ts";
+import { textWidth } from "./text-width.ts";
 import { isList } from "./values.ts";
 
 /** The names a transpiled module's declaration is written with. */
@@ -90,25 +90,11 @@ export function declarationDoc(
 
 /** A call: arguments on one line, or one per line. */
 export function callDoc(callee: string, args: readonly Doc[]): Doc {
-  return group([
-    callee,
-    "(",
-    indent([softline, join([",", line], args)]),
-    ifBreak(","),
-    softline,
-    ")",
-  ]);
-}
-
-/** `const x = …;`, breaking inside the call rather than after `=`. */
-export function statementDoc(left: string, call: Doc): Doc {
-  const id = groupId("statement");
-  return group([left, " =", group(indent(line), id), indentIfBreak([call, ";"], id)]);
+  return bracketed([callee, "("], args, ")");
 }
 
 export function objectDoc(properties: readonly Doc[]): Doc {
-  if (properties.length === 0) return "{}";
-  return group(["{", indent([line, join([",", line], properties)]), ifBreak(","), line, "}"]);
+  return properties.length === 0 ? "{}" : bracketed("{", properties, "}", { spaced: true });
 }
 
 /**
@@ -118,10 +104,13 @@ export function objectDoc(properties: readonly Doc[]): Doc {
 export function arrayDoc(items: readonly Doc[], breaks = false): Doc {
   if (items.length === 0) return "[]";
   if (breaks) return ["[", indent([hardline, join([",", hardline], items)]), ",", hardline, "]"];
-  return group(["[", indent([softline, join([",", line], items)]), ifBreak(","), softline, "]"]);
+  return bracketed("[", items, "]");
 }
 
-/** `key: value`; a scalar stays on the key's line, anything else may move below it. */
+/**
+ * `key: value`. A value that isn't a string literal (a number, a name, a call) stays on the key's
+ * line, and so does any value after a short key; a string or a structure may move below it.
+ */
 export function propertyDoc(key: string, value: Doc): Doc {
   // Prettier never breaks after a key narrower than five columns (tab width plus three).
   const short = textWidth(key) < 5;
@@ -130,11 +119,6 @@ export function propertyDoc(key: string, value: Doc): Doc {
   }
   const id = groupId("property");
   return group([key, ":", group(indent(line), id), indentIfBreak(value, id)]);
-}
-
-/** A number literal as Prettier writes it: exponents without `+` (`1e21`, not `1e+21`). */
-function numberText(value: number): string {
-  return Object.is(value, -0) ? "-0" : String(value).replace("e+", "e");
 }
 
 export function scalarDoc(value: string | number | bigint | boolean | null): Doc {

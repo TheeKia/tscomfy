@@ -26,22 +26,43 @@ export function quote(text: string): string {
 const LINE_TERMINATOR = /\r\n|[\r\n\u2028\u2029]/;
 
 /**
- * Lines of server text for a comment: split at every line terminator (which a comment can't
- * hold raw without oxfmt rewriting it) and with `*\/` escaped, so no name or tooltip can close
- * the comment and inject code.
+ * Lines of text for a block comment: split at every line terminator (which a comment can't hold
+ * raw without oxfmt rewriting it) and with `*\/` escaped, so no name or tooltip can close the
+ * comment and inject code.
  */
 export function commentLines(text: string): string[] {
-  return text.split(LINE_TERMINATOR).map((each) => each.replaceAll("*/", "*\\/").trimEnd());
+  return lines(text).map((each) => each.replaceAll("*/", "*\\/"));
 }
 
-/** Server text for a one-line comment. */
+/** Text for a one-line block comment. */
 export function commentText(text: string): string {
   return commentLines(text).join(" ");
 }
 
-/** `//` comment lines; line terminators in the text can't end the comment early. */
+/**
+ * Server text made inert in a doc comment: an `@` that would start a JSDoc tag (a tooltip line
+ * `@deprecated …` would make editors strike the input through) or an inline tag (`{@link …}`) is
+ * escaped as `\@`, which TypeScript doesn't read as one.
+ */
+export function untagged(text: string): string {
+  return text.replaceAll(/(^|\s|\{)@/g, "$1\\@");
+}
+
+function lines(text: string): string[] {
+  return text.split(LINE_TERMINATOR).map((each) => each.trimEnd());
+}
+
+/** A number literal as Prettier writes it: exponents without `+` (`1e21`, not `1e+21`). */
+export function numberText(value: number): string {
+  return Object.is(value, -0) ? "-0" : String(value).replace("e+", "e");
+}
+
+/**
+ * `//` comment lines, one per entry: line terminators in the text can't end the comment early,
+ * and nothing else needs escaping there (a `*\/` in a recorded path stays as it is).
+ */
 export function headerLines(header: readonly string[]): string[] {
-  return header.map((text) => `// ${commentText(text)}`);
+  return header.map((text) => `// ${lines(text).join(" ")}`);
 }
 
 /**
@@ -71,15 +92,40 @@ export class NameRegistry {
 
   /** A fresh name based on `base`, now taken. */
   claim(base: string): string {
-    let suffix = this.#next.get(base) ?? 1;
-    let name = suffix === 1 ? base : `${base}${String(suffix)}`;
-    while (this.#taken.has(name)) {
-      suffix++;
-      name = `${base}${String(suffix)}`;
-    }
-    this.#next.set(base, suffix + 1);
-    this.#taken.add(name);
-    return name;
+    return this.claimAll([base])[0] ?? base;
+  }
+
+  /** Fresh names based on `bases`, claimed in turn, now taken. */
+  claimAll(bases: readonly string[]): string[] {
+    const { names, next } = this.#fresh(bases);
+    for (const name of names) this.#taken.add(name);
+    for (const [base, suffix] of next) this.#next.set(base, suffix);
+    return names;
+  }
+
+  /** The names {@link claimAll} would give `bases`, none of them taken yet. */
+  preview(bases: readonly string[]): string[] {
+    return this.#fresh(bases).names;
+  }
+
+  #fresh(bases: readonly string[]): {
+    readonly names: string[];
+    readonly next: ReadonlyMap<string, number>;
+  } {
+    const taken = new Set<string>();
+    const next = new Map<string, number>();
+    const names = bases.map((base) => {
+      let suffix = next.get(base) ?? this.#next.get(base) ?? 1;
+      let name = suffix === 1 ? base : `${base}${String(suffix)}`;
+      while (this.#taken.has(name) || taken.has(name)) {
+        suffix++;
+        name = `${base}${String(suffix)}`;
+      }
+      next.set(base, suffix + 1);
+      taken.add(name);
+      return name;
+    });
+    return { names, next };
   }
 
   /** Whether `name` is taken. */

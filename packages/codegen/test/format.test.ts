@@ -73,6 +73,27 @@ const CASES: Record<string, Record<string, unknown>> = {
       },
     },
   }),
+  "Autogrow slots of a union type": node("ComboSlots", {
+    input: {
+      required: {
+        named: [
+          "COMFY_AUTOGROW_V3",
+          { template: { input: { required: { v: ["COMBO", {}] } }, names: ["a1", "a2"], min: 1 } },
+        ],
+        listed: [
+          "COMFY_AUTOGROW_V3",
+          { template: { input: { required: { v: ["COMBO", {}] } }, prefix: "l", min: 2, max: 3 } },
+        ],
+        optional: [
+          "COMFY_AUTOGROW_V3",
+          { template: { input: { required: { v: [["x", "y"]] } }, prefix: "o", min: 0, max: 2 } },
+        ],
+      },
+    },
+  }),
+  "numbers with exponents": node("BigNumbers", {
+    input: { required: { big: [[1e21, 2.5e-7, -0, 7]] } },
+  }),
   "quotes in names and options": node('Say "Hi" Node', {
     input: {
       required: {
@@ -145,3 +166,33 @@ async function expectFormattedAndCompiling(files: readonly GeneratedFile[]): Pro
     await rm(directory, { recursive: true, force: true });
   }
 }
+
+describe("server text in comments", () => {
+  const text = JSON.stringify(
+    node("Tagged", {
+      display_name: "@internal name",
+      input: {
+        required: {
+          value: ["INT", { tooltip: "line one\n@deprecated really, {@link X} and me@example.com" }],
+        },
+      },
+    }),
+  );
+  const { files } = generate(normalizeObjectInfo(text).schema, {
+    exportName: "tagged",
+    command: "tscomfy generate --from src/*/object_info.json --out out",
+  });
+  const nodes = files.find((file) => file.path === "nodes.ts")?.contents ?? "";
+
+  test("can't start JSDoc tags", () => {
+    expect(nodes).toContain("   * \\@deprecated really, {\\@link X} and me@example.com\n");
+    expect(nodes).toContain("/** \\@internal name · mock */");
+    expect(nodes).not.toMatch(/^\s*\* @/m);
+  });
+
+  test("is recorded as given in a header's command", () => {
+    expect(nodes).toContain(
+      "// Regenerate with: tscomfy generate --from src/*/object_info.json --out out\n",
+    );
+  });
+});

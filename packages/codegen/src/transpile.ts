@@ -20,7 +20,7 @@ import {
   stringify,
   type Workflow,
 } from "@tscomfy/core";
-import { type Doc, hardline, indent, join, print, PRINT_WIDTH, textWidth } from "./doc.ts";
+import { assignment, type Doc, hardline, indent, join, print, PRINT_WIDTH } from "./doc.ts";
 import { exportNameProblem, isExportName, TRANSPILED_MODULE_NAMES } from "./export-name.ts";
 import {
   arrayDoc,
@@ -38,12 +38,12 @@ import {
   propertyDoc,
   scalarDoc,
   STATEMENT_INDENT,
-  statementDoc,
 } from "./expressions.ts";
 import { CODEGEN_VERSION } from "./generate.ts";
 import { headerLines, NameRegistry, quote } from "./names.ts";
 import { hasDefault, isRequired } from "./rules.ts";
-import { Typing, type WriteMode } from "./typing.ts";
+import { textWidth } from "./text-width.ts";
+import { definitionOf, Typing, type WriteMode } from "./typing.ts";
 import { isList, isPlainObject, references } from "./values.ts";
 
 /** Options for {@link transpile}. */
@@ -152,7 +152,9 @@ class Transpiler {
       for (const ref of references(node.inputs)) {
         const source = this.#workflow.graph.nodes.get(ref.node);
         const outputs =
-          source === undefined ? undefined : this.#workflow.schema.nodes[source.classType]?.outputs;
+          source === undefined
+            ? undefined
+            : definitionOf(this.#workflow.schema, source.classType)?.outputs;
         if (outputs !== undefined && outputs[ref.slot] === undefined) {
           missing.set(ref.node, ref.slot);
         }
@@ -161,9 +163,7 @@ class Transpiler {
     // In dependency order, so a node's sources are decided first: a raw source is `Out<"*">`.
     const typing = new Typing(this.#workflow, (id) => this.#plans.get(id)?.mode);
     for (const node of order) {
-      const definition = Object.hasOwn(this.#workflow.schema.nodes, node.classType)
-        ? this.#workflow.schema.nodes[node.classType]
-        : undefined;
+      const definition = definitionOf(this.#workflow.schema, node.classType);
       const slot = missing.get(node.id);
       const reason =
         node.raw || definition === undefined
@@ -283,7 +283,7 @@ class Transpiler {
       for (const slot of slots) {
         this.#references.set(slotKey(node.id, slot), [name, ".output(", String(slot), ")"]);
       }
-      return statementDoc(`const ${name}`, call);
+      return assignment(`const ${name}`, [call, ";"]);
     }
     const callee = /^[A-Za-z_$][\w$]*$/.test(node.classType)
       ? `n.${node.classType}`
@@ -308,33 +308,42 @@ class Transpiler {
       }
       const name = this.#claim(camel(outputs[0]?.name ?? node.classType, "output"));
       this.#references.set(key, name);
-      return statementDoc(`const ${name}`, call);
+      return assignment(`const ${name}`, [call, ";"]);
     }
     // Several outputs: destructure the ones used, by their names, while the pattern fits on its
     // line (Prettier would break a longer one); otherwise index one variable.
+    // The names are claimed only for the layout chosen.
     const last = Math.max(...used.map((output) => output.index));
-    const bindings = outputs
-      .slice(0, last + 1)
-      .map((output) => (used.includes(output) ? this.#claim(camel(output.name, "output")) : ""));
-    const pattern = `const [${bindings.join(", ")}] =`;
+    const listed = outputs.slice(0, last + 1);
+    const bases = used.map((output) => this.#usable(camel(output.name, "output")));
+    const preview = this.#names.preview(bases);
+    const bindings = (names: readonly string[]): string[] =>
+      listed.map((output) => names[used.indexOf(output)] ?? "");
+    const pattern = `const [${bindings(preview).join(", ")}] =`;
     if (STATEMENT_INDENT[this.#layout] + textWidth(pattern) <= PRINT_WIDTH) {
-      for (const [index, binding] of bindings.entries()) {
+      const claimed = bindings(this.#names.claimAll(bases));
+      for (const [index, binding] of claimed.entries()) {
         if (binding !== "") this.#references.set(slotKey(node.id, index), binding);
       }
-      return statementDoc(`const [${bindings.join(", ")}]`, call);
+      return assignment(`const [${claimed.join(", ")}]`, [call, ";"]);
     }
     const name = this.#claim(camel(node.classType, "node"));
     for (const output of used) {
       this.#references.set(slotKey(node.id, output.index), [name, "[", String(output.index), "]"]);
     }
-    return statementDoc(`const ${name}`, call);
+    return assignment(`const ${name}`, [call, ";"]);
   }
 
   #claim(base: string): string {
-    // A word no export may be gets a suffix, except the module's own names, which the registry
-    // holds: those get a number, like any other taken name.
-    const usable = isExportName(base) || TRANSPILED_MODULE_NAMES.includes(base);
-    return this.#names.claim(usable ? base : `${base}Node`);
+    return this.#names.claim(this.#usable(base));
+  }
+
+  /**
+   * A base for a variable name: a word no export may be gets a suffix, except the module's own
+   * names, which the registry holds: those get a number, like any other taken name.
+   */
+  #usable(base: string): string {
+    return isExportName(base) || TRANSPILED_MODULE_NAMES.includes(base) ? base : `${base}Node`;
   }
 
   /** `{ id: "5" }`, and the title and mode if there are. */

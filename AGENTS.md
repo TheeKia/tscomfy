@@ -90,6 +90,7 @@ bun run check     # tsc -b, lint, format check, tests: run before declaring work
 bun run test      # tests against source, no build needed (skips corpus tests)
 bun run test:corpus  # corpus tests against your local real data
 bun run generate:fixtures  # after changing codegen: regenerate packages/codegen/test/generated (types and transpiled prompts)
+bun run generate:widths  # after updating oxfmt: remeasure the text widths codegen breaks lines by
 bun run bench:types  # type-check budget of generated types (plan §6.6)
 bun run api:update  # after an intended API change: rewrite docs/api/ and review its diff
 bun run test:pack  # pack, install offline, run the CLI under Node and Bun, type-check a consumer

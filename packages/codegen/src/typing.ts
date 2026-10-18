@@ -9,21 +9,30 @@ import {
   type InputValue,
   isOutputRef,
   type NodeDef,
+  type Schema,
   type NodeId,
   type OutputDef,
   type SocketType,
   sendsInputValue,
   type Workflow,
 } from "@tscomfy/core";
-import { forcedRowField, isObjectMember, isRequired } from "./rules.ts";
+import { forcedRowField, isObjectMember, isRequired, mayAllBeLeftOut } from "./rules.ts";
 import { isList, isPlainObject } from "./values.ts";
+
+/**
+ * A class's definition, or `undefined` for a class the schema doesn't have. Own keys only: a
+ * class named `constructor` is no `Object` member.
+ */
+export function definitionOf(schema: Schema, classType: string): NodeDef | undefined {
+  return Object.hasOwn(schema.nodes, classType) ? schema.nodes[classType] : undefined;
+}
 
 /** How a node is written: `typed` as `n.Class(…)`, `raw` as `raw(…)` with its wire keys. */
 export type WriteMode = "typed" | "raw";
 
 /**
  * Whether the generated types can express a node's inputs, by the rules `emit-types.ts` types
- * them with. Returns why not, or `undefined`.
+ * them with: {@link Typing.problem} says why not.
  */
 export class Typing {
   readonly #workflow: Workflow;
@@ -126,7 +135,7 @@ export class Typing {
           const option = input.options.find((each) => each.key === value);
           if (option === undefined) return `${where} has no option ${value}`;
           // An option whose inputs may all be left out can be given by its key alone.
-          return option.inputs.every((child) => !isRequired(child))
+          return mayAllBeLeftOut(option.inputs)
             ? undefined
             : `${where} option ${value} needs its inputs`;
         }
@@ -267,9 +276,7 @@ export class Typing {
     const node = this.#workflow.graph.nodes.get(id);
     const mode = this.#mode(id);
     if (node === undefined || mode === undefined) return undefined;
-    const definition = Object.hasOwn(this.#workflow.schema.nodes, node.classType)
-      ? this.#workflow.schema.nodes[node.classType]
-      : undefined;
+    const definition = definitionOf(this.#workflow.schema, node.classType);
     // Whatever is written as raw(…), known class or not, has `Out<"*">` outputs.
     if (mode === "raw" || definition === undefined) return STAR;
     const output = definition.outputs[slot];

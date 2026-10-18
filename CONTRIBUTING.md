@@ -25,6 +25,7 @@ Everything runs from source: tests and the CLI resolve the packages to `src/` th
 | `bun run format` | Format and sort imports (oxfmt) |
 | `bun run lint` | oxlint with type-aware rules |
 | `bun run generate:fixtures` | Regenerate `packages/codegen/test/generated/` (types and transpiled mock workflows) after changing codegen |
+| `bun run generate:widths` | Remeasure the text widths codegen breaks lines by from oxfmt, after updating oxfmt (`text-width.test.ts` fails until then) |
 | `bun run api:update` | Rewrite the API reports in `docs/api/` after an intended API change |
 | `bun run bench:types` | Check the type-checking budget of generated types |
 | `bun run test:pack` | Pack every package, install the tarballs offline into a scratch project, run the CLI under Node and Bun and type-check a consumer. CI runs it on every push, under Node 24 and 26 |
