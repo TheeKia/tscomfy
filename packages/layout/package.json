@@ -1,6 +1,6 @@
 {
   "name": "@tscomfy/layout",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Automatic layout for tscomfy workflows written in the ComfyUI frontend's UI format.",
   "keywords": [
     "comfyui",

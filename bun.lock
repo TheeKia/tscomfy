@@ -59,7 +59,7 @@
     },
     "packages/cli": {
       "name": "@tscomfy/cli",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "bin": {
         "tscomfy": "dist/main.js",
       },
@@ -77,7 +77,7 @@
     },
     "packages/client": {
       "name": "@tscomfy/client",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "devDependencies": {
         "@tscomfy/core": "workspace:*",
         "@tscomfy/fixtures": "workspace:*",
@@ -88,7 +88,7 @@
     },
     "packages/codegen": {
       "name": "@tscomfy/codegen",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "devDependencies": {
         "@tscomfy/core": "workspace:*",
         "@tscomfy/fixtures": "workspace:*",
@@ -99,14 +99,14 @@
     },
     "packages/core": {
       "name": "@tscomfy/core",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "devDependencies": {
         "@tscomfy/fixtures": "workspace:*",
       },
     },
     "packages/layout": {
       "name": "@tscomfy/layout",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "devDependencies": {
         "@tscomfy/core": "workspace:*",
         "@tscomfy/fixtures": "workspace:*",

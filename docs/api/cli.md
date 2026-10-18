@@ -55,7 +55,7 @@ export declare function systemIo(): Io;
 ```ts
 import { type Io } from "./io.ts";
 /** The CLI's version. A test keeps it equal to package.json. */
-export declare const CLI_VERSION = "0.1.2";
+export declare const CLI_VERSION = "0.2.0";
 /**
  * Runs the CLI with `args` (without the program name) and returns the exit code: 0 on success,
  * 1 on a failure or detected drift, 2 on a usage error.

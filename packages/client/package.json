@@ -1,6 +1,6 @@
 {
   "name": "@tscomfy/client",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Runs tscomfy workflows on a ComfyUI server: queueing, live progress and previews, outputs, uploads.",
   "keywords": [
     "client",

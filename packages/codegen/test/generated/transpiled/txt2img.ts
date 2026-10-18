@@ -1,4 +1,4 @@
-// Transpiled by @tscomfy/codegen 0.1.2.
+// Transpiled by @tscomfy/codegen 0.2.0.
 // Regenerate with: bun run generate:fixtures
 
 import { type NodesOf, type Workflow, workflow } from "@tscomfy/core";
