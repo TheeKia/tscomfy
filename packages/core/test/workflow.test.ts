@@ -71,6 +71,26 @@ describe("results", () => {
   });
 });
 
+describe("handles", () => {
+  test("are what the build function returned, kept as returned", () => {
+    const built = workflow(basic, ({ n }) => {
+      const save = n["SaveImage"]!({ images: n["VAEDecode"]!({}) }, { id: "save" });
+      return { save, label: "kept" };
+    });
+    expect(built.handles.save.id).toBe("save");
+    expect(built.handles.label).toBe("kept");
+    expect(Object.isFrozen(built)).toBeTrue();
+  });
+
+  test("are undefined when the build function returns nothing", () => {
+    const built = workflow(basic, ({ n }) => {
+      n["VAELoader"]?.({ vae_name: "pixel_space" });
+    });
+    expect(built.handles).toBeUndefined();
+    expect(Object.keys(built)).toEqual(["schema", "graph", "handles"]);
+  });
+});
+
 describe("the graph", () => {
   test("records structured inputs and options, frozen", () => {
     const built = workflow(basic, ({ n }) => {

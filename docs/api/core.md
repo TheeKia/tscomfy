@@ -95,6 +95,9 @@ declare const CODES: {
     readonly W_EMPTY_COMBO: "warning";
     readonly W_UNTYPED_INPUT: "warning";
     readonly W_TRANSPILED_AS_RAW: "warning";
+    readonly E_PROMPT_REJECTED: "error";
+    readonly E_SERVER_VALIDATION: "error";
+    readonly W_NODE_BLOCKED: "warning";
 };
 /**
  * Every diagnostic code with its severity. The prefix names the severity: `E_` for errors (the
@@ -192,7 +195,7 @@ import type { TypedSchema } from "../schema/typed.ts";
 /** What {@link importApi} returns. */
 export interface ApiImportResult<N> {
     /** The prompt as a workflow over `schema`; nodes it couldn't read are left out. */
-    readonly workflow: Workflow<N>;
+    readonly workflow: Workflow<N, undefined>;
     /** Problems reading the prompt. Validation (`validate`) is separate. */
     readonly diagnostics: readonly Diagnostic[];
 }
@@ -300,10 +303,20 @@ export interface GraphNode {
 export interface Graph {
     readonly nodes: ReadonlyMap<NodeId, GraphNode>;
 }
-/** A built workflow: its schema and its graph. Frozen. */
-export interface Workflow<N = unknown> {
+/**
+ * A built workflow: its schema, its graph, and the handles its build function returned. Frozen
+ * (the handles are kept as returned). `H` defaults to `unknown`, so `Workflow<N>` accepts a
+ * workflow with any handles.
+ */
+export interface Workflow<N = unknown, H = unknown> {
     readonly schema: TypedSchema<N>;
     readonly graph: Graph;
+    /**
+     * What the build function of {@link workflow} returned, usually an object of node handles:
+     * `return { save }`. `undefined` when it returned nothing, and for imported workflows. Graph
+     * operations keep it, since they keep node ids.
+     */
+    readonly handles: H;
 }
 /** A node added with {@link BuildContext.raw}: its id, and untyped access to its outputs. */
 export interface RawNode extends NodeHandle {
@@ -411,14 +424,16 @@ import type { Workflow } from "./graph.ts";
  * that run (not bypassed or muted) and everything they link to, through bypassed and muted
  * nodes too, so the result is a workflow the builder could make (no link to a node left out).
  * Nodes of classes the schema doesn't know are kept only when something kept links to them.
- * Cosmetic: the backend only runs output nodes and their ancestors anyway.
+ * Cosmetic: the backend only runs output nodes and their ancestors anyway. The handles are
+ * kept as they are, so a handle of a node it dropped finds nothing.
  */
-export declare function prune<N>(workflow: Workflow<N>): Workflow<N>;
+export declare function prune<N, H>(workflow: Workflow<N, H>): Workflow<N, H>;
 /**
  * One workflow per output node that runs, in graph order, each holding that node and everything
- * it depends on, as `prune` keeps them. An output node another one depends on is in both.
+ * it depends on, as `prune` keeps them. An output node another one depends on is in both. Each
+ * keeps all the handles, also those of nodes it doesn't have.
  */
-export declare function splitOutputs<N>(workflow: Workflow<N>): readonly Workflow<N>[];
+export declare function splitOutputs<N, H>(workflow: Workflow<N, H>): readonly Workflow<N, H>[];
 ```
 
 ## `graph/workflow.d.ts`
@@ -429,14 +444,15 @@ import type { BuildContext, InputValue, Workflow } from "./graph.ts";
 import type { NodeId, NodeMode, Out } from "./types.ts";
 /**
  * Builds a workflow: `build` calls node functions on `n`, which add nodes and return their outputs,
- * and `raw` for untyped nodes. The result is frozen; ids are `"1"`, `"2"`, … in creation order
- * unless set with `options.id`.
+ * and `raw` for untyped nodes. What `build` returns, usually an object of node handles, becomes
+ * the workflow's `handles` (typed by inference: an explicit `workflow<N>(…)` types them `void`).
+ * The result is frozen; ids are `"1"`, `"2"`, … in creation order unless set with `options.id`.
  *
  * Throws a `TypeError` for misuse the types can't catch: a duplicate or empty id, a node function
  * called after `build` returned or from an async `build`, an input value that isn't JSON or an
  * output reference of this workflow, or a sparse array.
  */
-export declare function workflow<N>(schema: TypedSchema<N>, build: (context: BuildContext<N>) => void): Workflow<N>;
+export declare function workflow<N, H = void>(schema: TypedSchema<N>, build: (context: BuildContext<N>) => H): Workflow<N, H>;
 /** A node given whole, as an importer reads it: its id, class, structured inputs and title. */
 export interface AssembledNode {
     readonly id: NodeId;
@@ -449,11 +465,12 @@ export interface AssembledNode {
     readonly mode?: NodeMode;
 }
 /**
- * Builds a workflow from whole nodes, for importers (not part of the package API). `build`
- * receives `link`, which makes an output reference of this workflow, to a node added before or
- * after, and returns the nodes in order. Throws a `TypeError` as {@link workflow} does.
+ * Builds a workflow from whole nodes, for importers and graph operations (not part of the
+ * package API). `build` receives `link`, which makes an output reference of this workflow, to a
+ * node added before or after, and returns the nodes in order. Throws a `TypeError` as
+ * {@link workflow} does.
  */
-export declare function assembleWorkflow<N>(schema: TypedSchema<N>, build: (link: (node: NodeId, slot: number) => Out<string>) => readonly AssembledNode[]): Workflow<N>;
+export declare function assembleWorkflow<N, H>(schema: TypedSchema<N>, build: (link: (node: NodeId, slot: number) => Out<string>) => readonly AssembledNode[], handles: H): Workflow<N, H>;
 ```
 
 ## `json/parse.d.ts`
@@ -1054,7 +1071,7 @@ import type { TypedSchema } from "../schema/typed.ts";
 /** What {@link importUi} returns. */
 export interface UiImportResult<N> {
     /** The workflow the frontend would queue, as a graph over `schema`. */
-    readonly workflow: Workflow<N>;
+    readonly workflow: Workflow<N, undefined>;
     /** Problems reading the workflow, and frontend behavior it reproduces with a warning. */
     readonly diagnostics: readonly Diagnostic[];
 }

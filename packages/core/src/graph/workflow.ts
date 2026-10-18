@@ -8,19 +8,20 @@ import type { NodeHandle, NodeId, NodeMode, Out } from "./types.ts";
 
 /**
  * Builds a workflow: `build` calls node functions on `n`, which add nodes and return their outputs,
- * and `raw` for untyped nodes. The result is frozen; ids are `"1"`, `"2"`, … in creation order
- * unless set with `options.id`.
+ * and `raw` for untyped nodes. What `build` returns, usually an object of node handles, becomes
+ * the workflow's `handles` (typed by inference: an explicit `workflow<N>(…)` types them `void`).
+ * The result is frozen; ids are `"1"`, `"2"`, … in creation order unless set with `options.id`.
  *
  * Throws a `TypeError` for misuse the types can't catch: a duplicate or empty id, a node function
  * called after `build` returned or from an async `build`, an input value that isn't JSON or an
  * output reference of this workflow, or a sparse array.
  */
-export function workflow<N>(
+export function workflow<N, H = void>(
   schema: TypedSchema<N>,
-  build: (context: BuildContext<N>) => void,
-): Workflow<N> {
+  build: (context: BuildContext<N>) => H,
+): Workflow<N, H> {
   const builder = new GraphBuilder<N>(schema);
-  let returned: unknown;
+  let returned: H;
   try {
     returned = build({
       n: builder.nodes(),
@@ -33,7 +34,7 @@ export function workflow<N>(
   if (isThenable(returned)) {
     throw new TypeError("workflow: the build function must be synchronous");
   }
-  return Object.freeze({ schema, graph: builder.graph() });
+  return Object.freeze({ schema, graph: builder.graph(), handles: returned });
 }
 
 /** A node given whole, as an importer reads it: its id, class, structured inputs and title. */
@@ -47,14 +48,16 @@ export interface AssembledNode {
 }
 
 /**
- * Builds a workflow from whole nodes, for importers (not part of the package API). `build`
- * receives `link`, which makes an output reference of this workflow, to a node added before or
- * after, and returns the nodes in order. Throws a `TypeError` as {@link workflow} does.
+ * Builds a workflow from whole nodes, for importers and graph operations (not part of the
+ * package API). `build` receives `link`, which makes an output reference of this workflow, to a
+ * node added before or after, and returns the nodes in order. Throws a `TypeError` as
+ * {@link workflow} does.
  */
-export function assembleWorkflow<N>(
+export function assembleWorkflow<N, H>(
   schema: TypedSchema<N>,
   build: (link: (node: NodeId, slot: number) => Out<string>) => readonly AssembledNode[],
-): Workflow<N> {
+  handles: H,
+): Workflow<N, H> {
   const builder = new GraphBuilder<N>(schema);
   try {
     for (const node of build((source, slot) => outputRef(builder, source, slot))) {
@@ -63,7 +66,7 @@ export function assembleWorkflow<N>(
   } finally {
     builder.close();
   }
-  return Object.freeze({ schema, graph: builder.graph() });
+  return Object.freeze({ schema, graph: builder.graph(), handles });
 }
 
 class GraphBuilder<N> {

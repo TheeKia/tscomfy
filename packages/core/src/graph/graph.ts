@@ -38,10 +38,20 @@ export interface Graph {
   readonly nodes: ReadonlyMap<NodeId, GraphNode>;
 }
 
-/** A built workflow: its schema and its graph. Frozen. */
-export interface Workflow<N = unknown> {
+/**
+ * A built workflow: its schema, its graph, and the handles its build function returned. Frozen
+ * (the handles are kept as returned). `H` defaults to `unknown`, so `Workflow<N>` accepts a
+ * workflow with any handles.
+ */
+export interface Workflow<N = unknown, H = unknown> {
   readonly schema: TypedSchema<N>;
   readonly graph: Graph;
+  /**
+   * What the build function of {@link workflow} returned, usually an object of node handles:
+   * `return { save }`. `undefined` when it returned nothing, and for imported workflows. Graph
+   * operations keep it, since they keep node ids.
+   */
+  readonly handles: H;
 }
 
 /** A node added with {@link BuildContext.raw}: its id, and untyped access to its outputs. */

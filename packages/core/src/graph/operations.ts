@@ -11,17 +11,19 @@ import { type AssembledNode, assembleWorkflow } from "./workflow.ts";
  * that run (not bypassed or muted) and everything they link to, through bypassed and muted
  * nodes too, so the result is a workflow the builder could make (no link to a node left out).
  * Nodes of classes the schema doesn't know are kept only when something kept links to them.
- * Cosmetic: the backend only runs output nodes and their ancestors anyway.
+ * Cosmetic: the backend only runs output nodes and their ancestors anyway. The handles are
+ * kept as they are, so a handle of a node it dropped finds nothing.
  */
-export function prune<N>(workflow: Workflow<N>): Workflow<N> {
+export function prune<N, H>(workflow: Workflow<N, H>): Workflow<N, H> {
   return subset(workflow, needed(workflow, outputNodes(workflow)));
 }
 
 /**
  * One workflow per output node that runs, in graph order, each holding that node and everything
- * it depends on, as `prune` keeps them. An output node another one depends on is in both.
+ * it depends on, as `prune` keeps them. An output node another one depends on is in both. Each
+ * keeps all the handles, also those of nodes it doesn't have.
  */
-export function splitOutputs<N>(workflow: Workflow<N>): readonly Workflow<N>[] {
+export function splitOutputs<N, H>(workflow: Workflow<N, H>): readonly Workflow<N, H>[] {
   return outputNodes(workflow).map((root) => subset(workflow, needed(workflow, [root])));
 }
 
@@ -47,15 +49,18 @@ function needed(workflow: Workflow, roots: readonly GraphNode[]): ReadonlySet<No
   return kept;
 }
 
-/** The nodes in `ids`, in graph order, as a new workflow. */
-function subset<N>(workflow: Workflow<N>, ids: ReadonlySet<NodeId>): Workflow<N> {
+/** The nodes in `ids`, in graph order, as a new workflow with the same handles. */
+function subset<N, H>(workflow: Workflow<N, H>, ids: ReadonlySet<NodeId>): Workflow<N, H> {
   const order = positions(workflow);
   const kept = [...ids].toSorted((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
-  return assembleWorkflow(workflow.schema, (link) =>
-    kept.flatMap((id) => {
-      const node = workflow.graph.nodes.get(id);
-      return node === undefined ? [] : [copy(node, link)];
-    }),
+  return assembleWorkflow(
+    workflow.schema,
+    (link) =>
+      kept.flatMap((id) => {
+        const node = workflow.graph.nodes.get(id);
+        return node === undefined ? [] : [copy(node, link)];
+      }),
+    workflow.handles,
   );
 }
 

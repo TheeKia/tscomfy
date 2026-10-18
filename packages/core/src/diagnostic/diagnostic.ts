@@ -52,6 +52,9 @@ const CODES = {
   W_EMPTY_COMBO: "warning",
   W_UNTYPED_INPUT: "warning",
   W_TRANSPILED_AS_RAW: "warning",
+  E_PROMPT_REJECTED: "error",
+  E_SERVER_VALIDATION: "error",
+  W_NODE_BLOCKED: "warning",
 } as const;
 
 /**

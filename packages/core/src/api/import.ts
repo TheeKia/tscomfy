@@ -18,7 +18,7 @@ import { groupKey } from "./wire.ts";
 /** What {@link importApi} returns. */
 export interface ApiImportResult<N> {
   /** The prompt as a workflow over `schema`; nodes it couldn't read are left out. */
-  readonly workflow: Workflow<N>;
+  readonly workflow: Workflow<N, undefined>;
   /** Problems reading the prompt. Validation (`validate`) is separate. */
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -37,20 +37,24 @@ export function importApi<N>(text: string, schema: TypedSchema<N>): ApiImportRes
   const parsed = parse(text);
   diagnostics.push(...parsed.diagnostics);
   const nodes: AssembledNode[] = [];
-  const workflow = assembleWorkflow(schema, (link) => {
-    if (parsed.value === undefined) return [];
-    if (!isJsonObject(parsed.value)) {
-      diagnostics.push(
-        createDiagnostic("E_INVALID_PROMPT", [], "Expected a prompt: an object of nodes by id."),
-      );
-      return [];
-    }
-    for (const [id, raw] of Object.entries(parsed.value)) {
-      const node = readNode(id, raw, schema, link, diagnostics);
-      if (node !== undefined) nodes.push(node);
-    }
-    return nodes;
-  });
+  const workflow = assembleWorkflow(
+    schema,
+    (link) => {
+      if (parsed.value === undefined) return [];
+      if (!isJsonObject(parsed.value)) {
+        diagnostics.push(
+          createDiagnostic("E_INVALID_PROMPT", [], "Expected a prompt: an object of nodes by id."),
+        );
+        return [];
+      }
+      for (const [id, raw] of Object.entries(parsed.value)) {
+        const node = readNode(id, raw, schema, link, diagnostics);
+        if (node !== undefined) nodes.push(node);
+      }
+      return nodes;
+    },
+    undefined,
+  );
   return { workflow, diagnostics };
 }
 

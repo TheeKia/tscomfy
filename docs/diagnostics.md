@@ -142,3 +142,14 @@ have; the input is left out) and whatever the exporter reports.
 | Code | Meaning | What happens |
 |---|---|---|
 | `W_TRANSPILED_AS_RAW` | A node of a known class whose inputs the generated types can't express: a value or link they refuse (a legacy combo linked from an option list, a link into a socketless widget, a MatchType input that disagrees with the inferring one), an input the class doesn't have, a missing required input, a link to an output the node doesn't have. | The node is written as `raw(…)` with its wire keys, so the program still builds the same prompt. |
+
+## Running prompts
+
+`@tscomfy/client` reports what the server said about a job (plan §17). Paths point into the
+prompt that was sent, like validation paths: `[id, "inputs", input]`, `[id]` or `[]`.
+
+| Code | Meaning | What happens |
+|---|---|---|
+| `E_PROMPT_REJECTED` | The server refused the prompt as a whole (its `error`): no output node, an unknown class (path `[id]`), an invalid prompt id, or every output failing validation. The message names the server's error type. | The job's outcome is `rejected`. |
+| `E_SERVER_VALIDATION` | The server's validation found an error in a node (its `node_errors`): a value outside its bounds or list, a missing input, a link of the wrong type, a custom check. One per error, at the input it names. Validation passing locally and failing here means the server differs from the schema (a file was deleted, a node changed). | With other outputs valid, the server runs those and leaves out the ones this error affects (the outcome lists it); otherwise the outcome is `rejected`. |
+| `W_NODE_BLOCKED` | A node blocked execution with a message while the job ran (an `ExecutionBlocker`). | The run continues without what depends on the node; the job also gets a `blocked` event. |

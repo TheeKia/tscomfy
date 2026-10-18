@@ -35,7 +35,7 @@ import { type RestoredValues, restoreWidgetValues } from "./import/widget-values
 /** What {@link importUi} returns. */
 export interface UiImportResult<N> {
   /** The workflow the frontend would queue, as a graph over `schema`. */
-  readonly workflow: Workflow<N>;
+  readonly workflow: Workflow<N, undefined>;
   /** Problems reading the workflow, and frontend behavior it reproduces with a warning. */
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -57,14 +57,18 @@ export function importUi<N>(text: string, schema: TypedSchema<N>): UiImportResul
   };
   const parsed = parse(text);
   diagnostics.push(...parsed.diagnostics);
-  const workflow = assembleWorkflow(schema, (link) => {
-    if (parsed.value === undefined) return [];
-    if (!isJsonObject(parsed.value) || !isJsonArray(parsed.value["nodes"])) {
-      report("E_INVALID_WORKFLOW", [], "Expected a UI workflow: an object with a nodes list.");
-      return [];
-    }
-    return read(parsed.value, schema, link, diagnostics, report);
-  });
+  const workflow = assembleWorkflow(
+    schema,
+    (link) => {
+      if (parsed.value === undefined) return [];
+      if (!isJsonObject(parsed.value) || !isJsonArray(parsed.value["nodes"])) {
+        report("E_INVALID_WORKFLOW", [], "Expected a UI workflow: an object with a nodes list.");
+        return [];
+      }
+      return read(parsed.value, schema, link, diagnostics, report);
+    },
+    undefined,
+  );
   return { workflow, diagnostics };
 }
 

@@ -68,11 +68,18 @@ interface Producer {
   readonly path: readonly (string | number)[];
 }
 
-/** Codes codegen reports; their negative tests are in packages/codegen/test. */
-const CODEGEN_CODES = ["W_EMPTY_COMBO", "W_UNTYPED_INPUT", "W_TRANSPILED_AS_RAW"] as const;
-type CoreCode = Exclude<DiagnosticCode, (typeof CODEGEN_CODES)[number]>;
+/** Codes other packages report; their negative tests are in that package's tests. */
+const OTHER_CODES = [
+  "W_EMPTY_COMBO",
+  "W_UNTYPED_INPUT",
+  "W_TRANSPILED_AS_RAW",
+  "E_PROMPT_REJECTED",
+  "E_SERVER_VALIDATION",
+  "W_NODE_BLOCKED",
+] as const;
+type CoreCode = Exclude<DiagnosticCode, (typeof OTHER_CODES)[number]>;
 const isCoreCode = (code: DiagnosticCode): code is CoreCode =>
-  !(CODEGEN_CODES as readonly DiagnosticCode[]).includes(code);
+  !(OTHER_CODES as readonly DiagnosticCode[]).includes(code);
 
 /** One negative test per code: an input that must produce it, at a precise path. */
 const PRODUCERS: Record<CoreCode, Producer> = {

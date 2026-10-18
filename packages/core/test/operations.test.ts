@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   type InputValue,
+  importApi,
   isOutputRef,
   type Out,
   prune,
   splitOutputs,
+  stringify,
   toApi,
   type Workflow,
   workflow,
@@ -71,6 +73,26 @@ const built = workflow(basic, ({ n, raw }) => {
   n["SaveImage"]?.({ images: muted }, { id: "save3" });
   // A bypassed output node doesn't run, so nothing is kept for it.
   n["SaveImage"]?.({ images: muted }, { id: "bypassedSave", mode: "bypass" });
+});
+
+describe("handles", () => {
+  const withHandles = workflow(basic, ({ n }) => {
+    const save = n["SaveImage"]!({ images: n["VAEDecode"]!({}) }, { id: "save" });
+    const stray = n["VAELoader"]!({ vae_name: "pixel_space" }, { id: "stray" });
+    return { save, stray };
+  });
+
+  test("are kept by prune and splitOutputs, even for nodes they drop", () => {
+    const pruned = prune(withHandles);
+    expect(pruned.handles).toBe(withHandles.handles);
+    expect(pruned.graph.nodes.has("stray")).toBeFalse();
+    expect(splitOutputs(withHandles).map((each) => each.handles)).toEqual([withHandles.handles]);
+  });
+
+  test("are undefined for imported workflows", () => {
+    const text = stringify(toApi(withHandles, { validate: false }));
+    expect(importApi(text, basic).workflow.handles).toBeUndefined();
+  });
 });
 
 describe("prune", () => {
