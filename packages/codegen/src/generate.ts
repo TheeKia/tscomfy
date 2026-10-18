@@ -3,7 +3,7 @@ import { emitSchemaModule } from "./emit-schema-module.ts";
 import { emitTypes } from "./emit-types.ts";
 
 /** The version written into generated headers. A test keeps it equal to package.json. */
-export const CODEGEN_VERSION = "0.1.0";
+export const CODEGEN_VERSION = "0.1.1";
 
 /** A file to write, as data: codegen never touches the filesystem. */
 export interface GeneratedFile {

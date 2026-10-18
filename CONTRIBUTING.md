@@ -87,8 +87,8 @@ The four packages share one version and are released together, from CI only:
 doesn't), all with read-only permissions; a second job, the only one allowed to mint the token,
 publishes the tarballs with npm trusted publishing: no token is stored, and npm adds
 provenance. A prerelease version (`0.2.0-rc.1`) is published under the `next` dist-tag, so
-`latest` stays the last release. Versions already on npm are skipped, so a failed release can be re-run. Each
-package's trusted publisher on npmjs.com names `TheeKia/tscomfy` and `release.yml`; a new
+`latest` stays the last release. Versions already on npm are skipped, so a failed release can be
+re-run. Each package's trusted publisher on npmjs.com names `TheeKia/tscomfy` and `release.yml`; a new
 package needs one, which npm only allows once the package exists, so its first version is
 published by hand.
 
