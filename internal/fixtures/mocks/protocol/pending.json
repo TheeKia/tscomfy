@@ -1,0 +1,429 @@
+{
+  "about": "A job cancelled while queued behind another: no event at all, and its record is gone (404).",
+  "comfyVersion": "0.41.0",
+  "runs": [
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 2048,
+            "height": 2048,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["1", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "3": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["2", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "4": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["3", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "5": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["4", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "99": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["5", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 10,
+          "node_errors": {}
+        }
+      },
+      "events": [
+        {
+          "type": "execution_start",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348566893
+          }
+        },
+        {
+          "type": "execution_cached",
+          "data": {
+            "nodes": ["1", "2", "3"],
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348566894
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "4",
+            "display_node": "4",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "5",
+            "display_node": "5",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              },
+              "99": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "99",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "99",
+                "parent_node_id": null,
+                "real_node_id": "99"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "99",
+            "display_node": "99",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "99",
+            "display_node": "99",
+            "output": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_sasra_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 2048,
+                    "height": 2048
+                  }
+                }
+              ]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              },
+              "99": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "99",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "99",
+                "parent_node_id": null,
+                "real_node_id": "99"
+              }
+            }
+          }
+        },
+        {
+          "type": "execution_success",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348566981
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": null,
+            "prompt_id": "PROMPT_ID"
+          }
+        }
+      ],
+      "record": {
+        "status": 200,
+        "body": {
+          "id": "PROMPT_ID",
+          "status": "completed",
+          "priority": 10,
+          "create_time": 1792348566893,
+          "execution_start_time": 1792348566893,
+          "execution_end_time": 1792348566981,
+          "outputs_count": 1,
+          "previewable_outputs_count": 1,
+          "preview_output": {
+            "filename": "ComfyUI_temp_sasra_00001_.png",
+            "subfolder": "",
+            "type": "temp",
+            "metadata": {
+              "kind": "image",
+              "width": 2048,
+              "height": 2048
+            },
+            "nodeId": "99",
+            "mediaType": "images"
+          },
+          "outputs": {
+            "99": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_sasra_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 2048,
+                    "height": 2048
+                  }
+                }
+              ]
+            }
+          },
+          "execution_status": {
+            "status_str": "success",
+            "completed": true,
+            "messages": [
+              [
+                "execution_start",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348566893
+                }
+              ],
+              [
+                "execution_cached",
+                {
+                  "nodes": ["1", "2", "3"],
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348566894
+                }
+              ],
+              [
+                "execution_success",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348566981
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 2048,
+            "height": 2048,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["1", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "3": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["2", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "99": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["3", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 11,
+          "node_errors": {}
+        }
+      },
+      "events": [],
+      "record": {
+        "status": 404,
+        "body": {
+          "error": "Job not found"
+        }
+      }
+    }
+  ]
+}

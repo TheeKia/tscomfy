@@ -18,8 +18,16 @@ export interface Txt2ImgParams {
   readonly height?: number;
 }
 
-/** A plain txt2img graph: checkpoint, two prompts, an empty latent, a sampler, decode, save. */
-export function txt2img(params: Txt2ImgParams): Workflow<Nodes> {
+/** The nodes callers look outputs up by, typed as the server's node functions return them. */
+export interface Txt2ImgHandles {
+  readonly save: ReturnType<Nodes["SaveImage"]>;
+}
+
+/**
+ * A plain txt2img graph: checkpoint, two prompts, an empty latent, a sampler, decode, save. Its
+ * `handles.save` finds the saved image after a run.
+ */
+export function txt2img(params: Txt2ImgParams): Workflow<Nodes, Txt2ImgHandles> {
   return workflow(local, ({ n }) => {
     const [model, clip, vae] = n.CheckpointLoaderSimple({ ckpt_name: params.checkpoint });
     const latent = n.KSampler({
@@ -35,10 +43,11 @@ export function txt2img(params: Txt2ImgParams): Workflow<Nodes> {
       sampler_name: "euler",
       scheduler: "normal",
     });
-    n.SaveImage(
+    const save = n.SaveImage(
       { images: n.VAEDecode({ samples: latent, vae }), filename_prefix: "tscomfy" },
       { title: "Result" },
     );
+    return { save };
   });
 }
 

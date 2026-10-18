@@ -14,6 +14,9 @@
       "path": "packages/layout"
     },
     {
+      "path": "packages/client"
+    },
+    {
       "path": "packages/core/test"
     },
     {
@@ -24,6 +27,9 @@
     },
     {
       "path": "packages/layout/test"
+    },
+    {
+      "path": "packages/client/test"
     },
     {
       "path": "internal/fixtures"

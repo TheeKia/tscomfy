@@ -1,0 +1,48 @@
+{
+  "name": "@tscomfy/client",
+  "version": "0.1.2",
+  "description": "Runs tscomfy workflows on a ComfyUI server: queueing, live progress and previews, outputs, uploads.",
+  "keywords": [
+    "client",
+    "comfyui",
+    "typescript",
+    "websocket",
+    "workflow"
+  ],
+  "homepage": "https://github.com/TheeKia/tscomfy/tree/main/packages/client#readme",
+  "bugs": "https://github.com/TheeKia/tscomfy/issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheeKia/tscomfy.git",
+    "directory": "packages/client"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.tsbuildinfo",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@tscomfy/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@tscomfy/core": "workspace:*",
+    "@tscomfy/fixtures": "workspace:*"
+  },
+  "peerDependencies": {
+    "@tscomfy/core": "workspace:^"
+  },
+  "engines": {
+    "bun": ">=1.4",
+    "node": ">=24"
+  }
+}

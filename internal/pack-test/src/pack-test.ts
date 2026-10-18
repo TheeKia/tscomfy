@@ -2,8 +2,10 @@
 // (as `bun publish` would, rewriting `workspace:` specifiers), checks what each tarball holds,
 // installs them all into a fresh project with npm (offline: only the tarballs), runs the
 // installed `tscomfy` under Node and Bun, and type-checks and runs a consumer of every package
-// under `nodenext` and `bundler` with `skipLibCheck: false` and no ambient types. Not part of
-// `check`: it builds, packs and installs. Expects `tsc -b` to have built `dist/`.
+// under `nodenext` and `bundler` with `skipLibCheck: false` and no ambient types. The client's
+// consumer needs a runtime's web types (the DOM lib here) and runs a workflow on a fake server
+// under Node and Bun. Not part of `check`: it builds, packs and installs. Expects `tsc -b` to
+// have built `dist/`.
 //
 // TEST_PACK_NODES lists the Node binaries to run under, separated by `:` (default: `node`).
 
@@ -15,16 +17,18 @@ import {
   exec,
   type ExecOptions,
   type Executed,
+  FakeServer,
   MOCK_API_WORKFLOW_DIR,
   MOCK_OBJECT_INFO_DIR,
   MOCK_UI_API_WORKFLOW_DIR,
   MOCK_UI_WORKFLOW_DIR,
   REPO_DIR,
   TOOLS,
+  trace,
 } from "@tscomfy/fixtures";
 
 /** The publishable packages, in dependency order, by folder under `packages/`. */
-const PACKAGES = ["core", "codegen", "layout", "cli"] as const;
+const PACKAGES = ["core", "codegen", "layout", "client", "cli"] as const;
 type Package = (typeof PACKAGES)[number];
 /** The version every package shares, released together: core's. */
 const VERSION = String(
@@ -201,6 +205,45 @@ const code = transpile(built, { name: "again", schemaModule: "./comfy/index.js",
 console.log(\`transpile \${String(code.includes("export const again"))}\`);
 `;
 
+/**
+ * The client's consumer: a workflow run on the fake server, its saved image found by handle and
+ * downloaded. Node "3" is the protocol mock's SaveImage.
+ */
+const RUN = `import { connect, fetchFile, outputFiles, submit } from "@tscomfy/client";
+import { workflow } from "@tscomfy/core";
+import { comfy } from "./comfy/index.js";
+
+declare const process: { readonly argv: readonly string[] };
+
+const built = workflow(comfy, ({ n }) => {
+  const [model, clip, vae] = n.CheckpointLoaderSimple({ ckpt_name: "model-a.safetensors" }, { id: "ckpt" });
+  const latent = n.KSampler(
+    {
+      model,
+      positive: n.CLIPTextEncode({ clip, text: "a cat" }, { id: "pos" }),
+      negative: n.CLIPTextEncode({ clip, text: "" }, { id: "neg" }),
+      latent_image: n.EmptyLatentImage({}, { id: "latent" }),
+      seed: 2n ** 64n - 1n,
+      sampler_name: "euler",
+      scheduler: "normal",
+    },
+    { id: "sample" },
+  );
+  const save = n.SaveImage({ images: n.VAEDecode({ samples: latent, vae }, { id: "decode" }) }, { id: "3" });
+  return { save };
+});
+
+const connection = await connect({ url: process.argv[2] ?? "" });
+const job = submit(connection, built);
+let events = 0;
+for await (const event of job.events) if (event.type !== "progress") events++;
+const outcome = await job.outcome;
+const [file] = outputFiles(outcome, built.handles.save);
+const data = file === undefined ? undefined : await fetchFile(connection, file);
+console.log(\`client \${outcome.status} \${String(events)} \${file?.filename ?? "-"} \${data?.mime ?? "-"}\`);
+await connection.close();
+`;
+
 /** Strict options a consumer may have, with no ambient types and every declaration checked. */
 const STRICT = {
   target: "es2024",
@@ -309,16 +352,23 @@ async function main(): Promise<void> {
     }
 
     await Bun.write(join(project, "src", "main.ts"), MAIN);
+    await Bun.write(join(project, "src", "run.ts"), RUN);
     const configs = {
       nodenext: { module: "nodenext", rootDir: "src", outDir: "dist" },
       bundler: { module: "preserve", moduleResolution: "bundler", noEmit: true },
+      // The client names fetch, WebSocket and AbortSignal: a runtime's web types must be there.
+      client: { module: "nodenext", rootDir: "src", outDir: "dist", lib: ["es2024", "dom"] },
     };
     for (const [label, options] of Object.entries(configs)) {
       const config = join(project, `tsconfig.${label}.json`);
+      const files =
+        label === "client"
+          ? { files: ["src/run.ts"] }
+          : { include: ["src"], exclude: ["src/run.ts"] };
       // oxlint-disable-next-line no-await-in-loop -- one configuration at a time
       await Bun.write(
         config,
-        JSON.stringify({ compilerOptions: { ...STRICT, ...options }, include: ["src"] }),
+        JSON.stringify({ compilerOptions: { ...STRICT, ...options }, ...files }),
       );
       // oxlint-disable-next-line no-await-in-loop
       await run(`tsc (${label})`, [TOOLS.tsc, "-p", config], { cwd: project });
@@ -357,6 +407,28 @@ async function main(): Promise<void> {
       if (failed.length > 0)
         fail(`the consumer under ${node} got ${failed.join(", ")} wrong:\n${stdout}`);
       console.log(`ran the consumer under ${node}`);
+    }
+    const fake = FakeServer.start();
+    try {
+      const success = (await trace("success"))[0] ?? fail("no success trace");
+      const consumers = [...NODES, process.execPath];
+      for (const runtime of consumers) {
+        fake.expect(success);
+        // oxlint-disable-next-line no-await-in-loop -- one runtime at a time
+        const { stdout } = await run(
+          `the client consumer under ${runtime}`,
+          [runtime, join("dist", "run.js"), fake.url],
+          {
+            cwd: project,
+          },
+        );
+        if (stdout.trim() !== "client success 8 run_00001_.png image/png") {
+          fail(`the client consumer under ${runtime} printed ${stdout}`);
+        }
+        console.log(`ran the client consumer under ${runtime}`);
+      }
+    } finally {
+      fake.stop();
     }
     const left = await readdir(join(project, "src", "comfy"));
     if (left.toSorted().join(",") !== "index.ts,nodes.ts,object_info.json,tscomfy.json") {

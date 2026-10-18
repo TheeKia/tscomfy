@@ -1,0 +1,744 @@
+{
+  "about": "A saved and a previewed image (EmptyImage, ImageInvert, SaveImage, PreviewImage), then the same prompt again: every node cached, the outputs reported again.",
+  "comfyVersion": "0.41.0",
+  "runs": [
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 64,
+            "height": 64,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "ImageInvert",
+          "inputs": {
+            "image": ["1", 0]
+          }
+        },
+        "3": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "images": ["2", 0],
+            "filename_prefix": "tscomfy-capture/run"
+          }
+        },
+        "4": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["1", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 1,
+          "node_errors": {}
+        }
+      },
+      "events": [
+        {
+          "type": "execution_start",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348564174
+          }
+        },
+        {
+          "type": "execution_cached",
+          "data": {
+            "nodes": [],
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348564174
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "1",
+            "display_node": "1",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "4": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "4",
+            "display_node": "4",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "4",
+            "display_node": "4",
+            "output": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_vkgbr_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "2": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "2",
+            "display_node": "2",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              },
+              "3": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "3",
+            "display_node": "3",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "3",
+            "display_node": "3",
+            "output": {
+              "images": [
+                {
+                  "filename": "run_00001_.png",
+                  "subfolder": "tscomfy-capture",
+                  "type": "output",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              },
+              "3": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              }
+            }
+          }
+        },
+        {
+          "type": "execution_success",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348564681
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": null,
+            "prompt_id": "PROMPT_ID"
+          }
+        }
+      ],
+      "record": {
+        "status": 200,
+        "body": {
+          "id": "PROMPT_ID",
+          "status": "completed",
+          "priority": 1,
+          "create_time": 1792348564173,
+          "execution_start_time": 1792348564174,
+          "execution_end_time": 1792348564681,
+          "outputs_count": 2,
+          "previewable_outputs_count": 2,
+          "preview_output": {
+            "filename": "run_00001_.png",
+            "subfolder": "tscomfy-capture",
+            "type": "output",
+            "metadata": {
+              "kind": "image",
+              "width": 64,
+              "height": 64
+            },
+            "nodeId": "3",
+            "mediaType": "images"
+          },
+          "outputs": {
+            "4": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_vkgbr_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            },
+            "3": {
+              "images": [
+                {
+                  "filename": "run_00001_.png",
+                  "subfolder": "tscomfy-capture",
+                  "type": "output",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            }
+          },
+          "execution_status": {
+            "status_str": "success",
+            "completed": true,
+            "messages": [
+              [
+                "execution_start",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348564174
+                }
+              ],
+              [
+                "execution_cached",
+                {
+                  "nodes": [],
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348564174
+                }
+              ],
+              [
+                "execution_success",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348564681
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 64,
+            "height": 64,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "ImageInvert",
+          "inputs": {
+            "image": ["1", 0]
+          }
+        },
+        "3": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "images": ["2", 0],
+            "filename_prefix": "tscomfy-capture/run"
+          }
+        },
+        "4": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["1", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 2,
+          "node_errors": {}
+        }
+      },
+      "events": [
+        {
+          "type": "execution_start",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348564974
+          }
+        },
+        {
+          "type": "execution_cached",
+          "data": {
+            "nodes": ["1", "2", "3", "4"],
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348564974
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "4",
+            "display_node": "4",
+            "output": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_vkgbr_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1,
+                "max": 1,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "3",
+            "display_node": "3",
+            "output": {
+              "images": [
+                {
+                  "filename": "run_00001_.png",
+                  "subfolder": "tscomfy-capture",
+                  "type": "output",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1,
+                "max": 1,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "3": {
+                "value": 1,
+                "max": 1,
+                "state": "finished",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              }
+            }
+          }
+        },
+        {
+          "type": "execution_success",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348564975
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": null,
+            "prompt_id": "PROMPT_ID"
+          }
+        }
+      ],
+      "record": {
+        "status": 200,
+        "body": {
+          "id": "PROMPT_ID",
+          "status": "completed",
+          "priority": 2,
+          "create_time": 1792348564973,
+          "execution_start_time": 1792348564974,
+          "execution_end_time": 1792348564975,
+          "outputs_count": 2,
+          "previewable_outputs_count": 2,
+          "preview_output": {
+            "filename": "run_00001_.png",
+            "subfolder": "tscomfy-capture",
+            "type": "output",
+            "metadata": {
+              "kind": "image",
+              "width": 64,
+              "height": 64
+            },
+            "nodeId": "3",
+            "mediaType": "images"
+          },
+          "outputs": {
+            "4": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_vkgbr_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            },
+            "3": {
+              "images": [
+                {
+                  "filename": "run_00001_.png",
+                  "subfolder": "tscomfy-capture",
+                  "type": "output",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            }
+          },
+          "execution_status": {
+            "status_str": "success",
+            "completed": true,
+            "messages": [
+              [
+                "execution_start",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348564974
+                }
+              ],
+              [
+                "execution_cached",
+                {
+                  "nodes": ["1", "2", "3", "4"],
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348564974
+                }
+              ],
+              [
+                "execution_success",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348564975
+                }
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

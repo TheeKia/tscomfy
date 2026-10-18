@@ -25,6 +25,7 @@
       "name": "@tscomfy/example-txt2img",
       "version": "0.0.0",
       "dependencies": {
+        "@tscomfy/client": "workspace:*",
         "@tscomfy/core": "workspace:*",
       },
     },
@@ -44,6 +45,9 @@
     "internal/fixtures": {
       "name": "@tscomfy/fixtures",
       "version": "0.0.0",
+      "dependencies": {
+        "@tscomfy/core": "workspace:*",
+      },
     },
     "internal/pack-test": {
       "name": "@tscomfy/pack-test",
@@ -66,6 +70,17 @@
         "@tscomfy/core": "workspace:*",
         "@tscomfy/fixtures": "workspace:*",
         "@types/node": "24.19.2",
+      },
+      "peerDependencies": {
+        "@tscomfy/core": "workspace:^",
+      },
+    },
+    "packages/client": {
+      "name": "@tscomfy/client",
+      "version": "0.1.2",
+      "devDependencies": {
+        "@tscomfy/core": "workspace:*",
+        "@tscomfy/fixtures": "workspace:*",
       },
       "peerDependencies": {
         "@tscomfy/core": "workspace:^",
@@ -195,6 +210,8 @@
     "@tscomfy/bench": ["@tscomfy/bench@workspace:internal/bench"],
 
     "@tscomfy/cli": ["@tscomfy/cli@workspace:packages/cli"],
+
+    "@tscomfy/client": ["@tscomfy/client@workspace:packages/client"],
 
     "@tscomfy/codegen": ["@tscomfy/codegen@workspace:packages/codegen"],
 

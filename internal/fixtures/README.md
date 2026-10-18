@@ -1,7 +1,7 @@
 # Fixtures
 
-Hand-written mock data for tests. Everything here is written by us: no real server dumps, no
-personal data, no text copied from upstream projects. The shapes follow what ComfyUI actually
+Mock data for tests, written or distilled by hand. Everything here is ours: no raw server dumps,
+no personal data, no text copied from upstream projects. The shapes follow what ComfyUI actually
 serves; the coverage list below comes from analyzing real `/object_info` output.
 
 Real data lives in the gitignored `corpus/` directory and is used only by local corpus tests
@@ -56,6 +56,33 @@ name to `MOCK_UI_WORKFLOW_NAMES`; a test enforces this.
 | `subgraphs.json` | Nested subgraphs, two instances of one definition, promoted widget values (outer over inner over interior), a root id an inner node also uses (reminted from `last_node_id`) |
 | `subgraph-modes.json` | A muted subgraph inside another: its interior is still sent, its output resolves to nothing (`W_FRONTEND_QUIRK`) |
 | `subgraph-primitive.json` | A PrimitiveNode linked to a promoted subgraph input: the value never arrives, and the instance's order changes (`W_FRONTEND_QUIRK`) |
+
+## `mocks/protocol/`
+
+What a ComfyUI server sends while it runs prompts, for `FakeServer` (`src/fake-server.ts`): a
+real HTTP and websocket server (`Bun.serve`) that plays these runs to the client, with faults to
+inject (a dropped socket, events before the HTTP answer, the same-id hazard, a job cancelled
+while queued, a dead worker). The client's tests and `test:pack` use it.
+
+Each file holds runs: the prompt, the answer to `POST /prompt`, the websocket events in order,
+and the job record (`GET /api/jobs/{id}`) at the end. `PROMPT_ID`
+stands for the prompt id the client chose; binary frames are `{ "binary": 4, "metadata", "image" }`
+(base64) or `{ "binary": 3, "node", "text" }`. They are distilled from captures of ComfyUI 0.41.0
+(`scripts/capture.ts`, into `corpus/protocol/`): tracebacks cut to two frames, the server's
+paths and model names generalized, image bytes replaced by a tiny image. Adding a file
+means adding its name to `MOCK_PROTOCOL_NAMES`; a test enforces this.
+
+| File | Covers |
+|---|---|
+| `success.json` | A saved and a previewed image, then the same prompt again, every node cached |
+| `websocket.json` | `SaveImageWebsocket`'s type-4 PNG frame, PreviewAny's text output |
+| `rejected.json` | 400s: no output node, an unknown class (`node_id` in `extra_info`), an input out of bounds |
+| `partial.json` | A 200 with `node_errors`: one output refused, the other run |
+| `error.json` | A node raising after an output ran: `execution_error`, a failed record with that output |
+| `cancel.json` | A running job cancelled: `execution_interrupted`, a cancelled record |
+| `pending.json` | A job cancelled while queued: no event, then a 404 record |
+| `sampler.json` | A real sampler run (captured with a model, its name generalized): six latent previews as type-4 JPEG frames, step progress, a 2⁶⁴−1 seed echoed exactly |
+| `blocked.json` | Hand-written from the source, since no core node does it without a model or a partner account: progress text (type 3) and a blocked node |
 
 ## `mocks/workflows/ui-extensions/`, `ui-extensions-api/` and `ui-extensions-export/`
 

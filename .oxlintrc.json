@@ -42,7 +42,12 @@
   },
   "overrides": [
     {
-      "files": ["packages/core/src/**", "packages/codegen/src/**", "packages/layout/src/**"],
+      "files": [
+        "packages/core/src/**",
+        "packages/codegen/src/**",
+        "packages/layout/src/**",
+        "packages/client/src/**"
+      ],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -50,7 +55,7 @@
             "patterns": [
               {
                 "group": ["node:*", "bun", "bun:*"],
-                "message": "core, codegen and layout must stay runtime-agnostic (docs/plan.md D3)."
+                "message": "core, codegen, layout and client must stay runtime-agnostic (docs/plan.md D3, D23)."
               }
             ]
           }

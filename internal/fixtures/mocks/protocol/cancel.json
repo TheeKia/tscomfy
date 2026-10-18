@@ -1,0 +1,424 @@
+{
+  "about": "A running job cancelled through POST /api/jobs/{id}/cancel: interrupted at the next node, record cancelled.",
+  "comfyVersion": "0.41.0",
+  "runs": [
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 2048,
+            "height": 2048,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["1", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "3": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["2", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "4": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["3", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "5": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["4", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "6": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["5", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "7": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["6", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "8": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["7", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "9": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["8", 0],
+            "blur_radius": 31,
+            "sigma": 10
+          }
+        },
+        "99": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["9", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 9,
+          "node_errors": {}
+        }
+      },
+      "events": [
+        {
+          "type": "execution_start",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348566515
+          }
+        },
+        {
+          "type": "execution_cached",
+          "data": {
+            "nodes": [],
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348566515
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "1",
+            "display_node": "1",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "2",
+            "display_node": "2",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              },
+              "3": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "3",
+            "display_node": "3",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              },
+              "3": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              },
+              "3": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              },
+              "4": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "4",
+            "display_node": "4",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "execution_interrupted",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "node_id": "4",
+            "node_type": "ImageBlur",
+            "executed": ["1", "2", "3"],
+            "timestamp": 1792348566591
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": null,
+            "prompt_id": "PROMPT_ID"
+          }
+        }
+      ],
+      "record": {
+        "status": 200,
+        "body": {
+          "id": "PROMPT_ID",
+          "status": "cancelled",
+          "priority": 9,
+          "create_time": 1792348566514,
+          "execution_start_time": 1792348566515,
+          "execution_end_time": 1792348566591,
+          "outputs_count": 0,
+          "previewable_outputs_count": 0,
+          "outputs": {},
+          "execution_status": {
+            "status_str": "error",
+            "completed": false,
+            "messages": [
+              [
+                "execution_start",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348566515
+                }
+              ],
+              [
+                "execution_cached",
+                {
+                  "nodes": [],
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348566515
+                }
+              ],
+              [
+                "execution_interrupted",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "node_id": "4",
+                  "node_type": "ImageBlur",
+                  "executed": ["1", "2", "3"],
+                  "timestamp": 1792348566591
+                }
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

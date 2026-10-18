@@ -1,0 +1,128 @@
+{
+  "about": "Refused prompts (400): no output node, an unknown class, an input out of bounds.",
+  "comfyVersion": "0.41.0",
+  "runs": [
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 64,
+            "height": 64,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        }
+      },
+      "answer": {
+        "status": 400,
+        "body": {
+          "error": {
+            "type": "prompt_no_outputs",
+            "message": "Prompt has no outputs",
+            "details": "",
+            "extra_info": {}
+          },
+          "node_errors": {}
+        }
+      },
+      "events": []
+    },
+    {
+      "prompt": {
+        "1": {
+          "class_type": "NoSuchNodeForCapture",
+          "inputs": {}
+        },
+        "2": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["1", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 400,
+        "body": {
+          "error": {
+            "type": "missing_node_type",
+            "message": "Node 'NoSuchNodeForCapture' not found. The custom node may not be installed.",
+            "details": "Node ID '#1'",
+            "extra_info": {
+              "node_id": "1",
+              "class_type": "NoSuchNodeForCapture",
+              "node_title": "NoSuchNodeForCapture"
+            }
+          },
+          "node_errors": {}
+        }
+      },
+      "events": []
+    },
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 64,
+            "height": 64,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["1", 0],
+            "blur_radius": 99,
+            "sigma": 1
+          }
+        },
+        "3": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["2", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 400,
+        "body": {
+          "error": {
+            "type": "prompt_outputs_failed_validation",
+            "message": "Prompt outputs failed validation",
+            "details": "",
+            "extra_info": {}
+          },
+          "node_errors": {
+            "2": {
+              "errors": [
+                {
+                  "type": "value_bigger_than_max",
+                  "message": "Value 99 bigger than max of 31",
+                  "details": "blur_radius",
+                  "extra_info": {
+                    "input_name": "blur_radius",
+                    "input_config": [
+                      "INT",
+                      {
+                        "default": 1,
+                        "min": 1,
+                        "max": 31,
+                        "step": 1
+                      }
+                    ],
+                    "received_value": 99
+                  }
+                }
+              ],
+              "dependent_outputs": ["3"],
+              "class_type": "ImageBlur"
+            }
+          }
+        }
+      },
+      "events": []
+    }
+  ]
+}

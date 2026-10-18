@@ -12,6 +12,8 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 export * from "./exec.ts";
+export * from "./fake-server.ts";
+export * from "./protocol.ts";
 
 const root = join(import.meta.dir, "..");
 
@@ -164,7 +166,12 @@ export function readMockUiExtensionExportPrompt(
  * Sections of the local corpus. `workflows/ui-api` holds, under the same names as
  * `workflows/ui`, the prompts the frontend builds for those files (`scripts/frontend.ts`).
  */
-export type CorpusSection = "object-info" | "workflows/api" | "workflows/ui" | "workflows/ui-api";
+export type CorpusSection =
+  | "object-info"
+  | "protocol"
+  | "workflows/api"
+  | "workflows/ui"
+  | "workflows/ui-api";
 
 /** One file of the local corpus. */
 export interface CorpusFile {

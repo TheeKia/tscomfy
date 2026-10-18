@@ -17,7 +17,7 @@ concurrency:
 
 env:
   # In dependency order, so no package is published before what it depends on.
-  PACKAGES: core codegen layout cli
+  PACKAGES: core codegen layout client cli
 
 jobs:
   build:

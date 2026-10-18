@@ -1,0 +1,639 @@
+{
+  "about": "Hand-written from the 0.41 source, not captured (no core node does it without a model or a partner account): progress text from a running node (a type-3 frame, which carries no prompt id, server.py:1581-1591) and a node that blocks execution (execution_error of type ExecutionBlocked, execution.py:525-541), while the run goes on to succeed.",
+  "comfyVersion": "0.41.0",
+  "runs": [
+    {
+      "prompt": {
+        "1": {
+          "class_type": "CheckpointLoaderSimple",
+          "inputs": {
+            "ckpt_name": "model.safetensors"
+          }
+        },
+        "2": {
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "clip": ["1", 1],
+            "text": "a lighthouse"
+          }
+        },
+        "3": {
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "clip": ["1", 1],
+            "text": ""
+          }
+        },
+        "4": {
+          "class_type": "EmptyLatentImage",
+          "inputs": {
+            "width": 512,
+            "height": 512,
+            "batch_size": 1
+          }
+        },
+        "5": {
+          "class_type": "KSampler",
+          "inputs": {
+            "model": ["1", 0],
+            "positive": ["2", 0],
+            "negative": ["3", 0],
+            "latent_image": ["4", 0],
+            "seed": 18446744073709551615,
+            "steps": 3,
+            "cfg": 6,
+            "sampler_name": "euler",
+            "scheduler": "normal",
+            "denoise": 1
+          }
+        },
+        "6": {
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": ["5", 0],
+            "vae": ["1", 2]
+          }
+        },
+        "7": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["6", 0]
+          }
+        },
+        "8": {
+          "class_type": "MockBlocker",
+          "inputs": {
+            "images": ["6", 0]
+          }
+        },
+        "9": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "images": ["8", 0],
+            "filename_prefix": "blocked"
+          }
+        }
+      },
+      "extraData": {
+        "preview_method": "latent2rgb"
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 20,
+          "node_errors": {}
+        }
+      },
+      "events": [
+        {
+          "type": "execution_start",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348800000
+          }
+        },
+        {
+          "type": "execution_cached",
+          "data": {
+            "nodes": ["1", "2", "3"],
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348800000
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "4",
+            "display_node": "4",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "5",
+            "display_node": "5",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 1,
+                "max": 3,
+                "state": "running",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              }
+            }
+          }
+        },
+        {
+          "binary": 4,
+          "metadata": {
+            "node_id": "5",
+            "prompt_id": "PROMPT_ID",
+            "display_node_id": "5",
+            "parent_node_id": null,
+            "real_node_id": "5",
+            "image_type": "image/jpeg"
+          },
+          "image": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=="
+        },
+        {
+          "type": "progress",
+          "data": {
+            "value": 1,
+            "max": 3,
+            "prompt_id": "PROMPT_ID",
+            "node": "5"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 2,
+                "max": 3,
+                "state": "running",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              }
+            }
+          }
+        },
+        {
+          "binary": 4,
+          "metadata": {
+            "node_id": "5",
+            "prompt_id": "PROMPT_ID",
+            "display_node_id": "5",
+            "parent_node_id": null,
+            "real_node_id": "5",
+            "image_type": "image/jpeg"
+          },
+          "image": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=="
+        },
+        {
+          "type": "progress",
+          "data": {
+            "value": 2,
+            "max": 3,
+            "prompt_id": "PROMPT_ID",
+            "node": "5"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 3,
+                "max": 3,
+                "state": "running",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              }
+            }
+          }
+        },
+        {
+          "binary": 4,
+          "metadata": {
+            "node_id": "5",
+            "prompt_id": "PROMPT_ID",
+            "display_node_id": "5",
+            "parent_node_id": null,
+            "real_node_id": "5",
+            "image_type": "image/jpeg"
+          },
+          "image": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=="
+        },
+        {
+          "type": "progress",
+          "data": {
+            "value": 3,
+            "max": 3,
+            "prompt_id": "PROMPT_ID",
+            "node": "5"
+          }
+        },
+        {
+          "binary": 3,
+          "node": "5",
+          "text": "sampling done"
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 3,
+                "max": 3,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              }
+            }
+          }
+        },
+        {
+          "type": "execution_error",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "node_id": "8",
+            "node_type": "MockBlocker",
+            "executed": ["4", "5"],
+            "exception_message": "Execution Blocked: no faces found",
+            "exception_type": "ExecutionBlocked",
+            "traceback": [],
+            "current_inputs": [],
+            "current_outputs": []
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 3,
+                "max": 3,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              },
+              "6": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "6",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "6",
+                "parent_node_id": null,
+                "real_node_id": "6"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "6",
+            "display_node": "6",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 3,
+                "max": 3,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              },
+              "6": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "6",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "6",
+                "parent_node_id": null,
+                "real_node_id": "6"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 3,
+                "max": 3,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              },
+              "6": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "6",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "6",
+                "parent_node_id": null,
+                "real_node_id": "6"
+              },
+              "7": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "7",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "7",
+                "parent_node_id": null,
+                "real_node_id": "7"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "7",
+            "display_node": "7",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "7",
+            "display_node": "7",
+            "output": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_abcde_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 512,
+                    "height": 512
+                  }
+                }
+              ]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "4": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "4",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "4",
+                "parent_node_id": null,
+                "real_node_id": "4"
+              },
+              "5": {
+                "value": 3,
+                "max": 3,
+                "state": "finished",
+                "node_id": "5",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "5",
+                "parent_node_id": null,
+                "real_node_id": "5"
+              },
+              "6": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "6",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "6",
+                "parent_node_id": null,
+                "real_node_id": "6"
+              },
+              "7": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "7",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "7",
+                "parent_node_id": null,
+                "real_node_id": "7"
+              }
+            }
+          }
+        },
+        {
+          "type": "execution_success",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348803000
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": null,
+            "prompt_id": "PROMPT_ID"
+          }
+        }
+      ],
+      "record": {
+        "status": 200,
+        "body": {
+          "id": "PROMPT_ID",
+          "status": "completed",
+          "priority": 20,
+          "create_time": 1792348800000,
+          "execution_start_time": 1792348800000,
+          "execution_end_time": 1792348803000,
+          "outputs_count": 1,
+          "previewable_outputs_count": 1,
+          "outputs": {
+            "7": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_abcde_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 512,
+                    "height": 512
+                  }
+                }
+              ]
+            }
+          },
+          "execution_status": {
+            "status_str": "success",
+            "completed": true,
+            "messages": []
+          }
+        }
+      }
+    }
+  ]
+}

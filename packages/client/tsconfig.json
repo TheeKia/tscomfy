@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "lib": ["es2024", "webworker"]
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../core"
+    }
+  ]
+}

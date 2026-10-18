@@ -6,6 +6,8 @@ import {
   MOCK_API_WORKFLOW_NAMES,
   MOCK_OBJECT_INFO_DIR,
   MOCK_OBJECT_INFO_NAMES,
+  MOCK_PROTOCOL_DIR,
+  MOCK_PROTOCOL_NAMES,
   MOCK_UI_API_WORKFLOW_DIR,
   MOCK_UI_EXPORT_DIR,
   MOCK_UI_EXTENSION_API_DIR,
@@ -16,6 +18,7 @@ import {
   MOCK_UI_WORKFLOW_NAMES,
   readMockApiWorkflow,
   readMockObjectInfo,
+  readMockProtocol,
   readMockUiApiWorkflow,
   readMockUiExtensionApiWorkflow,
   readMockUiExtensionExportPrompt,
@@ -52,6 +55,35 @@ describe("mock API workflows", () => {
     const parsed: unknown = JSON.parse(await readMockApiWorkflow(name));
     expect(parsed).toBeObject();
   });
+});
+
+/** A property of an object read from JSON, or `undefined`. */
+const field = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+
+describe("mock protocol", () => {
+  test("the name list matches the files on disk", async () => {
+    const onDisk = (await readdir(MOCK_PROTOCOL_DIR))
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => name.slice(0, -".json".length))
+      .toSorted();
+    expect(onDisk).toEqual([...MOCK_PROTOCOL_NAMES]);
+  });
+
+  test.each(MOCK_PROTOCOL_NAMES)(
+    "%s has runs, each with a prompt, an answer and events",
+    async (name) => {
+      const parsed: unknown = JSON.parse(await readMockProtocol(name));
+      expect(field(parsed, "about")).toBeString();
+      const runs = field(parsed, "runs");
+      expect(Array.isArray(runs) && runs.length > 0).toBeTrue();
+      for (const run of Array.isArray(runs) ? runs : []) {
+        expect(field(run, "prompt")).toBeObject();
+        expect(field(field(run, "answer"), "status")).toBeNumber();
+        expect(Array.isArray(field(run, "events"))).toBeTrue();
+      }
+    },
+  );
 });
 
 describe("mock UI workflows", () => {

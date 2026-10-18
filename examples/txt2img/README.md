@@ -5,11 +5,14 @@ misspelled samplers and missing inputs are compile errors.
 
 - `src/txt2img.ts`: the workflow, a function of its parameters.
 - `src/main.ts`: prints the prompt for `POST /prompt`.
+- `src/run.ts`: runs it on the server with `@tscomfy/client`: progress, a live preview
+  (`out/preview.jpg`), and the image saved to `out/`, found by the workflow's `handles.save`.
 
 ```sh
 bun run generate    # types from http://127.0.0.1:8188 into src/comfy/local
 bun run typecheck
-bun run start "a cat in a hat"   # prints the API prompt; POST it to /prompt yourself
+bun run start "a cat in a hat"   # prints the API prompt
+bun run run "a cat in a hat"     # runs it: progress, a live preview, the image in out/
 bun run check       # has the server changed since generate?
 ```
 

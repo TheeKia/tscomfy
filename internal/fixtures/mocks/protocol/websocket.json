@@ -1,0 +1,368 @@
+{
+  "about": "SaveImageWebsocket sends its image as a type-4 binary frame (PNG, full size); PreviewAny reports text.",
+  "comfyVersion": "0.41.0",
+  "runs": [
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 32,
+            "height": 16,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "SaveImageWebsocket",
+          "inputs": {
+            "images": ["1", 0]
+          }
+        },
+        "3": {
+          "class_type": "PreviewAny",
+          "inputs": {
+            "source": ["1", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 3,
+          "node_errors": {}
+        }
+      },
+      "events": [
+        {
+          "type": "execution_start",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348565277
+          }
+        },
+        {
+          "type": "execution_cached",
+          "data": {
+            "nodes": [],
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348565277
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "1",
+            "display_node": "1",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "2",
+            "display_node": "2",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 0,
+                "max": 1,
+                "state": "running",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "binary": 4,
+          "metadata": {
+            "node_id": "2",
+            "prompt_id": "PROMPT_ID",
+            "display_node_id": "2",
+            "parent_node_id": null,
+            "real_node_id": "2",
+            "image_type": "image/png"
+          },
+          "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC"
+        },
+        {
+          "type": "progress",
+          "data": {
+            "value": 0,
+            "max": 1,
+            "prompt_id": "PROMPT_ID",
+            "node": "2"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1,
+                "max": 1,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1,
+                "max": 1,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              },
+              "3": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "3",
+            "display_node": "3",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "3",
+            "display_node": "3",
+            "output": {
+              "text": ["tensor([[[[0.2000, 0.4000, 0.8000]]]])"]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1,
+                "max": 1,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              },
+              "3": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "3",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "3",
+                "parent_node_id": null,
+                "real_node_id": "3"
+              }
+            }
+          }
+        },
+        {
+          "type": "execution_success",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348565291
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": null,
+            "prompt_id": "PROMPT_ID"
+          }
+        }
+      ],
+      "record": {
+        "status": 200,
+        "body": {
+          "id": "PROMPT_ID",
+          "status": "completed",
+          "priority": 3,
+          "create_time": 1792348565277,
+          "execution_start_time": 1792348565277,
+          "execution_end_time": 1792348565291,
+          "outputs_count": 0,
+          "previewable_outputs_count": 0,
+          "outputs": {
+            "3": {
+              "text": ["tensor([[[[0.2000, 0.4000, 0.8000]]]])"]
+            }
+          },
+          "execution_status": {
+            "status_str": "success",
+            "completed": true,
+            "messages": [
+              [
+                "execution_start",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348565277
+                }
+              ],
+              [
+                "execution_cached",
+                {
+                  "nodes": [],
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348565277
+                }
+              ],
+              [
+                "execution_success",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348565291
+                }
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

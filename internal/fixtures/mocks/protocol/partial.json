@@ -1,0 +1,302 @@
+{
+  "about": "One output valid, one not: the server answers 200 with node_errors and runs the valid output only.",
+  "comfyVersion": "0.41.0",
+  "runs": [
+    {
+      "prompt": {
+        "1": {
+          "class_type": "EmptyImage",
+          "inputs": {
+            "width": 64,
+            "height": 64,
+            "batch_size": 1,
+            "color": 3368652
+          }
+        },
+        "2": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["1", 0]
+          }
+        },
+        "3": {
+          "class_type": "ImageBlur",
+          "inputs": {
+            "image": ["1", 0],
+            "blur_radius": 99,
+            "sigma": 1
+          }
+        },
+        "4": {
+          "class_type": "PreviewImage",
+          "inputs": {
+            "images": ["3", 0]
+          }
+        }
+      },
+      "answer": {
+        "status": 200,
+        "body": {
+          "prompt_id": "PROMPT_ID",
+          "number": 7,
+          "node_errors": {
+            "3": {
+              "errors": [
+                {
+                  "type": "value_bigger_than_max",
+                  "message": "Value 99 bigger than max of 31",
+                  "details": "blur_radius",
+                  "extra_info": {
+                    "input_name": "blur_radius",
+                    "input_config": [
+                      "INT",
+                      {
+                        "default": 1,
+                        "min": 1,
+                        "max": 31,
+                        "step": 1
+                      }
+                    ],
+                    "received_value": 99
+                  }
+                }
+              ],
+              "dependent_outputs": ["4"],
+              "class_type": "ImageBlur"
+            }
+          }
+        }
+      },
+      "events": [
+        {
+          "type": "execution_start",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348565895
+          }
+        },
+        {
+          "type": "execution_cached",
+          "data": {
+            "nodes": [],
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348565895
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "1",
+            "display_node": "1",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              }
+            }
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 0.0,
+                "max": 1.0,
+                "state": "running",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": "2",
+            "display_node": "2",
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "executed",
+          "data": {
+            "node": "2",
+            "display_node": "2",
+            "output": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_fzbav_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            },
+            "prompt_id": "PROMPT_ID"
+          }
+        },
+        {
+          "type": "progress_state",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "nodes": {
+              "1": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "1",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "1",
+                "parent_node_id": null,
+                "real_node_id": "1"
+              },
+              "2": {
+                "value": 1.0,
+                "max": 1.0,
+                "state": "finished",
+                "node_id": "2",
+                "prompt_id": "PROMPT_ID",
+                "display_node_id": "2",
+                "parent_node_id": null,
+                "real_node_id": "2"
+              }
+            }
+          }
+        },
+        {
+          "type": "execution_success",
+          "data": {
+            "prompt_id": "PROMPT_ID",
+            "timestamp": 1792348565898
+          }
+        },
+        {
+          "type": "executing",
+          "data": {
+            "node": null,
+            "prompt_id": "PROMPT_ID"
+          }
+        }
+      ],
+      "record": {
+        "status": 200,
+        "body": {
+          "id": "PROMPT_ID",
+          "status": "completed",
+          "priority": 7,
+          "create_time": 1792348565895,
+          "execution_start_time": 1792348565895,
+          "execution_end_time": 1792348565898,
+          "outputs_count": 1,
+          "previewable_outputs_count": 1,
+          "preview_output": {
+            "filename": "ComfyUI_temp_fzbav_00001_.png",
+            "subfolder": "",
+            "type": "temp",
+            "metadata": {
+              "kind": "image",
+              "width": 64,
+              "height": 64
+            },
+            "nodeId": "2",
+            "mediaType": "images"
+          },
+          "outputs": {
+            "2": {
+              "images": [
+                {
+                  "filename": "ComfyUI_temp_fzbav_00001_.png",
+                  "subfolder": "",
+                  "type": "temp",
+                  "metadata": {
+                    "kind": "image",
+                    "width": 64,
+                    "height": 64
+                  }
+                }
+              ]
+            }
+          },
+          "execution_status": {
+            "status_str": "success",
+            "completed": true,
+            "messages": [
+              [
+                "execution_start",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348565895
+                }
+              ],
+              [
+                "execution_cached",
+                {
+                  "nodes": [],
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348565895
+                }
+              ],
+              [
+                "execution_success",
+                {
+                  "prompt_id": "PROMPT_ID",
+                  "timestamp": 1792348565898
+                }
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

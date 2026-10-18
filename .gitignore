@@ -10,3 +10,5 @@ internal/fixtures/corpus/*
 # Examples generate from your own server: never committed.
 examples/*/src/comfy/
 examples/*/.test-*/
+# What the examples' run scripts save.
+examples/*/out/

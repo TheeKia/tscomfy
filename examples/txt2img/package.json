@@ -2,16 +2,18 @@
   "name": "@tscomfy/example-txt2img",
   "version": "0.0.0",
   "private": true,
-  "description": "A txt2img workflow built with tscomfy, typed by your own ComfyUI server.",
+  "description": "A txt2img workflow built with tscomfy, typed by your own ComfyUI server, and run on it.",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "generate": "bun --conditions=@tscomfy/source ../../packages/cli/src/main.ts generate --url http://127.0.0.1:8188 --out src/comfy/local --import-extension .ts",
     "check": "bun --conditions=@tscomfy/source ../../packages/cli/src/main.ts check --url http://127.0.0.1:8188 --out src/comfy/local",
     "typecheck": "tsc -p .",
-    "start": "bun --conditions=@tscomfy/source src/main.ts"
+    "start": "bun --conditions=@tscomfy/source src/main.ts",
+    "run": "bun --conditions=@tscomfy/source src/run.ts"
   },
   "dependencies": {
+    "@tscomfy/client": "workspace:*",
     "@tscomfy/core": "workspace:*"
   }
 }
