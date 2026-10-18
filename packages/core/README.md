@@ -39,6 +39,13 @@ const prompt = toApi(txt2img); // throws a ValidationError listing what the back
 await fetch("http://127.0.0.1:8188/prompt", { method: "POST", body: stringify({ prompt }) });
 ```
 
+`local` is named after the `--out` directory (`--out src/types` exports `types`); `--name` picks
+another. `ckpt_name`, `sampler_name` and `scheduler` take only what your server has, so put one
+of your checkpoints there: your editor completes them. The import names the generated `index.ts`
+as `index.js`, as TypeScript expects under `nodenext` and `bundler`; `tsc` output, bundlers and
+Bun resolve it. To run the sources directly with Node, generate with `--import-extension .ts`
+and import `./comfy/local/index.ts`, with `allowImportingTsExtensions` on.
+
 ## What's in it
 
 **Building** ([guide](https://github.com/TheeKia/tscomfy/blob/main/docs/guides/building-workflows.md))

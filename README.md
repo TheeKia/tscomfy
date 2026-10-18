@@ -43,7 +43,8 @@ npm install --save-dev @tscomfy/cli typescript
 npx tscomfy generate --url http://127.0.0.1:8188 --out comfy --import-extension .ts
 ```
 
-`comfy/` now holds the types of every node, model and sampler your server has. Add a
+`comfy/` now holds the types of every node, model and sampler your server has, exported as
+`comfy`, after the directory (`--name` picks another name). Add a
 `tsconfig.json` so your editor and `tsc` check against them:
 
 ```json

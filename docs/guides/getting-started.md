@@ -40,7 +40,8 @@ In this repository, run it as `bun run tscomfy …`. It only sends `GET /object_
 | `object_info.json` | The server's response as it came, for regenerating offline (`--from`) and for `tscomfy check` |
 | `tscomfy.json` | What was generated, so `tscomfy check` can tell an edited or stale file |
 
-The constant is named after the directory (`local` here; `--name` picks another). The files hold
+The constant is named after the directory (`local` here, `types` for `--out src/types`; `--name`
+picks another), and the examples in these guides import it as `local`. The files hold
 your model names and depend on what your server has installed, so most projects gitignore them
 and regenerate; commit them if your builds must work without the server. `--out` can be any
 directory; several servers can live side by side (`src/comfy/laptop`, `src/comfy/render-box`).
@@ -68,6 +69,12 @@ const txt2img = workflow(local, ({ n }) => {
   n.SaveImage({ images: n.VAEDecode({ samples: latent, vae }) });
 });
 ```
+
+Put one of your server's checkpoints in `ckpt_name`: it takes only those, and your editor
+completes them. The import names the generated `index.ts` as `index.js`, as TypeScript expects
+under `nodenext` and `bundler`; `tsc` output, bundlers and Bun resolve it. To run the sources
+directly with Node, generate with `--import-extension .ts`, import `./comfy/local/index.ts`, and
+turn on `allowImportingTsExtensions`.
 
 `workflow(schema, build)` calls `build` once with `n`, which has a function per node class.
 Each call adds a node and returns its outputs: one output is returned as is, several as a tuple
