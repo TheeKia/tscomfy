@@ -233,6 +233,57 @@ describe("the executable", () => {
     ]);
   });
 
+  test.skipIf(node === null)("sends credentials under Node too, and never shows them", async () => {
+    seen.length = 0;
+    const cwd = join(temp, "node-url");
+    await mkdir(cwd);
+    const withCredentials = `http://us%40er:p%C3%A9@127.0.0.1:${String(server.port)}/?token=t0k`;
+    const generated = await exec(
+      [
+        node ?? "",
+        "--conditions=@tscomfy/source",
+        main,
+        "generate",
+        "--url",
+        withCredentials,
+        "--out",
+        "comfy",
+        "--quiet",
+      ],
+      { cwd },
+    );
+    expect(generated.stderr).toBe("");
+    expect(generated.code).toBe(0);
+    const auth = `Basic ${btoa(String.fromCodePoint(...new TextEncoder().encode("us@er:pé")))}`;
+    expect(seen.map((request) => request.auth)).toEqual([auth, auth]);
+
+    // Node's own message is "fetch failed"; the reason is its cause. (Node refuses port 9
+    // outright, as a "bad port", so this one was free a moment ago.)
+    const free = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data: () => undefined } });
+    const port = String(free.port);
+    free.stop(true);
+    const closed = await exec(
+      [
+        node ?? "",
+        "--conditions=@tscomfy/source",
+        main,
+        "generate",
+        "--url",
+        `http://user:hunter2@127.0.0.1:${port}/?token=t0k`,
+        "--out",
+        "closed",
+      ],
+      { cwd },
+    );
+    expect(closed.code).toBe(1);
+    expect(closed.stderr).toStartWith(
+      `tscomfy: Could not reach http://127.0.0.1:${port}/object_info: `,
+    );
+    expect(closed.stderr).toContain("ECONNREFUSED");
+    expect(closed.stderr).not.toContain("hunter2");
+    expect(closed.stderr).not.toContain("t0k");
+  });
+
   test.each([
     [["--version"], 0],
     [[], 2],

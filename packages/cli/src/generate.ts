@@ -13,7 +13,7 @@ import {
 } from "./manifest.ts";
 import { count, formatDiagnostic, reportDiagnostics, size } from "./report.ts";
 import { loadSchema, readSource, type Source } from "./source.ts";
-import { camelName, flagWords } from "./util.ts";
+import { camelName, flagWords, printable } from "./util.ts";
 
 /** `tscomfy generate --help`. */
 export const GENERATE_USAGE: string = `Usage: tscomfy generate (--url <server> | --from <object_info.json>) --out <dir> [options]
@@ -99,7 +99,9 @@ export async function generateCommand(io: Io, args: readonly string[]): Promise<
   const diagnostics = [...schema.diagnostics, ...result.diagnostics];
   if (!flags.has("quiet")) {
     const version =
-      schema.schema.comfyVersion === undefined ? "" : ` (ComfyUI ${schema.schema.comfyVersion})`;
+      schema.schema.comfyVersion === undefined
+        ? ""
+        : ` (ComfyUI ${printable(schema.schema.comfyVersion)})`;
     io.out(
       `Generated ${count(Object.keys(schema.schema.nodes).length, "node type")} from ${source.label}${version} into ${out}:\n` +
         `  ${files.map((file) => `${file.path} ${size(byteLength(file.contents))}`).join(" · ")}\n`,

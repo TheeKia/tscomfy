@@ -114,6 +114,9 @@ describe("usage errors exit with 2 and show the command's usage", () => {
     [["--out", "gen", "--url", `${SERVER}/#top`], "--url can't have a #fragment"],
     [["--out", "a\nb", "--from", "x"], "--out has a control character"],
     [["--out", "gen", "--from", "x\ty"], "--from has a control character"],
+    // The header's comment would turn a line separator into a space, and its command with it.
+    [["--out", "a\u2028b", "--from", "x"], "--out has a control character or a line separator"],
+    [["--out", "gen", "--from", "x\u009b"], "--from has a control character"],
     [["--out", "gen", "--from", "x", "--comfy-version", "1\n2"], "--comfy-version has a control"],
     [["--out", "gen", "--from", "x", "--name", "foo-bar"], '--name "foo-bar" isn\'t usable'],
     [["--out", "gen", "--from", "x", "--name", "new"], '--name "new" isn\'t usable'],
@@ -424,6 +427,41 @@ describe("generate", () => {
     expect(lines.some((line) => line.includes("more (--verbose"))).toBeFalse();
   });
 
+  test("escapes what a terminal would act on in names and versions from the server", async () => {
+    const evil = "Evil\u001b[2J\u009b31m\u202eNode";
+    const io = memoryIo(
+      {},
+      {
+        [`${SERVER}/object_info`]: JSON.stringify({
+          ...JSON.parse(basic),
+          [evil]: { ...rawNode(evil, { x: ["INT", { min: "?" }] }), python_module: "pack\u0007" },
+        }),
+        [`${SERVER}/system_stats`]: JSON.stringify({ system: { comfyui_version: "0.41\u001b]0" } }),
+      },
+    );
+    expect(await run(["generate", "--url", SERVER, "--out", "gen"], io)).toBe(0);
+    expect(io.stdout()).toContain("  pack\\u0007: 1\n");
+    expect(io.stdout()).toContain("Evil\\u001b[2J\\u009b31m\\u202eNode");
+    // A version a regenerate command can't record isn't recorded, or shown.
+    expect(io.stdout()).toStartWith(`Generated 12 node types from ${SERVER} into gen:`);
+    expect(JSON.parse(io.files.get("gen/tscomfy.json") ?? "")).not.toHaveProperty("comfyVersion");
+    // oxlint-disable-next-line no-control-regex -- control characters are what this looks for
+    expect(io.stdout()).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u009b\u202e]/);
+
+    const drifted = memoryIo(Object.fromEntries(io.files), {
+      [`${SERVER}/object_info`]: JSON.stringify({
+        ...JSON.parse(basic),
+        [`${evil}2`]: rawNode(`${evil}2`, {}),
+      }),
+      [`${SERVER}/system_stats`]: SYSTEM_STATS,
+    });
+    expect(await run(["check", "--url", SERVER, "--out", "gen"], drifted)).toBe(1);
+    expect(drifted.stdout()).toContain("added: Evil\\u001b[2J\\u009b31m\\u202eNode2\n");
+    expect(drifted.stdout()).toContain("removed: Evil\\u001b[2J\\u009b31m\\u202eNode\n");
+    // oxlint-disable-next-line no-control-regex -- control characters are what this looks for
+    expect(drifted.stdout()).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u009b\u202e]/);
+  });
+
   test("prints only errors, to stderr, when quiet", async () => {
     const io = memoryIo({ "info.json": await readMockObjectInfo("malformed") });
     expect(await run(["generate", "--from", "info.json", "--out", "gen", "--quiet"], io)).toBe(0);
@@ -603,12 +641,21 @@ describe("check", () => {
     );
   });
 
-  test("suggests the recorded --comfy-version again with --from", async () => {
+  test("suggests the recorded --comfy-version again with --from, for the snapshot only", async () => {
     const io = await generated(basic, ["--comfy-version", "0.41.0"]);
     io.files.set("gen/nodes.ts", "");
     expect(await run(["check", "--from", "before.json", "--out", "gen"], io)).toBe(1);
     expect(io.stdout()).toEndWith(
       "Run tscomfy generate --from before.json --out gen --comfy-version 0.41.0 to update.\n",
+    );
+    // Another dump is from a server whose version nothing records.
+    const other = memoryIo({
+      ...Object.fromEntries(io.files),
+      "after.json": JSON.stringify({ Added: rawNode("Added", {}) }),
+    });
+    expect(await run(["check", "--from", "after.json", "--out", "gen"], other)).toBe(1);
+    expect(other.stdout()).toEndWith(
+      "Run tscomfy generate --from after.json --out gen to update.\n",
     );
   });
 

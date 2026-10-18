@@ -14,6 +14,7 @@ import type { Io } from "./io.ts";
 import { contentHash, FILES, MANIFEST, readGenerated, SNAPSHOT } from "./manifest.ts";
 import { count } from "./report.ts";
 import { loadSchema, readSource } from "./source.ts";
+import { printable } from "./util.ts";
 
 /** `tscomfy check --help`. */
 export const CHECK_USAGE: string = `Usage: tscomfy check (--url <server> | --from <object_info.json>) --out <dir>
@@ -78,7 +79,7 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
   const ignored =
     runtime.length === 0
       ? ""
-      : ` (changed files in ${count(runtime.length, "upload or remote combo")} aren't drift: ${listed(runtime, verbose, SHOWN_NAMES)})`;
+      : ` (changed files in ${count(runtime.length, "upload or remote combo")} aren't drift: ${printable(listed(runtime, verbose, SHOWN_NAMES))})`;
   if (!drifted && stale.length === 0 && !outdated) {
     const nodes = Object.keys(current.nodes).length;
     io.out(
@@ -102,7 +103,7 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
   if (drifted) {
     lines.push(
       `${source.label} differs from ${snapshotPath}${ignored}:`,
-      ...formatDiff(diff, verbose),
+      ...formatDiff(diff, verbose).map(printable),
     );
   }
   const command = regenerateCommand({
@@ -110,8 +111,11 @@ export async function checkCommand(io: Io, args: readonly string[]): Promise<num
     out,
     exportName: manifest.exportName,
     importExtension: manifest.importExtension,
-    // With --url, the server says again.
-    ...(flags.has("from") && manifest.comfyVersion !== undefined
+    // With --url, the server says again. With --from, the recorded version is the snapshot's,
+    // so it goes with that file only, as generate reads it.
+    ...(flags.has("from") &&
+    manifest.comfyVersion !== undefined &&
+    contentHash(source.text) === manifest.files[SNAPSHOT]
       ? { comfyVersion: manifest.comfyVersion }
       : {}),
   });

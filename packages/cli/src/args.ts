@@ -1,4 +1,5 @@
 import { CliError } from "./io.ts";
+import { recordable } from "./util.ts";
 
 /** One flag a command accepts: `--name value`, `--name=value`, or a boolean `--name`. */
 export interface FlagSpec {
@@ -19,7 +20,8 @@ export const HELP: FlagSpec = { name: "help", takesValue: false, short: "h" };
  *
  * A value given apart (`--out dir`) can't start with `-`, so a forgotten value isn't read from
  * the next flag (`--out --from x`); `--out=-dir` gives such a value. Every value is recorded in
- * a regenerate command, which can't keep control characters, so none may have one.
+ * a regenerate command, which can't keep control characters or line separators, so none may
+ * have one.
  */
 export function parseFlags(args: readonly string[], specs: readonly FlagSpec[]): Flags {
   const flags = new Map<string, string | true>();
@@ -52,10 +54,9 @@ export function parseFlags(args: readonly string[], specs: readonly FlagSpec[]):
         2,
       );
     }
-    // oxlint-disable-next-line no-control-regex -- control characters are what this looks for
-    if (/[\u0000-\u001f\u007f]/.test(given)) {
+    if (!recordable(given)) {
       throw new CliError(
-        `--${name} has a control character, which a regenerate command can't keep.`,
+        `--${name} has a control character or a line separator, which a regenerate command can't keep.`,
         2,
       );
     }

@@ -1,5 +1,5 @@
 import { type Diagnostic, parse, type Schema } from "@tscomfy/core";
-import { isRecord } from "./util.ts";
+import { isRecord, printable } from "./util.ts";
 
 /** How many diagnostics a pack shows before the rest are summarized, unless verbose. */
 const SHOWN_PER_PACK = 5;
@@ -28,7 +28,7 @@ export function reportDiagnostics(
   ];
   for (const pack of [...groups.keys()].toSorted()) {
     const group = groups.get(pack) ?? [];
-    lines.push(`  ${pack}: ${String(group.length)}`);
+    lines.push(`  ${printable(pack)}: ${String(group.length)}`);
     const shown = verbose ? group : group.slice(0, SHOWN_PER_PACK);
     for (const diagnostic of shown) lines.push(`    ${formatDiagnostic(diagnostic)}`);
     if (shown.length < group.length) {
@@ -38,9 +38,9 @@ export function reportDiagnostics(
   return `${lines.join("\n")}\n`;
 }
 
-/** One line for a diagnostic: its code, where, and what. */
+/** One line for a diagnostic: its code, where, and what. Names in it come from the server. */
 export function formatDiagnostic(diagnostic: Diagnostic): string {
-  return `${diagnostic.code} ${diagnostic.path.join(" › ")}: ${diagnostic.message}`;
+  return printable(`${diagnostic.code} ${diagnostic.path.join(" › ")}: ${diagnostic.message}`);
 }
 
 /** `1 warning`, `3 errors`. */

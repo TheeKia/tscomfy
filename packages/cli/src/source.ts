@@ -1,7 +1,7 @@
 import { type Diagnostic, normalizeObjectInfo, type Schema } from "@tscomfy/core";
 import { type Flags, value } from "./args.ts";
 import { type Io, CliError } from "./io.ts";
-import { errorBodyMessage, flagWords, redactUrl } from "./util.ts";
+import { errorBodyMessage, flagWords, recordable, redactUrl } from "./util.ts";
 
 /** Where node definitions come from: a server, or a saved `/object_info` response. */
 export interface Source {
@@ -71,7 +71,10 @@ function endpoint(base: URL, name: string): string {
   return url.href;
 }
 
-/** The ComfyUI version from `/system_stats`; optional, so a failure only loses the version. */
+/**
+ * The ComfyUI version from `/system_stats`; optional, so a failure only loses the version, and so
+ * does a version a regenerate command couldn't record.
+ */
 async function readComfyVersion(io: Io, url: string): Promise<string | undefined> {
   try {
     const stats: unknown = JSON.parse(await io.fetchText(url));
@@ -81,7 +84,7 @@ async function readComfyVersion(io: Io, url: string): Promise<string | undefined
       typeof system === "object" && system !== null
         ? Reflect.get(system, "comfyui_version")
         : undefined;
-    return typeof version === "string" ? version : undefined;
+    return typeof version === "string" && recordable(version) ? version : undefined;
   } catch {
     return undefined;
   }

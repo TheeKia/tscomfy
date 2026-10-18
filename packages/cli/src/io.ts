@@ -44,9 +44,13 @@ export function systemIo(): Io {
       process.stderr.write(text);
     },
     fetchText: async (url) => {
-      const shown = redactUrl(new URL(url));
+      const { request, headers } = withoutCredentials(new URL(url));
+      const shown = redactUrl(request);
       try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+        const response = await fetch(request, {
+          headers,
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
         if (!response.ok) {
           const answer = `${String(response.status)} ${response.statusText}`.trimEnd();
           // Best effort: the status says what went wrong; the body may say why.
@@ -59,7 +63,9 @@ export function systemIo(): Io {
         return await response.text();
       } catch (error) {
         if (error instanceof CliError) throw error;
-        throw new CliError(`Could not reach ${shown}: ${reason(error)}`);
+        // The runtime's message may quote the URL, query and all.
+        const why = fetchFailure(error).replaceAll(request.href, shown);
+        throw new CliError(`Could not reach ${shown}: ${why}`);
       }
     },
     readText: async (path) => {
@@ -88,6 +94,39 @@ export function systemIo(): Io {
       }
     },
   };
+}
+
+/**
+ * The URL to request and the headers that carry its credentials. Node's `fetch` refuses a URL
+ * with credentials in it (Bun sends them), so they go as Basic authorization, which is what
+ * both runtimes do with them anyway.
+ */
+function withoutCredentials(url: URL): { readonly request: URL; readonly headers: Headers } {
+  const headers = new Headers();
+  if (url.username === "" && url.password === "") return { request: url, headers };
+  const bytes = new TextEncoder().encode(`${decoded(url.username)}:${decoded(url.password)}`);
+  headers.set("authorization", `Basic ${btoa(String.fromCodePoint(...bytes))}`);
+  const request = new URL(url.href);
+  request.username = "";
+  request.password = "";
+  return { request, headers };
+}
+
+/** A percent-encoded URL part as it was typed; one that isn't valid encoding stays as it is. */
+function decoded(part: string): string {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+}
+
+/** Why `fetch` failed. Node says only "fetch failed"; the reason is in its `cause`. */
+function fetchFailure(error: unknown): string {
+  const message = reason(error);
+  const cause: unknown = error instanceof Error ? error.cause : undefined;
+  if (!(cause instanceof Error) || message.includes(cause.message)) return message;
+  return `${message} (${cause.message})`;
 }
 
 function reason(error: unknown): string {
