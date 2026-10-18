@@ -27,6 +27,65 @@ const txt2img = workflow(local, ({ n }) => {
 const body = stringify({ prompt: toApi(txt2img) }); // POST it to /prompt
 ```
 
+## Quick start
+
+tscomfy isn't on npm yet, so start from the example project in this repository. You need Bun 1.4
+and a ComfyUI server at `http://127.0.0.1:8188` with at least one checkpoint.
+
+```sh
+git clone https://github.com/TheeKia/tscomfy.git && cd tscomfy && bun install
+cd examples/txt2img
+bun run generate                            # types from your server, into src/comfy/local
+bun run start "a cat in a hat" > prompt.json
+curl -H 'Content-Type: application/json' -d @prompt.json http://127.0.0.1:8188/prompt
+```
+
+The image lands in ComfyUI's `output/`. Now edit [`src/txt2img.ts`](examples/txt2img/src/txt2img.ts):
+your editor completes your server's node classes, checkpoints and samplers, and `bun run
+typecheck` rejects anything the server wouldn't accept. After installing models or node packs,
+run `bun run generate` again.
+
+## Recipes
+
+Short versions of everyday tasks; [the guides](docs/guides/README.md) cover each in full.
+
+**Render a batch.** A workflow is a function, so its parameters are plain arguments. With
+`txt2img` from the example:
+
+```ts
+for (const prompt of ["a lighthouse at dusk", "a fox in the snow"]) {
+  for (const seed of [1n, 2n, 3n]) {
+    const body = stringify({ prompt: toApi(txt2img({ checkpoint, prompt, seed })) });
+    await fetch("http://127.0.0.1:8188/prompt", { method: "POST", body });
+  }
+}
+```
+
+**Start from a workflow you already have.** Save it from ComfyUI, then turn it into typed code
+that builds the same prompt, and replace the values you want to vary with parameters:
+
+```sh
+tscomfy transpile --workflow portrait.json --schema src/comfy/local --out src/portrait.ts
+```
+
+**Check values from outside.** Types can't see a width typed into a form. `exportApi` reports
+what the backend would reject instead of throwing:
+
+```ts
+const { prompt, diagnostics } = exportApi(txt2img({ checkpoint, prompt: text, seed, width }));
+if (diagnostics.some((d) => d.severity === "error")) return Response.json(diagnostics, { status: 400 });
+```
+
+**Look at it in ComfyUI.** Write a laid-out workflow file and drag it into the frontend:
+
+```ts
+const built = txt2img({ checkpoint, prompt: "a cat in a hat", seed: 42n });
+await Bun.write("txt2img.json", stringify(toUi(built, { positions: layout(built) }).workflow));
+```
+
+[`examples/hires-fix`](examples/hires-fix) puts these together: reusable pieces, a LoRA stack with
+one LoRA bypassed, two outputs, diagnostics and a UI file.
+
 ## What it does
 
 - **Types per server.** `tscomfy generate` writes a `Nodes` interface with a function per node
@@ -50,8 +109,8 @@ tscomfy produces JSON; any ComfyUI client can queue it.
 ## Status
 
 Feature-complete for its scope (the phases in [the design](docs/plan.md#14-phases) are done) and
-tested against the frontend and backend of ComfyUI 0.41. Not on npm yet: to try it, clone this
-repository and start from [`examples/txt2img`](examples/txt2img).
+tested against the frontend and backend of ComfyUI 0.41. Not on npm yet; see
+[the quick start](#quick-start).
 
 ## Documentation
 
