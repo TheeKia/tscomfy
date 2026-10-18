@@ -16,7 +16,7 @@ INT values accept `number | bigint`. Our own deterministic serializer writes big
 - Everything that reads JSON from outside (the normalizer, the importer) takes raw text, never a parsed value, which has already lost precision.
 - The parser turns every integer literal beyond 2^53 into a bigint; each consumer decides per field (e.g. FLOAT bounds become numbers rounded inward, plan §9).
 - `parse` and `stringify` came first, in Phase 1, because the normalizer needs them.
-- `parse` also reads Python's `NaN`/`Infinity` and literals beyond the double range as `null` (`W_NON_FINITE_NUMBER`), so its result is always valid JSON data and one bad value can't invalidate a dump.
+- `parse` also reads Python's `NaN`/`Infinity` and non-integer literals beyond the double range (`1e400`) as `null` (`W_NON_FINITE_NUMBER`), so its result is always valid JSON data and one bad value can't invalidate a dump.
 - Without source-text access, the normalizer moves unsafe integer bounds inward by one double.
 - `toApi()` may return objects holding bigint; `stringify()` is the way to serialize them.
 

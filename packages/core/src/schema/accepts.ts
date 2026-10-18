@@ -1,25 +1,22 @@
 import type { ComboOption, InputDef, OutputDef, OutputType, SocketType } from "./types.ts";
 
 /**
- * Whether the backend accepts a link from `output` into `input`. Follows the
- * backend's non-strict `validate_node_input`:
+ * Whether the backend accepts a link from `output` into `input`. Follows the backend's non-strict
+ * `validate_node_input`:
  * - `*` on either side passes, also as a member of a comma list;
  * - MatchType passes on either side (it is checked per template instead);
- * - an option-list output passes into an input typed exactly `COMBO`; a legacy `[[…]]` combo only
- *   takes an identical option list;
+ * - an option-list output passes into an input typed exactly `COMBO`; a legacy `[[…]]` combo takes
+ *   an identical option list, and `*` and MatchType outputs;
  * - otherwise the comma lists must share a type.
  *
  * List outputs don't change the answer: ComfyUI maps a list over a non-list input. An Autogrow
- * input answers for its slots. Inputs that can't be linked as a whole (DynamicGroup, and a
- * dynamic combo, whose choice a link never matches) and specs
- * the normalizer couldn't interpret answer `false`, whatever the output: stricter than the
- * backend, never looser.
+ * input answers for its slots. Inputs that can't be linked as a whole (DynamicGroup, and a dynamic
+ * combo, whose choice a link never matches) and specs the normalizer couldn't interpret answer
+ * `false`, whatever the output: stricter than the backend, never looser.
  */
 export function accepts(input: InputDef, output: OutputDef): boolean {
-  if (input.kind === "dynamicGroup" || input.kind === "unknown") return false;
-  if (input.kind === "autogrow") return accepts(input.template, output);
-  if (output.matchTemplate !== undefined) return true;
-  return acceptsType(input, output.type);
+  // A MatchType output passes as `*` does, into whatever takes a link at all.
+  return acceptsType(input, output.matchTemplate === undefined ? output.type : { kind: "any" });
 }
 
 /**

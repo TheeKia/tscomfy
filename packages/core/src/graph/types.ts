@@ -55,8 +55,8 @@ export interface NodeOptions {
   readonly title?: string;
   /**
    * `"bypass"`: the node isn't sent, and links through it reroute to one of its inputs, as the
-   * frontend's bypass does. `"mute"`: the node isn't sent, and inputs linked
-   * to it are left out.
+   * frontend's bypass does. `"mute"`: the node isn't sent. An input whose link then resolves to
+   * nothing is left out, or, for a widget, sends the widget's value instead.
    */
   readonly mode?: NodeMode;
 }

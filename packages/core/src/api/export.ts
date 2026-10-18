@@ -31,8 +31,8 @@ export interface ToApiOptions {
    */
   readonly validate?: boolean;
   /**
-   * Apply bypass and mute. Default `true`. With `false`, every node is sent
-   * as if it ran, as a tool that rewrites workflows needs (the transpiler).
+   * Apply bypass and mute. Default `true`. With `false`, every node is sent as if it ran, as a tool
+   * that rewrites workflows needs (the transpiler).
    */
   readonly modes?: boolean;
 }
@@ -46,15 +46,15 @@ export interface ApiExportResult {
 }
 
 /**
- * Converts a workflow into an API-format prompt: explicit schema
- * defaults filled in, dynamic inputs flattened to their wire keys, list values wrapped, keys in
- * the frontend's order. Serialize it with `stringify`, which keeps big integers exact.
+ * Converts a workflow into an API-format prompt: explicit schema defaults filled in, dynamic inputs
+ * flattened to their wire keys, list values wrapped, keys in the frontend's order. Serialize it
+ * with `stringify`, which keeps big integers exact.
  *
- * Throws a {@link ValidationError}, carrying every diagnostic, when there is an error: the
- * prompt can't be built faithfully (`E_INPUT_KEY_COLLISION`, `E_TOO_MANY_DYNAMIC_INPUTS`), or,
- * unless `validate` is `false`, the backend would reject it. Warnings don't throw; use
- * {@link exportApi} to see them. Throws a `TypeError` for an output reference nested inside a
- * JSON value, which no input can carry.
+ * Throws a {@link ValidationError}, carrying every diagnostic, when there is an error: the prompt
+ * can't be built faithfully (`E_INPUT_KEY_COLLISION`, `E_TOO_MANY_DYNAMIC_INPUTS`), or, unless
+ * `validate` is `false`, the backend would reject it. Warnings don't throw; use {@link exportApi}
+ * to see them. Throws a `TypeError` for an output reference nested inside a JSON value, which no
+ * input can carry.
  */
 export function toApi(workflow: Workflow, options: ToApiOptions = {}): ApiPrompt {
   const { prompt, diagnostics } = exportApi(workflow, options);
@@ -65,7 +65,8 @@ export function toApi(workflow: Workflow, options: ToApiOptions = {}): ApiPrompt
 }
 
 /**
- * {@link toApi} without throwing: the prompt, and what went wrong building and validating it.
+ * {@link toApi} without throwing for diagnostics: the prompt, and what went wrong building and
+ * validating it. Still throws a `TypeError` where {@link toApi} does.
  */
 export function exportApi(workflow: Workflow, options: ToApiOptions = {}): ApiExportResult {
   const diagnostics: Diagnostic[] = [];
@@ -99,10 +100,10 @@ export function exportApi(workflow: Workflow, options: ToApiOptions = {}): ApiEx
 }
 
 /**
- * Every problem with a workflow: the errors {@link toApi} would throw for, and
- * the warnings, which don't stop the backend (a value outside an upload combo's listed files, for
- * example). Empty for a workflow the backend accepts with nothing to report. Throws a `TypeError`
- * where {@link toApi} does.
+ * Every problem with a workflow: the errors {@link toApi} would throw for, and the warnings, which
+ * don't stop the backend (a value outside an upload combo's listed files, for example). Empty for a
+ * workflow the backend accepts with nothing to report. Throws a `TypeError` where {@link toApi}
+ * does.
  */
 export function validate(workflow: Workflow): readonly Diagnostic[] {
   return exportApi(workflow).diagnostics;

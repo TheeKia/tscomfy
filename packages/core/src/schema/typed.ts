@@ -18,11 +18,13 @@ export type TypedSchema<N> = Schema & { readonly [nodesType]: N };
 export type NodesOf<S> = S extends TypedSchema<infer N> ? N : never;
 
 /**
- * Loads the schema a generated `index.ts` embeds. `text` is
- * `stringify(schema)` as codegen wrote it; it is parsed losslessly, so big integers stay exact.
+ * Loads the schema a generated `index.ts` embeds. `text` is `stringify(schema)` as codegen wrote
+ * it; it is parsed losslessly, so big integers stay exact.
  *
  * Throws when the text isn't such a schema: generated files are tscomfy's own output, so a
  * mismatch means the file was edited or truncated, which is misuse rather than data to report.
+ * Also throws when the schema holds integers beyond 2^53 (every real one does: seed bounds) and
+ * the runtime's `JSON.parse` has no source-text access to read them exactly.
  */
 export function defineSchema<N>(text: string): TypedSchema<N> {
   return schemaFromParse(parse(text));
@@ -32,7 +34,10 @@ export function defineSchema<N>(text: string): TypedSchema<N> {
  * A schema as a typed schema, to build and import workflows over a schema read at runtime (from
  * `normalizeObjectInfo`) rather than generated. With `N` left `unknown`, `n` has no node
  * functions, and nodes are added with `raw`; `importApi` and `importUi` work as with generated
- * types. The schema is frozen, as the normalizer returns it.
+ * types.
+ *
+ * The result is frozen. The node definitions aren't copied: they are frozen in place, as the
+ * normalizer already returns them, so a schema built by hand can't be changed afterwards either.
  */
 export function typedSchema<N = unknown>(schema: Schema): TypedSchema<N> {
   return brand(

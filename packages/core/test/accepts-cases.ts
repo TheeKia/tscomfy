@@ -322,6 +322,12 @@ export const ACCEPTS_CASES: readonly AcceptsCase[] = [
     expected: false,
   },
   {
+    name: "dynamic combo rejects MatchType outputs too",
+    input: dynamicCombo,
+    output: output(ANY, "t"),
+    expected: false,
+  },
+  {
     name: "dynamic groups accept nothing",
     input: dynamicGroup,
     output: output(ANY),

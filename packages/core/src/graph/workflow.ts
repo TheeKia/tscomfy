@@ -6,9 +6,9 @@ import { isOutputRef, outputRef, ownerOf } from "./output-ref.ts";
 import type { NodeHandle, NodeId, NodeMode, Out } from "./types.ts";
 
 /**
- * Builds a workflow: `build` calls node functions on `n`, which add nodes and
- * return their outputs, and `raw` for untyped nodes. The result is frozen; ids are `"1"`, `"2"`,
- * … in creation order unless set with `options.id`.
+ * Builds a workflow: `build` calls node functions on `n`, which add nodes and return their outputs,
+ * and `raw` for untyped nodes. The result is frozen; ids are `"1"`, `"2"`, … in creation order
+ * unless set with `options.id`.
  *
  * Throws a `TypeError` for misuse the types can't catch: a duplicate or empty id, a node function
  * called after `build` returned or from an async `build`, an input value that isn't JSON or an

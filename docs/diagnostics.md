@@ -14,7 +14,7 @@ Paths of parser and normalizer diagnostics point into the raw document, e.g.
 | Code | Meaning | What happens |
 |---|---|---|
 | `E_INVALID_JSON` | The text is not valid JSON. The path is empty; the message has the parser's reason. | No value. |
-| `W_NON_FINITE_NUMBER` | `NaN`, `Infinity` or `-Infinity` (not JSON, but Python servers write them for non-finite floats), or a number literal beyond the double range. | Read as `null`, which the normalizer treats as unset: an infinite bound is no bound. |
+| `W_NON_FINITE_NUMBER` | `NaN`, `Infinity` or `-Infinity` (not JSON, but Python servers write them for non-finite floats), or a literal with a fraction or an exponent beyond the double range (`1e400`; an integer literal stays exact as a `bigint`, or, without source-text access, becomes `null` too). | Read as `null`, which the normalizer treats as unset: an infinite bound is no bound. |
 | `W_PRECISION_LOSS` | An integer beyond 2⁵³ was parsed on a runtime without `JSON.parse` source-text access, so it may have been rounded. | The rounded number is kept. The normalizer then moves such bounds inward by one double. |
 
 ## Normalizing `/object_info`
@@ -22,13 +22,13 @@ Paths of parser and normalizer diagnostics point into the raw document, e.g.
 | Code | Meaning | What happens |
 |---|---|---|
 | `E_INVALID_OBJECT_INFO` | The document is not an object of node definitions. | Empty schema. |
-| `E_INVALID_NODE` | A node can't be used: it isn't an object, its `input`, `input.required` or `output` is unreadable, or an output type is (an empty string, or an option list with an option that isn't a string, number or boolean). | The node is dropped. |
+| `E_INVALID_NODE` | A node can't be used: it isn't an object, its `input`, `input.required` or `output` is unreadable, or an output type is unusable: neither a string nor an option list, an empty string, or an option list with an option that isn't a string, number or boolean. | The node is dropped. |
 | `W_INVALID_NODE_FIELD` | A descriptive node field is missing or has the wrong type (`display_name`, `category`, `python_module`, `output_node`, flags, `input_order`); an `output_*` array doesn't match `output`; a MatchType output names no template. | A default is used for that field or slot; a MatchType output without a template connects like `*`. |
 | `W_NODE_NAME_MISMATCH` | The node's `name` differs from the key it is listed under. | The key is used: prompts address nodes by it. |
 | `E_INVALID_INPUT_SECTION` | `input.optional` is not an object. | Its inputs are dropped. |
-| `E_DUPLICATE_INPUT` | An input name appears twice: in both `required` and `optional` (the backend reads `required`), or in both sections of a dynamic option. | The required (first) one is kept, the other dropped. |
+| `E_DUPLICATE_INPUT` | An input name appears twice: in both `required` and `optional` (the backend reads `required`), or in both sections of a dynamic option or a DynamicGroup's template. | The required (first) one is kept, the other dropped. |
 | `W_INPUT_ORDER_MISMATCH` | `input_order` names an input the node doesn't declare, or leaves one out. | The frontend's order: listed required inputs, then listed optional ones, then every unlisted input. |
-| `W_INVALID_INPUT_SPEC` | An input spec can't be interpreted: not a `[type, options?]` list, a type that isn't a string or option list, an empty type, a dynamic input missing its payload or with counts outside the backend's limits, a DynamicGroup with fields the backend doesn't allow there (sockets, `forceInput`, dynamic inputs, dotted names) or none it sends, or a legacy combo with an option that isn't a string, number or boolean (its links match the full list). | The input is kept as `unknown`. |
+| `W_INVALID_INPUT_SPEC` | An input spec can't be interpreted: not a `[type, options?]` list, a type that isn't a string or option list, an empty type, a dynamic input missing its payload or with counts outside the backend's limits, an Autogrow whose template is a dynamic input, a DynamicGroup with fields the backend doesn't allow there (sockets, `forceInput`, dynamic inputs, dotted names) or none it sends, or a legacy combo with an option that isn't a string, number or boolean (its links match the full list). | The input is kept as `unknown`. |
 | `W_UNSUPPORTED_INPUT_TYPE` | The input uses a `COMFY_…_V3` dynamic type this version doesn't know. | The input is kept as `unknown`. |
 | `W_INVALID_INPUT_OPTION` | One option of a readable spec is invalid: wrong type; a combo option that isn't a string, number or boolean; a default the backend would reject (not one of the combo's options, outside `min`/`max`, a list for INT or FLOAT); a malformed or duplicate dynamic-combo option. | That option is ignored. A combo with no listed options keeps its default, since membership can't be checked. |
 

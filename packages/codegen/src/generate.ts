@@ -34,9 +34,9 @@ export interface GenerateResult {
 }
 
 /**
- * Generates the files for one schema: `nodes.ts` (types only) and
- * `index.ts` (the typed runtime schema). Pure and deterministic. Throws a `TypeError` for an
- * export name `exportNameProblem` refuses.
+ * Generates the files for one schema: `nodes.ts` (types only) and `index.ts` (the typed runtime
+ * schema). Pure and deterministic. Throws a `TypeError` for an export name `exportNameProblem`
+ * refuses.
  */
 export function generate(schema: Schema, options: GenerateOptions): GenerateResult {
   const header = [

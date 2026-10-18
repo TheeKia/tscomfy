@@ -52,6 +52,10 @@ describe("parse", () => {
       ["W_PRECISION_LOSS", ["a", "max"]],
       ["W_PRECISION_LOSS", ["b", 1]],
     ]);
+    // The value as read, exactly, not JavaScript's shortest form of it (18446744073709552000).
+    expect(result.diagnostics[0]?.message).toStartWith(
+      "An integer was read as 18446744073709551616, which may have lost precision",
+    );
   });
 
   test("reads non-finite numbers as null, at their paths", () => {

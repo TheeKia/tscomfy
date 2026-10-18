@@ -2,9 +2,9 @@ import type { TypedSchema } from "../schema/typed.ts";
 import type { NodeHandle, NodeId, NodeMode, NodeOptions, Out } from "./types.ts";
 
 /**
- * A value in a node's inputs, as the builder records it: structured, with
- * dynamic inputs nested (`{ option, inputs }`, slot lists, group rows) rather than flattened to
- * wire keys. Flattening is the exporter's job.
+ * A value in a node's inputs, as the builder records it: structured, with dynamic inputs nested
+ * (`{ option, inputs }`, slot lists, group rows) rather than flattened to wire keys. Flattening is
+ * the exporter's job.
  */
 export type InputValue =
   | string

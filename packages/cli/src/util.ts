@@ -23,9 +23,9 @@ export function flagWords(name: string, value: string): string {
 /**
  * An export name from a file or directory name, the same rule for `generate --out` and
  * `transpile --prompt`: camelCase from the runs of ASCII letters and digits, a word in capitals
- * lowercased, the first word starting lowercase and the others uppercase
- * (`src/comfy/local` → `local`, `my-server` → `myServer`, `Anima-API.json` → `animaApi`).
- * May be empty or start with a digit: callers check the result.
+ * lowercased, the first word starting lowercase and the others uppercase (`src/comfy/local` →
+ * `local`, `my-server` → `myServer`, `Anima-API.json` → `animaApi`). May be empty or start with a
+ * digit: callers check the result.
  */
 export function camelName(text: string): string {
   const words = text.match(/[A-Za-z0-9]+/g) ?? [];

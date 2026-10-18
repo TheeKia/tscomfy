@@ -10,9 +10,9 @@ consumer's type checker reads, starting at the `types` entry. Don't edit it by h
 /**
  * @module @tscomfy/codegen
  *
- * Turns a normalized tscomfy schema into generated TypeScript (node types and
- * the runtime schema module) and transpiles workflows to code. Pure: returns
- * files as data and never touches the filesystem.
+ * Turns a normalized tscomfy schema into generated TypeScript (node types and the runtime schema
+ * module) and transpiles workflows to code. Pure: returns files as data and never touches the
+ * filesystem.
  */
 export { CODEGEN_VERSION, generate, type GeneratedFile, type GenerateOptions, type GenerateResult, } from "./generate.ts";
 export { exportNameProblem } from "./export-name.ts";
@@ -51,9 +51,9 @@ export interface GenerateResult {
     readonly diagnostics: readonly Diagnostic[];
 }
 /**
- * Generates the files for one schema: `nodes.ts` (types only) and
- * `index.ts` (the typed runtime schema). Pure and deterministic. Throws a `TypeError` for an
- * export name `exportNameProblem` refuses.
+ * Generates the files for one schema: `nodes.ts` (types only) and `index.ts` (the typed runtime
+ * schema). Pure and deterministic. Throws a `TypeError` for an export name `exportNameProblem`
+ * refuses.
  */
 export declare function generate(schema: Schema, options: GenerateOptions): GenerateResult;
 ```
@@ -102,16 +102,16 @@ export interface TranspileResult {
     readonly diagnostics: readonly Diagnostic[];
 }
 /**
- * Builder code for `workflow`: an ES module exporting the workflow, built with
- * the generated types over `options.schemaName`. Nodes keep their ids and titles and come in
- * dependency order; inputs equal to their default are left out, since the exporter fills them
- * in. Running it and exporting gives the same prompt as `toApi(workflow)`, except that ids that
- * aren't integers (`40:31`) come in dependency order, where the workflow lists one before a node
- * it depends on. Pure and deterministic.
+ * Builder code for `workflow`: an ES module exporting the workflow, built with the generated types
+ * over `options.schemaName`. Nodes keep their ids and titles and come in dependency order; inputs
+ * equal to their default are left out, since the exporter fills them in. Running it and exporting
+ * gives the same prompt as `toApi(workflow)`, except that ids that aren't integers (`40:31`) come
+ * in dependency order, where the workflow lists one before a node it depends on. Pure and
+ * deterministic.
  *
- * Reports `W_TRANSPILED_AS_RAW` for a node the types can't express, which is written as
- * `raw(…)`, and `E_DEPENDENCY_CYCLE` and `E_DANGLING_LINK` for what no program can build: those
- * nodes, or links, are left out.
+ * Reports `W_TRANSPILED_AS_RAW` for a node the types can't express, which is written as `raw(…)`,
+ * and `E_DEPENDENCY_CYCLE` and `E_DANGLING_LINK` for what no program can build: those nodes, or
+ * links, are left out.
  */
 export declare function transpile(workflow: Workflow, options: TranspileOptions): TranspileResult;
 /**

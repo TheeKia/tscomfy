@@ -44,16 +44,18 @@ function probeSourceAccess(): boolean {
 }
 
 /**
- * Parses JSON text, keeping integers beyond 2^53 exact as `bigint` wherever they occur
- *. Integer literals inside the safe range, and every literal with a fraction
- * or an exponent, stay `number`. The result never holds a non-finite number.
+ * Parses JSON text, keeping integers beyond 2^53 exact as `bigint` wherever they occur, however
+ * long. Integer literals inside the safe range, and every literal with a fraction or an exponent,
+ * stay `number`. The result never holds a non-finite number.
  *
  * Never throws for bad input:
  * - invalid JSON yields `E_INVALID_JSON` and no value;
  * - `NaN`, `Infinity` and `-Infinity` (which Python servers write for non-finite floats), and
- *   number literals beyond the double range, become `null` with `W_NON_FINITE_NUMBER`;
- * - on runtimes without `JSON.parse` source-text access, each integer that may have lost
- *   precision yields `W_PRECISION_LOSS`.
+ *   literals with a fraction or an exponent beyond the double range (`1e400`), become `null` with
+ *   `W_NON_FINITE_NUMBER`;
+ * - on runtimes without `JSON.parse` source-text access, each integer beyond 2^53 may have lost
+ *   precision and yields `W_PRECISION_LOSS`, and one beyond the double range becomes `null` with
+ *   `W_NON_FINITE_NUMBER`.
  */
 export function parse(text: string): ParseResult {
   return parseWith(text, HAS_SOURCE_ACCESS);
@@ -125,7 +127,7 @@ function sanitize(value: JsonValue, path: DiagnosticPath, options: SanitizeOptio
         createDiagnostic(
           "W_PRECISION_LOSS",
           path,
-          `The integer ${String(value)} may have lost precision: this runtime has no JSON.parse source-text access.`,
+          `An integer was read as ${BigInt(value).toString()}, which may have lost precision: this runtime has no JSON.parse source-text access.`,
         ),
       );
     }

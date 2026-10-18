@@ -195,11 +195,15 @@ function readInput(
   }
   const reader = new SpecReader(context, name, required, options, optionsPath, readInput);
 
-  // Legacy combos stay combos under forceInput: their links only match an identical option list
-  // (§5.2), which a COMBO socket would not express. They record the flag, since the frontend
-  // then draws a socket and no widget.
+  // Legacy combos stay combos under forceInput (or as an Autogrow template, which the backend
+  // forces to a socket): their links only match an identical option list (§5.2), which a COMBO
+  // socket would not express. They record the flag, since the frontend then draws a socket and
+  // no widget.
   if (head !== undefined && isJsonArray(head)) {
-    return reader.legacyCombo(head, [...path, 0]) ?? unknown(context, name, required, spec, path);
+    return (
+      reader.legacyCombo(head, [...path, 0], forceSocket) ??
+      unknown(context, name, required, spec, path)
+    );
   }
   if (typeof head !== "string") {
     return unknown(

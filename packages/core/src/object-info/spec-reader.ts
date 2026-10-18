@@ -240,7 +240,11 @@ export class SpecReader {
    * A legacy `[[…]]` combo. The backend compares links against the full option list, so an
    * option we can't represent makes the spec unknown rather than silently shorter.
    */
-  legacyCombo(rawOptions: readonly JsonValue[], optionsPath: DiagnosticPath): InputDef | undefined {
+  legacyCombo(
+    rawOptions: readonly JsonValue[],
+    optionsPath: DiagnosticPath,
+    forceSocket: boolean,
+  ): InputDef | undefined {
     const invalid = rawOptions.findIndex((option) => !isComboOption(option));
     if (invalid !== -1) {
       return this.#invalid(
@@ -251,7 +255,7 @@ export class SpecReader {
     return this.#combo("legacy", [...rawOptions].filter(isComboOption), {
       type: { kind: "named", name: "COMBO" },
       socketless: this.flag("socketless"),
-      ...(this.flag("forceInput") ? { forceInput: true } : {}),
+      ...(forceSocket || this.flag("forceInput") ? { forceInput: true } : {}),
     });
   }
 
@@ -311,21 +315,19 @@ export class SpecReader {
     } else {
       return this.#invalid("Autogrow's template needs either names or a prefix.");
     }
-    return {
-      kind: "autogrow",
-      ...this.base(),
-      form,
-      slots,
-      min,
-      template: this.#readInput(
-        this.#context,
-        first.name,
-        first.value,
-        first.section === "required",
-        [...templatePath, "input", first.section, first.name],
-        true,
-      ),
-    };
+    const slot = this.#readInput(
+      this.#context,
+      first.name,
+      first.value,
+      first.section === "required",
+      [...templatePath, "input", first.section, first.name],
+      true,
+    );
+    // The backend asserts that the template isn't a dynamic input; MatchType is allowed.
+    if (slot.kind === "autogrow" || slot.kind === "dynamicCombo" || slot.kind === "dynamicGroup") {
+      return this.#invalid("Autogrow's template can't be a dynamic input.");
+    }
+    return { kind: "autogrow", ...this.base(), form, slots, min, template: slot };
   }
 
   dynamicCombo(): DynamicComboInput | undefined {
@@ -397,7 +399,12 @@ export class SpecReader {
     // The backend's DynamicGroup takes only widget fields, without forceInput or dots in their
     // names; and a row must have a field it sends, or no row could ever be counted.
     if (
-      !fields.every((field) => GROUP_FIELD_KINDS.has(field.kind) && !field.name.includes(".")) ||
+      !fields.every(
+        (field) =>
+          GROUP_FIELD_KINDS.has(field.kind) &&
+          !(field.kind === "combo" && field.forceInput === true) &&
+          !field.name.includes("."),
+      ) ||
       !fields.some((field) => field.kind !== "value" || sendsValue(field.widget))
     ) {
       return this.#invalid(
@@ -690,7 +697,7 @@ function exact(value: number | bigint | undefined): string {
  * The value the frontend gives a combo when none is given (ComfyUI_frontend 1.55.17
  * `useComboWidget.ts`), which is what the exporter fills in: a multi-select widget starts empty
  * whatever the default; otherwise a truthy default, or the first option in place of a falsy one.
- * No default stays no default: tscomfy doesn't invent one (§7.2).
+ * Otherwise no default stays no default: tscomfy doesn't invent one (§7.2).
  */
 function comboInitialValue(
   read: ComboOption | readonly ComboOption[] | undefined,

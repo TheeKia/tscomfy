@@ -142,8 +142,8 @@ export interface ToApiOptions {
      */
     readonly validate?: boolean;
     /**
-     * Apply bypass and mute. Default `true`. With `false`, every node is sent
-     * as if it ran, as a tool that rewrites workflows needs (the transpiler).
+     * Apply bypass and mute. Default `true`. With `false`, every node is sent as if it ran, as a tool
+     * that rewrites workflows needs (the transpiler).
      */
     readonly modes?: boolean;
 }
@@ -155,26 +155,27 @@ export interface ApiExportResult {
     readonly diagnostics: readonly Diagnostic[];
 }
 /**
- * Converts a workflow into an API-format prompt: explicit schema
- * defaults filled in, dynamic inputs flattened to their wire keys, list values wrapped, keys in
- * the frontend's order. Serialize it with `stringify`, which keeps big integers exact.
+ * Converts a workflow into an API-format prompt: explicit schema defaults filled in, dynamic inputs
+ * flattened to their wire keys, list values wrapped, keys in the frontend's order. Serialize it
+ * with `stringify`, which keeps big integers exact.
  *
- * Throws a {@link ValidationError}, carrying every diagnostic, when there is an error: the
- * prompt can't be built faithfully (`E_INPUT_KEY_COLLISION`, `E_TOO_MANY_DYNAMIC_INPUTS`), or,
- * unless `validate` is `false`, the backend would reject it. Warnings don't throw; use
- * {@link exportApi} to see them. Throws a `TypeError` for an output reference nested inside a
- * JSON value, which no input can carry.
+ * Throws a {@link ValidationError}, carrying every diagnostic, when there is an error: the prompt
+ * can't be built faithfully (`E_INPUT_KEY_COLLISION`, `E_TOO_MANY_DYNAMIC_INPUTS`), or, unless
+ * `validate` is `false`, the backend would reject it. Warnings don't throw; use {@link exportApi}
+ * to see them. Throws a `TypeError` for an output reference nested inside a JSON value, which no
+ * input can carry.
  */
 export declare function toApi(workflow: Workflow, options?: ToApiOptions): ApiPrompt;
 /**
- * {@link toApi} without throwing: the prompt, and what went wrong building and validating it.
+ * {@link toApi} without throwing for diagnostics: the prompt, and what went wrong building and
+ * validating it. Still throws a `TypeError` where {@link toApi} does.
  */
 export declare function exportApi(workflow: Workflow, options?: ToApiOptions): ApiExportResult;
 /**
- * Every problem with a workflow: the errors {@link toApi} would throw for, and
- * the warnings, which don't stop the backend (a value outside an upload combo's listed files, for
- * example). Empty for a workflow the backend accepts with nothing to report. Throws a `TypeError`
- * where {@link toApi} does.
+ * Every problem with a workflow: the errors {@link toApi} would throw for, and the warnings, which
+ * don't stop the backend (a value outside an upload combo's listed files, for example). Empty for a
+ * workflow the backend accepts with nothing to report. Throws a `TypeError` where {@link toApi}
+ * does.
  */
 export declare function validate(workflow: Workflow): readonly Diagnostic[];
 ```
@@ -270,9 +271,9 @@ export declare class ValidationError extends Error {
 import type { TypedSchema } from "../schema/typed.ts";
 import type { NodeHandle, NodeId, NodeMode, NodeOptions, Out } from "./types.ts";
 /**
- * A value in a node's inputs, as the builder records it: structured, with
- * dynamic inputs nested (`{ option, inputs }`, slot lists, group rows) rather than flattened to
- * wire keys. Flattening is the exporter's job.
+ * A value in a node's inputs, as the builder records it: structured, with dynamic inputs nested
+ * (`{ option, inputs }`, slot lists, group rows) rather than flattened to wire keys. Flattening is
+ * the exporter's job.
  */
 export type InputValue = string | number | bigint | boolean | null | Out<string> | readonly InputValue[] | {
     readonly [key: string]: InputValue;
@@ -391,8 +392,8 @@ export interface NodeOptions {
     readonly title?: string;
     /**
      * `"bypass"`: the node isn't sent, and links through it reroute to one of its inputs, as the
-     * frontend's bypass does. `"mute"`: the node isn't sent, and inputs linked
-     * to it are left out.
+     * frontend's bypass does. `"mute"`: the node isn't sent. An input whose link then resolves to
+     * nothing is left out, or, for a widget, sends the widget's value instead.
      */
     readonly mode?: NodeMode;
 }
@@ -427,9 +428,9 @@ import type { TypedSchema } from "../schema/typed.ts";
 import type { BuildContext, InputValue, Workflow } from "./graph.ts";
 import type { NodeId, NodeMode, Out } from "./types.ts";
 /**
- * Builds a workflow: `build` calls node functions on `n`, which add nodes and
- * return their outputs, and `raw` for untyped nodes. The result is frozen; ids are `"1"`, `"2"`,
- * … in creation order unless set with `options.id`.
+ * Builds a workflow: `build` calls node functions on `n`, which add nodes and return their outputs,
+ * and `raw` for untyped nodes. The result is frozen; ids are `"1"`, `"2"`, … in creation order
+ * unless set with `options.id`.
  *
  * Throws a `TypeError` for misuse the types can't catch: a duplicate or empty id, a node function
  * called after `build` returned or from an async `build`, an input value that isn't JSON or an
@@ -468,16 +469,18 @@ export interface ParseResult {
     readonly diagnostics: readonly Diagnostic[];
 }
 /**
- * Parses JSON text, keeping integers beyond 2^53 exact as `bigint` wherever they occur
- *. Integer literals inside the safe range, and every literal with a fraction
- * or an exponent, stay `number`. The result never holds a non-finite number.
+ * Parses JSON text, keeping integers beyond 2^53 exact as `bigint` wherever they occur, however
+ * long. Integer literals inside the safe range, and every literal with a fraction or an exponent,
+ * stay `number`. The result never holds a non-finite number.
  *
  * Never throws for bad input:
  * - invalid JSON yields `E_INVALID_JSON` and no value;
  * - `NaN`, `Infinity` and `-Infinity` (which Python servers write for non-finite floats), and
- *   number literals beyond the double range, become `null` with `W_NON_FINITE_NUMBER`;
- * - on runtimes without `JSON.parse` source-text access, each integer that may have lost
- *   precision yields `W_PRECISION_LOSS`.
+ *   literals with a fraction or an exponent beyond the double range (`1e400`), become `null` with
+ *   `W_NON_FINITE_NUMBER`;
+ * - on runtimes without `JSON.parse` source-text access, each integer beyond 2^53 may have lost
+ *   precision and yields `W_PRECISION_LOSS`, and one beyond the double range becomes `null` with
+ *   `W_NON_FINITE_NUMBER`.
  */
 export declare function parse(text: string): ParseResult;
 /**
@@ -495,15 +498,15 @@ import { type JsonValue } from "./value.ts";
  * Serializes a JSON value as compact JSON: keys in JavaScript's enumeration order (integer-like
  * keys first in numeric order, then insertion order, as `JSON.stringify` and the ComfyUI frontend
  * use), `bigint` written as a plain integer literal, everything else exactly as `JSON.stringify`
- * writes it, with one exception: an integer-valued `number` beyond 2^53 is
- * written in exponent form (`1.844674407370955e+19`). `JSON.stringify` would print it as an
- * integer literal, which `parse` reads back as a `bigint` of a different value; in exponent form
- * it round-trips as the same `number`, and Python reads it as a float too.
- * The output for a given value is the same in every runtime.
+ * writes it, with one exception: an integer-valued `number` beyond 2^53 is written in exponent form
+ * (`1.844674407370955e+19`). `JSON.stringify` would print it as an integer literal, which `parse`
+ * reads back as a `bigint` of a different value; in exponent form it round-trips as the same
+ * `number`, and Python reads it as a float too. The output for a given value is the same in every
+ * runtime.
  *
  * Throws a `TypeError` for what has no JSON form: a non-finite number, and `undefined` (a member
- * set to it, an array hole), which the types rule out but code without
- * `exactOptionalPropertyTypes` can still pass. Passing one is a programmer error.
+ * set to it, an array hole), which the types rule out but code without `exactOptionalPropertyTypes`
+ * can still pass. Passing one is a programmer error.
  */
 export declare function stringify(value: JsonValue): string;
 ```
@@ -546,14 +549,13 @@ export interface NormalizeResult {
     readonly diagnostics: readonly Diagnostic[];
 }
 /**
- * Normalizes the raw text of a ComfyUI `/object_info` response into a {@link Schema}
- *. Pass the response text, not a parsed value: integers beyond 2^53
- * only survive our own parser.
+ * Normalizes the raw text of a ComfyUI `/object_info` response into a {@link Schema}. Pass the
+ * response text, not a parsed value: integers beyond 2^53 only survive our own parser.
  *
- * Lenient and total: it never throws for bad data. A node it can't use is dropped with an
- * `E_` diagnostic; an input spec it can't interpret is kept as an `unknown` input with a `W_`
- * diagnostic. Nodes are built in code-unit order of class type, so the result doesn't depend on
- * the server's load order, and the same text always gives the same result.
+ * Lenient and total: it never throws for bad data. A node it can't use is dropped with an `E_`
+ * diagnostic; an input spec it can't interpret is kept as an `unknown` input with a `W_`
+ * diagnostic. Nodes are built in code-unit order of class type, so the result doesn't depend on the
+ * server's load order, and the same text always gives the same result.
  */
 export declare function normalizeObjectInfo(text: string, options?: NormalizeOptions): NormalizeResult;
 ```
@@ -563,19 +565,18 @@ export declare function normalizeObjectInfo(text: string, options?: NormalizeOpt
 ```ts
 import type { InputDef, OutputDef, OutputType, SocketType } from "./types.ts";
 /**
- * Whether the backend accepts a link from `output` into `input`. Follows the
- * backend's non-strict `validate_node_input`:
+ * Whether the backend accepts a link from `output` into `input`. Follows the backend's non-strict
+ * `validate_node_input`:
  * - `*` on either side passes, also as a member of a comma list;
  * - MatchType passes on either side (it is checked per template instead);
- * - an option-list output passes into an input typed exactly `COMBO`; a legacy `[[…]]` combo only
- *   takes an identical option list;
+ * - an option-list output passes into an input typed exactly `COMBO`; a legacy `[[…]]` combo takes
+ *   an identical option list, and `*` and MatchType outputs;
  * - otherwise the comma lists must share a type.
  *
  * List outputs don't change the answer: ComfyUI maps a list over a non-list input. An Autogrow
- * input answers for its slots. Inputs that can't be linked as a whole (DynamicGroup, and a
- * dynamic combo, whose choice a link never matches) and specs
- * the normalizer couldn't interpret answer `false`, whatever the output: stricter than the
- * backend, never looser.
+ * input answers for its slots. Inputs that can't be linked as a whole (DynamicGroup, and a dynamic
+ * combo, whose choice a link never matches) and specs the normalizer couldn't interpret answer
+ * `false`, whatever the output: stricter than the backend, never looser.
  */
 export declare function accepts(input: InputDef, output: OutputDef): boolean;
 /**
@@ -595,10 +596,9 @@ import type { OutputDef } from "./types.ts";
 /** Whether the exporter sends a value for an input; see `frontend/widgets.ts`. */
 export { sendsInputValue } from "../frontend/widgets.ts";
 /**
- * The outputs of a multi-output node that are also reachable by name, as
- * name → slot. A name is left out when two outputs share it, when it is reserved, or when it
- * looks like an index. Codegen types these members and the builder creates them, from this one
- * rule.
+ * The outputs of a multi-output node that are also reachable by name, as name → slot. A name is
+ * left out when two outputs share it, when it is reserved, or when it looks like an index. Codegen
+ * types these members and the builder creates them, from this one rule.
  */
 export declare function namedOutputs(outputs: readonly OutputDef[]): ReadonlyMap<string, number>;
 ```
@@ -645,9 +645,8 @@ export interface SchemaDiff {
     readonly changed: readonly NodeChange[];
 }
 /**
- * The differences between two schemas: nodes added, removed and
- * changed, and per changed node its inputs, combo options and outputs. Empty when both hash
- * the same.
+ * The differences between two schemas: nodes added, removed and changed, and per changed node its
+ * inputs, combo options and outputs. Empty when both hash the same.
  */
 export declare function diffSchemas(before: Schema, after: Schema): SchemaDiff;
 ```
@@ -657,10 +656,10 @@ export declare function diffSchemas(before: Schema, after: Schema): SchemaDiff;
 ```ts
 import type { Schema } from "./types.ts";
 /**
- * The identity of a schema: `sha256:` and the SHA-256 of
- * `stringify({ formatVersion, nodes })`. Equal for equal node definitions, whatever the server's
- * whitespace, key order or node load order; `comfyVersion` is metadata and not part of it.
- * Generated files record it, and `tscomfy check` compares it.
+ * The identity of a schema: `sha256:` and the SHA-256 of `stringify({ formatVersion, nodes })`.
+ * Equal for equal node definitions, whatever the server's whitespace, key order or node load order;
+ * `comfyVersion` is metadata and not part of it. Generated files record it, and `tscomfy check`
+ * compares it.
  */
 export declare function hashSchema(schema: Schema): string;
 ```
@@ -684,18 +683,23 @@ export type TypedSchema<N> = Schema & {
  */
 export type NodesOf<S> = S extends TypedSchema<infer N> ? N : never;
 /**
- * Loads the schema a generated `index.ts` embeds. `text` is
- * `stringify(schema)` as codegen wrote it; it is parsed losslessly, so big integers stay exact.
+ * Loads the schema a generated `index.ts` embeds. `text` is `stringify(schema)` as codegen wrote
+ * it; it is parsed losslessly, so big integers stay exact.
  *
  * Throws when the text isn't such a schema: generated files are tscomfy's own output, so a
  * mismatch means the file was edited or truncated, which is misuse rather than data to report.
+ * Also throws when the schema holds integers beyond 2^53 (every real one does: seed bounds) and
+ * the runtime's `JSON.parse` has no source-text access to read them exactly.
  */
 export declare function defineSchema<N>(text: string): TypedSchema<N>;
 /**
  * A schema as a typed schema, to build and import workflows over a schema read at runtime (from
  * `normalizeObjectInfo`) rather than generated. With `N` left `unknown`, `n` has no node
  * functions, and nodes are added with `raw`; `importApi` and `importUi` work as with generated
- * types. The schema is frozen, as the normalizer returns it.
+ * types.
+ *
+ * The result is frozen. The node definitions aren't copied: they are frozen in place, as the
+ * normalizer already returns them, so a schema built by hand can't be changed afterwards either.
  */
 export declare function typedSchema<N = unknown>(schema: Schema): TypedSchema<N>;
 /** {@link defineSchema} from a parse result. Exported for tests; not part of the public API. */
@@ -708,8 +712,8 @@ export {};
 ```ts
 import type { JsonValue } from "../json/value.ts";
 /**
- * An integer as the schema stores it: a `number` when it is a safe integer, otherwise a `bigint`
- *. One value never has both forms.
+ * An integer as the schema stores it: a `number` when it is a safe integer, otherwise a `bigint`.
+ * One value never has both forms.
  */
 export type IntValue = number | bigint;
 /**
@@ -978,13 +982,13 @@ import { type JsonValue } from "../json/value.ts";
 import type { Schema } from "../schema/types.ts";
 /**
  * Checks a prompt against a schema the way the backend would, and stricter where the generated
- * types are. Diagnostics come node by node in prompt order (its class, its keys
- * as they expand, then each input in input order), then for the prompt as a whole (no output
- * node, cycles). Paths point into the prompt: `[id, "inputs", key]`, `[id, "class_type"]`, `[id]`
- * for a node or a cycle through it, and `[]` for the whole prompt.
+ * types are. Diagnostics come node by node in prompt order (its class, its keys as they expand,
+ * then each input in input order), then for the prompt as a whole (no output node, cycles). Paths
+ * point into the prompt: `[id, "inputs", key]`, `[id, "class_type"]`, `[id]` for a node or a cycle
+ * through it, and `[]` for the whole prompt.
  *
- * Takes any JSON as well, such as a prompt read with `parse`: what isn't a prompt node is
- * reported (`E_INVALID_PROMPT`), never thrown.
+ * Takes any JSON as well, such as a prompt read with `parse`: what isn't a prompt node is reported
+ * (`E_INVALID_PROMPT`), never thrown.
  */
 export declare function validateApi(prompt: ApiPrompt | JsonValue, schema: Schema): readonly Diagnostic[];
 ```
@@ -1053,14 +1057,13 @@ export interface UiImportResult<N> {
 }
 /**
  * Reads a UI workflow, as the frontend saves it (format 0.4 with tuple links, or 1), into a
- * workflow over `schema`. Takes raw text, so big integers stay exact (the
- * frontend rounds them).
+ * workflow over `schema`. Takes raw text, so big integers stay exact (the frontend rounds them).
  *
  * Exporting the result gives the prompt the frontend builds for the same file, byte for byte,
- * except where JavaScript changes it at queue time (dates in file names, 3D scenes, webcam
- * frames, recordings, packs' injected links and widgets), for buttons the frontend sends under
- * their labels and the backend ignores, and for nodes of classes the schema doesn't have, which
- * the frontend sends without a class.
+ * except where JavaScript changes it at queue time (dates in file names, 3D scenes, webcam frames,
+ * recordings, packs' injected links and widgets), for buttons the frontend sends under their labels
+ * and the backend ignores, and for nodes of classes the schema doesn't have, which the frontend
+ * sends without a class.
  */
 export declare function importUi<N>(text: string, schema: TypedSchema<N>): UiImportResult<N>;
 ```

@@ -68,16 +68,16 @@ export interface TranspileResult {
 }
 
 /**
- * Builder code for `workflow`: an ES module exporting the workflow, built with
- * the generated types over `options.schemaName`. Nodes keep their ids and titles and come in
- * dependency order; inputs equal to their default are left out, since the exporter fills them
- * in. Running it and exporting gives the same prompt as `toApi(workflow)`, except that ids that
- * aren't integers (`40:31`) come in dependency order, where the workflow lists one before a node
- * it depends on. Pure and deterministic.
+ * Builder code for `workflow`: an ES module exporting the workflow, built with the generated types
+ * over `options.schemaName`. Nodes keep their ids and titles and come in dependency order; inputs
+ * equal to their default are left out, since the exporter fills them in. Running it and exporting
+ * gives the same prompt as `toApi(workflow)`, except that ids that aren't integers (`40:31`) come
+ * in dependency order, where the workflow lists one before a node it depends on. Pure and
+ * deterministic.
  *
- * Reports `W_TRANSPILED_AS_RAW` for a node the types can't express, which is written as
- * `raw(…)`, and `E_DEPENDENCY_CYCLE` and `E_DANGLING_LINK` for what no program can build: those
- * nodes, or links, are left out.
+ * Reports `W_TRANSPILED_AS_RAW` for a node the types can't express, which is written as `raw(…)`,
+ * and `E_DEPENDENCY_CYCLE` and `E_DANGLING_LINK` for what no program can build: those nodes, or
+ * links, are left out.
  */
 export function transpile(workflow: Workflow, options: TranspileOptions): TranspileResult {
   const problem = transpileNameProblem(options);

@@ -30,14 +30,13 @@ export interface NormalizeResult {
 }
 
 /**
- * Normalizes the raw text of a ComfyUI `/object_info` response into a {@link Schema}
- *. Pass the response text, not a parsed value: integers beyond 2^53
- * only survive our own parser.
+ * Normalizes the raw text of a ComfyUI `/object_info` response into a {@link Schema}. Pass the
+ * response text, not a parsed value: integers beyond 2^53 only survive our own parser.
  *
- * Lenient and total: it never throws for bad data. A node it can't use is dropped with an
- * `E_` diagnostic; an input spec it can't interpret is kept as an `unknown` input with a `W_`
- * diagnostic. Nodes are built in code-unit order of class type, so the result doesn't depend on
- * the server's load order, and the same text always gives the same result.
+ * Lenient and total: it never throws for bad data. A node it can't use is dropped with an `E_`
+ * diagnostic; an input spec it can't interpret is kept as an `unknown` input with a `W_`
+ * diagnostic. Nodes are built in code-unit order of class type, so the result doesn't depend on the
+ * server's load order, and the same text always gives the same result.
  */
 export function normalizeObjectInfo(text: string, options: NormalizeOptions = {}): NormalizeResult {
   const parsed = parse(text);

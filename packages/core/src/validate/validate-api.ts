@@ -35,13 +35,13 @@ import type {
 
 /**
  * Checks a prompt against a schema the way the backend would, and stricter where the generated
- * types are. Diagnostics come node by node in prompt order (its class, its keys
- * as they expand, then each input in input order), then for the prompt as a whole (no output
- * node, cycles). Paths point into the prompt: `[id, "inputs", key]`, `[id, "class_type"]`, `[id]`
- * for a node or a cycle through it, and `[]` for the whole prompt.
+ * types are. Diagnostics come node by node in prompt order (its class, its keys as they expand,
+ * then each input in input order), then for the prompt as a whole (no output node, cycles). Paths
+ * point into the prompt: `[id, "inputs", key]`, `[id, "class_type"]`, `[id]` for a node or a cycle
+ * through it, and `[]` for the whole prompt.
  *
- * Takes any JSON as well, such as a prompt read with `parse`: what isn't a prompt node is
- * reported (`E_INVALID_PROMPT`), never thrown.
+ * Takes any JSON as well, such as a prompt read with `parse`: what isn't a prompt node is reported
+ * (`E_INVALID_PROMPT`), never thrown.
  */
 export function validateApi(prompt: ApiPrompt | JsonValue, schema: Schema): readonly Diagnostic[] {
   if (typeof prompt !== "object" || prompt === null || isJsonArray(prompt)) {

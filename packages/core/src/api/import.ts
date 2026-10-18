@@ -188,7 +188,7 @@ function fold(
         const present = definition.slots.filter((slot) => Object.hasOwn(wire, `${key}.${slot}`));
         if (present.length === 0) return undefined;
         const values = present.map((slot) => take(`${key}.${slot}`) ?? null);
-        // A list when the slots are the first ones, in order; otherwise by slot name.
+        // Prefix form: a list when the slots are the first ones, in order. Otherwise by slot name.
         const contiguous = present.every((slot, index) => slot === definition.slots[index]);
         if (definition.form === "prefix" && contiguous) return values;
         return Object.fromEntries(present.map((slot, index) => [slot, values[index] ?? null]));

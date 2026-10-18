@@ -516,8 +516,9 @@ Researched in frontend 1.55.17 (the version the corpus came from) and backend 0.
   which §7.4 needs), bigint as a JSON number. An integer-valued number beyond 2⁵³ is written in
   exponent form, so it reads back as the same number rather than as a bigint (§16).
 - `parse()` reads `NaN`, `Infinity` and `-Infinity`, which Python servers write for non-finite
-  floats (`/object_info` goes through `json.dumps`), and literals beyond the double range, as
-  `null` with `W_NON_FINITE_NUMBER`, so one such value can't invalidate a whole dump.
+  floats (`/object_info` goes through `json.dumps`), and literals with a fraction or an exponent
+  beyond the double range (`1e400`), as `null` with `W_NON_FINITE_NUMBER`, so one such value can't
+  invalidate a whole dump.
 - `parse()` keeps big integers through `JSON.parse` source-text access: an integer literal beyond
   2⁵³ becomes a bigint wherever it occurs, and each consumer decides per field (§9). On runtimes
   without source-text access, such literals produce `W_PRECISION_LOSS`. Invalid JSON is a
@@ -593,8 +594,9 @@ The diagnostic model is §5.4.
     within its bound.
   - Widget or socket follows the frontend (D16). `forceInput` makes a widget a socket, except
     for legacy combos: a COMBO socket would not express their exact-list link rule (§5.2), and
-    the backend accepts constants for them anyway. Autogrow templates are always sockets, as the
-    backend forces them.
+    the backend accepts constants for them anyway. Autogrow templates are always link-only, as the
+    backend forces them: sockets, or a legacy combo with `forceInput`. A dynamic input as a
+    template, which the backend asserts against, makes the Autogrow unknown.
   - Input order is the frontend's (`getOrderedInputSpecs`): the required inputs `input_order`
     lists, then the optional ones it lists, then all others. A name in both sections keeps the
     required one, as the backend does.

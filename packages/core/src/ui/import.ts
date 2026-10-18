@@ -42,14 +42,13 @@ export interface UiImportResult<N> {
 
 /**
  * Reads a UI workflow, as the frontend saves it (format 0.4 with tuple links, or 1), into a
- * workflow over `schema`. Takes raw text, so big integers stay exact (the
- * frontend rounds them).
+ * workflow over `schema`. Takes raw text, so big integers stay exact (the frontend rounds them).
  *
  * Exporting the result gives the prompt the frontend builds for the same file, byte for byte,
- * except where JavaScript changes it at queue time (dates in file names, 3D scenes, webcam
- * frames, recordings, packs' injected links and widgets), for buttons the frontend sends under
- * their labels and the backend ignores, and for nodes of classes the schema doesn't have, which
- * the frontend sends without a class.
+ * except where JavaScript changes it at queue time (dates in file names, 3D scenes, webcam frames,
+ * recordings, packs' injected links and widgets), for buttons the frontend sends under their labels
+ * and the backend ignores, and for nodes of classes the schema doesn't have, which the frontend
+ * sends without a class.
  */
 export function importUi<N>(text: string, schema: TypedSchema<N>): UiImportResult<N> {
   const diagnostics: Diagnostic[] = [];

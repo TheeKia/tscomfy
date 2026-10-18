@@ -8,11 +8,10 @@ import {
 import { layered, type LayoutSpacing, type Position } from "./layered.ts";
 
 /**
- * Positions for `toUi`: the workflow laid out left to right in columns by
- * dependency depth (see {@link layered}), each node the size `toUi` writes for it. A node's
- * sources are the nodes its inputs link to, inside lists, Autogrow slots and dynamic-combo
- * options too. `spacing` is in canvas units and defaults to 80 between columns and 40 between
- * rows.
+ * Positions for `toUi`: the workflow laid out left to right in columns by dependency depth (see
+ * {@link layered}), each node the size `toUi` writes for it. A node's sources are the nodes its
+ * inputs link to, inside lists, Autogrow slots and dynamic-combo options too. `spacing` is in
+ * canvas units and defaults to 80 between columns and 40 between rows.
  *
  * ```ts
  * const { workflow: ui } = toUi(built, { positions: layout(built) });

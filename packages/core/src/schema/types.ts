@@ -7,8 +7,8 @@ import type { JsonValue } from "../json/value.ts";
 // it is plain, immutable JSON data (bigint included) and serializes with `stringify`.
 
 /**
- * An integer as the schema stores it: a `number` when it is a safe integer, otherwise a `bigint`
- *. One value never has both forms.
+ * An integer as the schema stores it: a `number` when it is a safe integer, otherwise a `bigint`.
+ * One value never has both forms.
  */
 export type IntValue = number | bigint;
 

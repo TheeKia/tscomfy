@@ -30,6 +30,12 @@ function inputOf(node: NodeDef, name: string): InputDef {
   return input!;
 }
 
+/** An Autogrow spec over one template input. */
+const autogrow = (template: unknown): unknown => [
+  "COMFY_AUTOGROW_V3",
+  { template: { input: { required: { slot: template } }, prefix: "s", max: 2 } },
+];
+
 describe("snapshots", () => {
   test.each(MOCK_OBJECT_INFO_NAMES)("%s", async (name) => {
     expect(await normalizeMock(name)).toMatchSnapshot();
@@ -524,6 +530,43 @@ describe("dynamic inputs", () => {
     );
     expect(optional).toMatchObject({ required: false, min: 0, max: 5 });
     expect(optional).not.toHaveProperty("groupName");
+  });
+
+  test("keeps Autogrow templates link-only and group fields widgets, as the backend does", () => {
+    const { schema, diagnostics } = normalizeObjectInfo(
+      JSON.stringify({
+        MockTemplates: {
+          input: {
+            required: {
+              legacy: autogrow([["a", "b"]]),
+              dynamic: autogrow(["COMFY_DYNAMICCOMBO_V3", { options: [] }]),
+              group: [
+                "COMFY_DYNAMICGROUP_V3",
+                { template: { required: { pick: [["a", "b"], { forceInput: true }] } } },
+              ],
+            },
+          },
+          output: [],
+          name: "MockTemplates",
+          display_name: "Mock Templates",
+          python_module: "nodes",
+          category: "test",
+          output_node: false,
+        },
+      }),
+    );
+    const node = schema.nodes["MockTemplates"];
+    if (node === undefined) throw new Error("expected the node");
+    expect(inputOf(node, "legacy")).toMatchObject({
+      kind: "autogrow",
+      template: { kind: "combo", form: "legacy", forceInput: true },
+    });
+    expect(inputOf(node, "dynamic")).toMatchObject({ kind: "unknown" });
+    expect(inputOf(node, "group")).toMatchObject({ kind: "unknown" });
+    expect(diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toEqual([
+      ["W_INVALID_INPUT_SPEC", ["MockTemplates", "input", "required", "dynamic", 1]],
+      ["W_INVALID_INPUT_SPEC", ["MockTemplates", "input", "required", "group", 1]],
+    ]);
   });
 
   test("links MatchType outputs to their templates", async () => {

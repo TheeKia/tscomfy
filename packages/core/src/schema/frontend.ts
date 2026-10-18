@@ -7,9 +7,9 @@ import type { OutputDef } from "./types.ts";
 export { sendsInputValue } from "../frontend/widgets.ts";
 
 /**
- * Output names that can't become named members of a multi-output result: members of
- * `NodeHandle` and `Out`, of arrays (the result is a tuple) and of `Object.prototype`. A fixed
- * list, so the result doesn't depend on the runtime's built-ins.
+ * Output names that can't become named members of a multi-output result: members of `NodeHandle`
+ * and `Out`, of arrays (the result is a tuple) and of `Object.prototype`. A fixed list, so the
+ * result doesn't depend on the runtime's built-ins.
  */
 const RESERVED_OUTPUT_NAMES: ReadonlySet<string> = new Set([
   "id",
@@ -58,10 +58,9 @@ const RESERVED_OUTPUT_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The outputs of a multi-output node that are also reachable by name, as
- * name → slot. A name is left out when two outputs share it, when it is reserved, or when it
- * looks like an index. Codegen types these members and the builder creates them, from this one
- * rule.
+ * The outputs of a multi-output node that are also reachable by name, as name → slot. A name is
+ * left out when two outputs share it, when it is reserved, or when it looks like an index. Codegen
+ * types these members and the builder creates them, from this one rule.
  */
 export function namedOutputs(outputs: readonly OutputDef[]): ReadonlyMap<string, number> {
   const counts = new Map<string, number>();

@@ -42,9 +42,8 @@ export interface SchemaDiff {
 }
 
 /**
- * The differences between two schemas: nodes added, removed and
- * changed, and per changed node its inputs, combo options and outputs. Empty when both hash
- * the same.
+ * The differences between two schemas: nodes added, removed and changed, and per changed node its
+ * inputs, combo options and outputs. Empty when both hash the same.
  */
 export function diffSchemas(before: Schema, after: Schema): SchemaDiff {
   const classTypes = [
