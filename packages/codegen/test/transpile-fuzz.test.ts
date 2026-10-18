@@ -63,16 +63,10 @@ const SCHEMAS: readonly (readonly [string, TypedSchema<unknown>])[] = [
 ];
 
 /** A node function of `n` by class, untyped: the fuzzer builds whatever the runtime takes. */
-function call(
-  n: unknown,
-  classType: string,
-  inputs: object,
-  id: string,
-  mode?: "bypass" | "mute",
-): unknown {
+function call(n: unknown, classType: string, inputs: object, options: object): unknown {
   const node: unknown = Reflect.get(Object(n), classType);
   if (typeof node !== "function") throw new Error(`no node ${classType}`);
-  return Reflect.apply(node, undefined, [inputs, mode === undefined ? { id } : { id, mode }]);
+  return Reflect.apply(node, undefined, [inputs, options]);
 }
 
 const LONG =
@@ -168,7 +162,7 @@ const CRAFTED: readonly Case[] = [
             '{"__proto__": 1, "big": 1e21, "small": 5e-7, "nested": [[1, 2], [3, 4]], "list": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]}',
           ).value,
         },
-        "1",
+        { id: "1" },
       );
     }),
   },
@@ -276,7 +270,20 @@ function fuzz(seed: number): Case {
         }),
       );
       const mode = next() < 0.1 ? pick(["bypass", "mute"] as const) : undefined;
-      const result = call(n, classType, inputs, String(index + 1), mode);
+      // Mostly the builder's own ids; some that aren't array indexes, which are never inlined.
+      const id = pick([
+        String(index + 1),
+        String(index + 1),
+        `node${String(index)}`,
+        `${String(index + 1)}:${String(index)}`,
+      ]);
+      const title =
+        next() < 0.15 ? pick(["Upscale", 'say "hi"', "日本語のノード", LONG]) : undefined;
+      const result = call(n, classType, inputs, {
+        id,
+        ...(title === undefined ? {} : { title }),
+        ...(mode === undefined ? {} : { mode }),
+      });
       if (isOutputRef(result)) sources.push(result);
       else if (Array.isArray(result)) sources.push(...result.filter(isOutputRef));
     }

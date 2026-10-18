@@ -20,11 +20,10 @@ function isJsonObject(value: JsonValue | undefined): value is JsonObject {
 }
 
 test("examples/txt2img type-checks against generated types and prints its prompt", async () => {
-  const { tsc, main } = await runExample(
-    "txt2img",
-    join(MOCK_OBJECT_INFO_DIR, "basic-pipeline.json"),
-    ["a dog"],
-  );
+  const {
+    tsc,
+    mains: [main],
+  } = await runExample("txt2img", join(MOCK_OBJECT_INFO_DIR, "basic-pipeline.json"), [["a dog"]]);
   expect(tsc).toEqual({ code: 0, stdout: "", stderr: "" });
   expect(main?.stderr).toBe("");
   expect(main?.code).toBe(0);
@@ -84,7 +83,16 @@ test("examples/txt2img type-checks against generated types and prints its prompt
 
 test("examples/hires-fix builds its two passes, and a UI workflow that imports to the same prompt", async () => {
   const from = join(MOCK_OBJECT_INFO_DIR, "basic-pipeline.json");
-  const { tsc, main } = await runExample("hires-fix", from, ["a fox"]);
+  const {
+    tsc,
+    mains: [main, ui],
+    files,
+  } = await runExample(
+    "hires-fix",
+    from,
+    [["a fox"], ["--ui", "hires.json", "a fox"]],
+    ["hires.json"],
+  );
   expect(tsc).toEqual({ code: 0, stdout: "", stderr: "" });
   expect(main?.stderr).toBe("");
   expect(main?.code).toBe(0);
@@ -129,9 +137,8 @@ test("examples/hires-fix builds its two passes, and a UI workflow that imports t
   ]);
   expect(samplers.map(({ inputs }) => inputs["denoise"])).toEqual([1, 0.5]);
 
-  const ui = await runExample("hires-fix", from, ["--ui", "hires.json", "a fox"], ["hires.json"]);
-  expect(ui.main?.code).toBe(0);
-  const file = ui.files.get("hires.json");
+  expect(ui?.code).toBe(0);
+  const file = files.get("hires.json");
   if (file === undefined) throw new Error("hires.json wasn't written");
   const schema = typedSchema(normalizeObjectInfo(await Bun.file(from).text()).schema);
   const imported = importUi(file, schema);

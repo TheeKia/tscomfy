@@ -59,8 +59,8 @@ function errors(diagnostics: readonly Diagnostic[]): string[] {
 }
 
 describe("what compiles passes validation", () => {
-  test.each(Object.keys(WORKFLOWS))("%s", (name) => {
-    expect(errors(validate(WORKFLOWS[name]?.() ?? workflow(matchType, () => {})))).toEqual([]);
+  test.each(Object.entries(WORKFLOWS))("%s", (_name, build) => {
+    expect(errors(validate(build()))).toEqual([]);
   });
 });
 

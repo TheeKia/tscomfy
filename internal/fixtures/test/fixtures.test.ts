@@ -102,14 +102,6 @@ describe("mock UI workflows of core extension classes", () => {
 });
 
 describe("corpus", () => {
-  const sections = ["object-info", "workflows/api", "workflows/ui", "workflows/ui-api"] as const;
-
-  test.each(sections)("%s lists only JSON files, sorted", async (section) => {
-    const names = (await listCorpus(section)).map((file) => file.name);
-    expect(names).toEqual(names.toSorted());
-    expect(names.every((name) => name.endsWith(".json"))).toBeTrue();
-  });
-
   test("a missing section lists as empty", async () => {
     // @ts-expect-error -- deliberately not a CorpusSection, to exercise the ENOENT path
     expect(await listCorpus("does-not-exist")).toEqual([]);

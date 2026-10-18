@@ -13,23 +13,25 @@ export interface Ran {
   readonly stderr: string;
 }
 
-/** What running an example gave: `tsc`, then `main` and the files it wrote, if `tsc` passed. */
+/** What running an example gave: `tsc`, then each run of `main` and the files they wrote. */
 export interface ExampleRun {
   readonly tsc: Ran;
-  readonly main?: Ran;
+  /** One per run asked for, in order; none when `tsc` failed. */
+  readonly mains: readonly Ran[];
   /** The `written` files, by the path given, `undefined` when `main` didn't write one. */
   readonly files: ReadonlyMap<string, string | undefined>;
 }
 
 /**
  * An example over the `/object_info` in `from`, instead of a server: generates into a copy of
- * the example, type-checks the copy with the example's tsconfig, and runs its `src/main.ts` with
- * `args`, from the copy. `written` are paths, relative to the copy, of files `main` writes.
+ * the example, type-checks the copy with the example's tsconfig, and runs its `src/main.ts` once
+ * per entry of `runs`, with those arguments, from the copy. `written` are paths, relative to the
+ * copy, of files the runs write.
  */
 export async function runExample(
   name: ExampleName,
   from: string,
-  args: readonly string[],
+  runs: readonly (readonly string[])[],
   written: readonly string[] = [],
 ): Promise<ExampleRun> {
   const example = join(REPO_DIR, "examples", name);
@@ -51,22 +53,20 @@ export async function runExample(
     );
     if (generated !== 0) throw new Error(`generate exited with ${String(generated)}`);
     const tsc = ran(await exec([TOOLS.tsc, "-p", "."], { cwd: copy }));
-    if (tsc.code !== 0) return { tsc, files: new Map() };
-    const main = ran(
-      await exec(
-        [process.execPath, "--conditions=@tscomfy/source", join("src", "main.ts"), ...args],
-        {
-          cwd: copy,
-        },
-      ),
-    );
+    if (tsc.code !== 0) return { tsc, mains: [], files: new Map() };
+    const mains: Ran[] = [];
+    for (const args of runs) {
+      const main = [process.execPath, "--conditions=@tscomfy/source", join("src", "main.ts")];
+      // oxlint-disable-next-line no-await-in-loop -- in order: a later run may read what one wrote
+      mains.push(ran(await exec([...main, ...args], { cwd: copy })));
+    }
     const files = new Map<string, string | undefined>();
     for (const path of written) {
       const file = Bun.file(join(copy, path));
       // oxlint-disable-next-line no-await-in-loop -- a few small files, read in order
       files.set(path, (await file.exists()) ? await file.text() : undefined);
     }
-    return { tsc, main, files };
+    return { tsc, mains, files };
   } finally {
     await rm(copy, { recursive: true, force: true });
   }

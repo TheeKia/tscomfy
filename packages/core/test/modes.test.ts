@@ -393,14 +393,22 @@ describe("slots as the frontend has them", () => {
     ]);
   });
 
-  test("keeps a link to an output a bypassed node doesn't have, for validation to report", () => {
-    const built = workflow(schema, ({ n, raw }) => {
-      n["Src"]?.({}, { id: "src" });
-      raw("Pass", { image: ["src", 0] }, { id: "p", mode: "bypass" });
-      n["Sink"]?.({ image: raw("Pass", {}, { id: "p2" }).output(5) }, { id: "s" });
-    });
-    expect(exportApi(built, { validate: false }).prompt["s"]?.inputs).toEqual({ image: ["p2", 5] });
-  });
+  test.each(["bypass", "mute"] as const)(
+    "keeps a link to an output a node on %s doesn't have, for validation to report",
+    (mode) => {
+      const built = workflow(schema, ({ n, raw }) => {
+        const image = n["Src"]!({}, { id: "src" })[0]!;
+        const off = raw("Pass", { image }, { id: "p", mode });
+        n["Sink"]?.({ image: off.output(5) }, { id: "s" });
+      });
+      const { prompt, diagnostics } = exportApi(built);
+      expect(prompt["s"]?.inputs).toEqual({ image: ["p", 5] });
+      expect(diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path])).toContainEqual([
+        "E_DANGLING_LINK",
+        ["s", "inputs", "image"],
+      ]);
+    },
+  );
 });
 
 describe("modes", () => {

@@ -22,7 +22,10 @@ describe("examples/txt2img over the corpus", () => {
     test(
       dump.name,
       async () => {
-        const { tsc, main } = await runExample("txt2img", dump.path, ["a cat"]);
+        const {
+          tsc,
+          mains: [main],
+        } = await runExample("txt2img", dump.path, [["a cat"]]);
         expect(tsc).toEqual({ code: 0, stdout: "", stderr: "" });
         // A server without checkpoints can't build the prompt; the example says so and exits 1.
         if (!(await hasCheckpoints(dump.path))) {
@@ -55,7 +58,10 @@ describe("examples/hires-fix over the corpus", () => {
     test(
       dump.name,
       async () => {
-        const { tsc, main } = await runExample("hires-fix", dump.path, ["a fox"]);
+        const {
+          tsc,
+          mains: [main],
+        } = await runExample("hires-fix", dump.path, [["a fox"]]);
         expect(tsc).toEqual({ code: 0, stdout: "", stderr: "" });
         if (!(await hasCheckpoints(dump.path))) {
           expect(main?.code).toBe(1);

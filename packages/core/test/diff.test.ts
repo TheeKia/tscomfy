@@ -40,11 +40,14 @@ const UNCHANGED = {
 };
 
 describe("diffSchemas", () => {
-  test("finds nothing between a schema and itself, for every mock", async () => {
+  test("finds nothing between two readings of one response, for every mock", async () => {
     for (const name of MOCK_OBJECT_INFO_NAMES) {
       // oxlint-disable-next-line no-await-in-loop -- reading mocks one by one is fine in a test
-      const { schema: each } = normalizeObjectInfo(await readMockObjectInfo(name));
-      expect(diffSchemas(each, each)).toEqual(NONE);
+      const text = await readMockObjectInfo(name);
+      const first = normalizeObjectInfo(text).schema;
+      const second = normalizeObjectInfo(text).schema;
+      expect(first).not.toBe(second);
+      expect(diffSchemas(first, second)).toEqual(NONE);
     }
   });
 

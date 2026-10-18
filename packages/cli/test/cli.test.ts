@@ -11,10 +11,12 @@ const sha256 = (text: string): string =>
 const SYSTEM_STATS = JSON.stringify({ system: { comfyui_version: "0.41.0" } });
 
 describe("tscomfy", () => {
-  test.each(["--help", "help"])("prints usage to stdout for %p", async (arg) => {
+  test.each(["-h", "--help", "help"])("%p prints the usage, which lists -h and -v", async (arg) => {
     const io = memoryIo();
     expect(await run([arg], io)).toBe(0);
     expect(io.stdout()).toStartWith("Usage: tscomfy <command>");
+    expect(io.stdout()).toContain("  -h, --help ");
+    expect(io.stdout()).toContain("  -v, --version ");
   });
 
   test("prints usage to stderr and exits 2 when no command is given", async () => {
@@ -24,14 +26,17 @@ describe("tscomfy", () => {
     expect(io.stderr()).toStartWith("Usage: tscomfy <command>");
   });
 
-  test("prints its version, which matches package.json and codegen's", async () => {
-    const io = memoryIo();
-    expect(await run(["--version"], io)).toBe(0);
-    expect(io.stdout()).toBe(`${CLI_VERSION}\n`);
-    const manifest: unknown = await Bun.file(new URL("../package.json", import.meta.url)).json();
-    expect(manifest).toMatchObject({ version: CLI_VERSION });
-    expect(CODEGEN_VERSION).toBe(CLI_VERSION);
-  });
+  test.each(["-v", "--version"])(
+    "%p prints the version, package.json's and codegen's",
+    async (flag) => {
+      const io = memoryIo();
+      expect(await run([flag], io)).toBe(0);
+      expect(io.stdout()).toBe(`${CLI_VERSION}\n`);
+      const manifest: unknown = await Bun.file(new URL("../package.json", import.meta.url)).json();
+      expect(manifest).toMatchObject({ version: CLI_VERSION });
+      expect(CODEGEN_VERSION).toBe(CLI_VERSION);
+    },
+  );
 
   test("rejects an unknown command with exit 2 and the usage", async () => {
     const io = memoryIo();
@@ -40,27 +45,6 @@ describe("tscomfy", () => {
       'tscomfy: Unknown command "generat".\n\nUsage: tscomfy <command>',
     );
   });
-
-  test.each(["-h", "--help"])("%s is listed in every usage", async (flag) => {
-    for (const command of [[], ["generate"], ["check"], ["transpile"]]) {
-      const io = memoryIo();
-      // oxlint-disable-next-line no-await-in-loop -- one command at a time
-      expect(await run([...command, flag], io)).toBe(0);
-      expect(io.stdout()).toContain("  -h, --help ");
-    }
-  });
-
-  test.each(["-v", "--version"])(
-    "%s prints the version and is listed in the usage",
-    async (flag) => {
-      const io = memoryIo();
-      expect(await run([flag], io)).toBe(0);
-      expect(io.stdout()).toBe(`${CLI_VERSION}\n`);
-      const usage = memoryIo();
-      expect(await run(["--help"], usage)).toBe(0);
-      expect(usage.stdout()).toContain("  -v, --version ");
-    },
-  );
 
   test.each([
     ["generate", "Usage: tscomfy generate (--url <server> | --from"],
@@ -76,6 +60,7 @@ describe("tscomfy", () => {
       // oxlint-disable-next-line no-await-in-loop -- one command at a time
       expect(await run(args, io)).toBe(0);
       expect(io.stdout()).toStartWith(usage);
+      expect(io.stdout()).toContain("  -h, --help ");
       expect(io.stderr()).toBe("");
     }
   });

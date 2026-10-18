@@ -20,7 +20,6 @@ import { node, validated } from "./prompts.ts";
 
 const isCode = (key: string): key is DiagnosticCode => Object.hasOwn(DIAGNOSTIC_CODES, key);
 const codes = Object.keys(DIAGNOSTIC_CODES).filter(isCode);
-const byCodeUnit = (a: string, b: string): number => (a === b ? 0 : a < b ? -1 : 1);
 
 describe("registry", () => {
   test.each(codes)("%s has the severity its prefix names", (code) => {
@@ -37,7 +36,7 @@ describe("registry", () => {
     const documented = [...doc.matchAll(/^\| `([EW]_[A-Z0-9_]+)` \|/gm)].map(
       (match) => match[1] ?? "",
     );
-    expect(documented.toSorted(byCodeUnit)).toEqual(codes.toSorted(byCodeUnit));
+    expect(documented.toSorted()).toEqual(codes.toSorted());
   });
 });
 

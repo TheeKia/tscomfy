@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { prune, splitOutputs, toApi, type Workflow, workflow } from "@tscomfy/core";
+import {
+  type InputValue,
+  isOutputRef,
+  type Out,
+  prune,
+  splitOutputs,
+  toApi,
+  type Workflow,
+  workflow,
+} from "@tscomfy/core";
 import { readMockObjectInfo } from "@tscomfy/fixtures";
+import { ownerOf } from "../src/graph/output-ref.ts";
 import { looseSchema } from "./loose.ts";
 
 // Graph operations (docs/plan.md §12).
@@ -8,6 +18,22 @@ import { looseSchema } from "./loose.ts";
 const basic = looseSchema(await readMockObjectInfo("basic-pipeline"));
 
 const ids = (built: Workflow): string[] => [...built.graph.nodes.keys()];
+
+/** The builders that made a workflow's references. */
+const owners = (each: Workflow): Set<object | undefined> =>
+  new Set(references(each).map((ref) => ownerOf(ref)));
+
+/** Every output reference in a workflow's inputs. */
+function references(each: Workflow): Out<string>[] {
+  const found: Out<string>[] = [];
+  const walk = (value: InputValue): void => {
+    if (isOutputRef(value)) found.push(value);
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (typeof value === "object" && value !== null) Object.values(value).forEach(walk);
+  };
+  for (const node of each.graph.nodes.values()) Object.values(node.inputs).forEach(walk);
+  return found;
+}
 
 /** Two pipelines from one checkpoint, a stray node, and a muted branch. */
 const built = workflow(basic, ({ n, raw }) => {
@@ -77,6 +103,10 @@ describe("prune", () => {
     const pruned = prune(built);
     expect(pruned).not.toBe(built);
     expect(Object.isFrozen(pruned)).toBeTrue();
+    const [owner, ...others] = owners(pruned);
+    expect(others).toEqual([]);
+    expect(owner).toBeDefined();
+    expect(owners(built).has(owner)).toBeFalse();
     expect(() => toApi(pruned, { validate: false })).not.toThrow();
   });
 });
@@ -89,9 +119,7 @@ describe("splitOutputs", () => {
       ["latent", "extraVae", "muted", "save3"],
     ]);
   });
-});
 
-describe("splitOutputs", () => {
   test("puts an output node another depends on in both", () => {
     const outputs = looseSchema(
       JSON.stringify({
