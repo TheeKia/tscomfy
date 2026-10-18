@@ -7,7 +7,7 @@ changed later says so in its status line.
 |---|---|
 | [0001](0001-bun.md) | Bun as package manager, workspace tool, test runner and script runner (updated 2026-10-18: the CLI runs on Node too; releases publish with npm) |
 | [0002](0002-typescript-7.md) | TypeScript 7 (native compiler) |
-| [0003](0003-runtime-agnostic-libraries.md) | Runtime-agnostic library packages |
+| [0003](0003-runtime-agnostic-libraries.md) | Runtime-agnostic library packages (updated 2026-10-18: the client) |
 | [0004](0004-esm-unbundled-build.md) | ESM-only, unbundled build with source-first development |
 | [0005](0005-zero-runtime-dependencies.md) | Zero runtime dependencies |
 | [0006](0006-normalizer-in-core.md) | The object_info normalizer lives in core |
@@ -27,3 +27,6 @@ changed later says so in its status line.
 | [0020](0020-defaults-policy.md) | Fill the schema's defaults, never invent one |
 | [0021](0021-validation-by-default.md) | `toApi` validates by default and throws |
 | [0022](0022-api-surface-report.md) | The public API is pinned by declaration reports (2026-10-18) |
+| [0023](0023-execution-client.md) | An execution client, `@tscomfy/client` (2026-10-18; revises the non-goal "executing workflows") |
+| [0024](0024-job-outcomes.md) | The job record decides the outcome; events are a view (2026-10-18) |
+| [0025](0025-build-returns-handles.md) | The build function may return handles (2026-10-18) |

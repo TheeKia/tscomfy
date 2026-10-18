@@ -60,3 +60,6 @@ for (const part of splitOutputs(built)) queue(toApi(part));
 One workflow per output node that runs, in graph order, each with what that output needs. Nodes
 several outputs share are in each part; node ids are kept, so the parts can be told apart and
 compared.
+
+`prune` and `splitOutputs` keep the workflow's `handles` as they are, since node ids don't
+change. A handle of a node a part doesn't have simply finds nothing in that part's results.

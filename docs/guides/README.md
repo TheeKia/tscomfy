@@ -15,10 +15,13 @@ For people using tscomfy. In reading order:
 7. [Schemas at runtime](runtime-schemas.md): tscomfy without codegen, for tools that work against
    any server.
 8. [The CLI](cli.md): every command and option of `tscomfy`.
+9. [Running workflows](running-workflows.md): `@tscomfy/client`: queueing, progress and live
+   previews, outputs, cancelling, uploads.
 
 Reference:
 - The packages, each with what it exports: [core](../../packages/core),
-  [cli](../../packages/cli), [layout](../../packages/layout), [codegen](../../packages/codegen).
+  [cli](../../packages/cli), [layout](../../packages/layout), [codegen](../../packages/codegen),
+  [client](../../packages/client).
 - [Diagnostics](../diagnostics.md): every code, what it means and what happens.
 - [API surface](../api/): every declaration of the published packages, with their docs.
 - [Examples](../../examples/): complete projects.

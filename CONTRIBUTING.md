@@ -21,6 +21,7 @@ Everything runs from source: tests and the CLI resolve the packages to `src/` th
 | `bun run check` | `tsc -b`, lint, format check, `api:check`, tests. Must pass before any change is done |
 | `bun run test` | The tests, against source; skips corpus tests |
 | `bun run test:corpus` | The corpus tests, over your local real data (below) |
+| `bun run test:live` | The client against your ComfyUI (`TSCOMFY_LIVE_URL`, default `http://127.0.0.1:8188`). It queues model-free prompts (empty images, blurs, text): no GPU time, a few files in the server's `output/tscomfy-live/` and temp directory. Never in `check` or CI |
 | `bun run build` | Type-check and emit every package (`tsc -b`) |
 | `bun run format` | Format and sort imports (oxfmt) |
 | `bun run lint` | oxlint with type-aware rules |
@@ -28,7 +29,7 @@ Everything runs from source: tests and the CLI resolve the packages to `src/` th
 | `bun run generate:widths` | Remeasure the text widths codegen breaks lines by from oxfmt, after updating oxfmt (`text-width.test.ts` fails until then) |
 | `bun run api:update` | Rewrite the API reports in `docs/api/` after an intended API change |
 | `bun run bench:types` | Check the type-checking budget of generated types |
-| `bun run test:pack` | Pack every package, install the tarballs offline into a scratch project, run the CLI under Node and Bun and type-check a consumer. CI runs it on every push, under Node 24 and 26 |
+| `bun run test:pack` | Pack every package, install the tarballs offline into a scratch project, run the CLI under Node and Bun, type-check a consumer, and run the client's consumer against a fake server under Node and Bun. CI runs it on every push, under Node 24 and 26 |
 | `bun run tscomfy …` | The CLI, from source |
 | `bun run clean` | Remove build output; `tsc` never deletes stale files |
 
@@ -73,7 +74,7 @@ needs JSDoc and an explicit type.
 
 ## Releasing
 
-The four packages share one version and are released together, from CI only:
+The five packages share one version and are released together, from CI only:
 
 1. Set the new version in each `packages/*/package.json` and in `CODEGEN_VERSION`
    (`packages/codegen/src/generate.ts`) and `CLI_VERSION` (`packages/cli/src/run.ts`); tests

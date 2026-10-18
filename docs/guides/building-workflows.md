@@ -20,9 +20,10 @@ export function txt2img(prompt: string, seed: bigint): Workflow<Nodes> {
 ```
 
 `workflow(schema, build)` runs `build` once, synchronously, and returns a frozen `Workflow`: the
-schema and a graph of nodes. There is no global state, so builds can nest or run side by side, and
-one project can target several servers through several generated schemas. `Workflow<Nodes>` (or
-`Workflow<NodesOf<typeof local>>`, without importing `nodes.ts`) names the type.
+schema, a graph of nodes, and the handles `build` returned ([below](#handles)). There is no
+global state, so builds can nest or run side by side, and one project can target several servers
+through several generated schemas. `Workflow<Nodes>` (or `Workflow<NodesOf<typeof local>>`,
+without importing `nodes.ts`) names the type.
 
 `build` receives:
 - `n`: one function per node class, keyed by its exact `class_type`. Classes whose names aren't
@@ -43,6 +44,27 @@ An output name is left off the result when two outputs share it, or when it woul
 `id`, `length` or another array member; the tuple always has every output. `Out<T>` carries the
 socket type, and an input of type `T` takes `Out<T>` or an any-typed `Out<"*">`. Outputs are
 values: pass them around, store them, feed one into many inputs.
+
+### Handles
+
+Whatever `build` returns is kept as the workflow's `handles`. Return the nodes you will want
+later, such as the ones whose results you'll fetch after a run
+([running workflows](running-workflows.md)):
+
+```ts
+const wf = workflow(local, ({ n }) => {
+  // …
+  const save = n.SaveImage({ images, filename_prefix: "portraits/run" });
+  return { save };
+});
+
+wf.handles.save; // the SaveImage node: a handle, or an output when the node has outputs
+```
+
+A `build` that returns nothing gives `handles: undefined`. The handles' type is inferred, so let
+TypeScript infer `workflow`'s type arguments: `workflow<Nodes>(…)` with an explicit argument
+types them `void`. `Workflow<Nodes>` accepts a workflow with any handles; a function that
+returns one can name them, `Workflow<Nodes, { readonly save: ReturnType<Nodes["SaveImage"]> }>`.
 
 ### Inputs
 

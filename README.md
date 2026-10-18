@@ -106,6 +106,9 @@ one LoRA bypassed, two outputs, diagnostics and a UI file.
 
 ## What it does
 
+- **Runs it, too.** `@tscomfy/client` queues a workflow, streams progress and live previews, and
+  hands back its outputs by the workflow's own handles; the outcome comes from the server's record
+  of the job, so a dropped connection never loses a result.
 - **Types per server.** `tscomfy generate` writes a `Nodes` interface with a function per node
   class, literal unions of your models and samplers, and every V3 dynamic input (dynamic combos,
   Autogrow, dynamic groups, MatchType) typed. 1,758 node types type-check in about 0.1 s.
@@ -121,8 +124,10 @@ one LoRA bypassed, two outputs, diagnostics and a UI file.
 - **No dependencies, any runtime.** The libraries run in Bun, Node, Deno and browsers. Seeds and
   bounds beyond 2^53 stay exact. Problems are reported as diagnostics with stable codes.
 
-Out of scope: running workflows (queueing, websockets, progress), executing nodes, a GUI.
-tscomfy produces JSON; any ComfyUI client can queue it.
+Out of scope: executing nodes in-process, a GUI, managing ComfyUI. To run what you build,
+[`@tscomfy/client`](packages/client) queues it and streams progress, live previews and outputs
+([running workflows](docs/guides/running-workflows.md)); any other ComfyUI client can queue the
+JSON too.
 
 ## Packages
 
@@ -130,6 +135,7 @@ tscomfy produces JSON; any ComfyUI client can queue it.
 |---|---|---|
 | [`@tscomfy/core`](packages/core) | Build, export, validate and import workflows; the UI format, graph operations, lossless JSON | Always, as a dependency |
 | [`@tscomfy/cli`](packages/cli) | The `tscomfy` command: `generate`, `check`, `transpile` | As a dev dependency |
+| [`@tscomfy/client`](packages/client) | Runs workflows on a server: progress, live previews, outputs, uploads | To run what you build |
 | [`@tscomfy/layout`](packages/layout) | Positions for the workflow files `toUi` writes | To write files the frontend opens |
 | [`@tscomfy/codegen`](packages/codegen) | `generate` and `transpile` as functions, returning files as data | Only to run them from your own code; the CLI includes it |
 
@@ -138,7 +144,8 @@ Each package's README lists what it exports.
 ## Status
 
 Feature-complete for its scope (the phases in [the design](docs/plan.md#14-phases) are done) and
-tested against the frontend and backend of ComfyUI 0.41. Published on npm; before 1.0, a minor
+tested against the frontend and backend of ComfyUI 0.41; the client runs its live tests against
+a real 0.41 server. Published on npm; before 1.0, a minor
 version may change the API.
 
 ## Documentation
@@ -149,7 +156,7 @@ version may change the API.
   [graph operations](docs/guides/graph-operations.md),
   [importing and transpiling](docs/guides/import-and-transpile.md),
   [the UI format](docs/guides/ui-format.md), [schemas at runtime](docs/guides/runtime-schemas.md),
-  [the CLI](docs/guides/cli.md).
+  [the CLI](docs/guides/cli.md), [running workflows](docs/guides/running-workflows.md).
 - [Diagnostics](docs/diagnostics.md): every code.
 - [API surface](docs/api/): every public declaration, per package.
 - [Design](docs/plan.md), [decision records](docs/decisions/README.md) and

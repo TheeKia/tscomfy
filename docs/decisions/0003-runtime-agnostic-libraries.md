@@ -1,6 +1,6 @@
 # ADR-0003: Runtime-agnostic library packages
 
-Status: accepted, 2026-10-17; updated 2026-10-18 (layout, globals)
+Status: accepted, 2026-10-17; updated 2026-10-18 (layout, globals; the client, ADR-0023)
 
 ## Context
 
@@ -8,7 +8,7 @@ Workflow generation should work wherever JavaScript runs: Node, Bun, Deno, brows
 
 ## Decision
 
-`@tscomfy/core`, `@tscomfy/codegen` and `@tscomfy/layout` use no `node:*`, `bun`, `bun:*` or DOM APIs. `@tscomfy/cli` is the only package with I/O. Imports are banned by oxlint `no-restricted-imports`, scoped to `packages/{core,codegen,layout}/src/**`; runtime and DOM globals by the build config (`lib: ["es2024"]`, `types: []`), so using one fails `tsc -b`.
+`@tscomfy/core`, `@tscomfy/codegen` and `@tscomfy/layout` use no `node:*`, `bun`, `bun:*` or DOM APIs, and do no I/O. `@tscomfy/cli` does I/O through Node's APIs; `@tscomfy/client` (ADR-0023) does network I/O through the WHATWG globals only (`fetch`, `WebSocket` and their companions), builds with `lib: ["es2024", "webworker"]` and is under the same import ban. Imports are banned by oxlint `no-restricted-imports`, scoped to `packages/{core,codegen,layout,client}/src/**`; runtime and DOM globals by the build config (`lib: ["es2024"]`, `types: []`), so using one fails `tsc -b`.
 
 ## Consequences
 

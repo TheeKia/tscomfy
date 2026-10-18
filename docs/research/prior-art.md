@@ -47,7 +47,8 @@ generation; several are worth learning from. Plan §2 has the borrow/avoid summa
   `packages/object-info-parser/src/schemas/nodeDefSchema.ts` (`/object_info`, including V3
   dynamic types). The best specification available; used as reference only.
 - **`@comfyorg/comfyui-frontend-types`** on npm ships no `.d.ts` since 1.48.4 (July 2026); unusable.
-- **`@comfyorg/sdk`**: official execution client for untyped API JSON; a natural companion.
+- **`@comfyorg/sdk`**: official execution client for Comfy's hosted API (a plain ComfyUI needs a
+  proxy in front). Execution clients are reviewed in `comfyui-execution.md` §9 (2026-10-18).
 - **`@comfyorg/comfy-multi-player`** (GPL-3.0): holds the hard rules for `widgets_values`
   ordering; reference for UI format.
 - **Backend V3 schema** (`comfy_api/latest/_io.py`): `/object_info` keeps the V1 shape; there is

@@ -1,9 +1,11 @@
 # tscomfy: design and plan
 
-> Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`), `@tscomfy/layout`. MIT.
-> Status: revision 7, 2026-10-18. **Phases 0–9 complete**; 0.1.1 is published on npm, from CI (D12; 0.1.0 by hand).
+> Packages: `@tscomfy/core`, `@tscomfy/codegen`, `@tscomfy/cli` (bin: `tscomfy`), `@tscomfy/layout`;
+> `@tscomfy/client` (Phase 10, §17). MIT.
+> Status: revision 8, 2026-10-18. **Phases 0–9 complete**; 0.1.2 is published on npm, from CI (D12; 0.1.0 by hand).
+> Phase 10, the execution client (D23–D25, §17), is complete.
 > This is the design reference: what was decided and why (§3, with an ADR per decision in
-> `docs/decisions/`), how it is built (§4–§13), how it got there (§14) and the evidence (§16).
+> `docs/decisions/`), how it is built (§4–§13, §17), how it got there (§14) and the evidence (§16).
 > User documentation is in `docs/guides/`. Every claim marked **[verified]** was checked
 > hands-on; the evidence is in [§16](#16-verification-log).
 
@@ -20,9 +22,14 @@ Anything the types can't express is caught by **runtime validation** against the
 Output is byte-for-byte what the ComfyUI frontend would send, apart from the documented
 differences in §7.4.
 
+`@tscomfy/client` (§17, D23) runs the result on a ComfyUI server. It queues the prompt, streams
+progress, live previews and outputs, and settles the outcome from the server's record of the job.
+
 ### Non-goals
 
-- Executing workflows, queueing, websockets, progress. We produce plain API-format JSON that any client can run.
+- Running or managing ComfyUI (servers, models, custom nodes), pools of servers, a job queue of our
+  own, and Comfy's hosted API. The client talks to one server's native API (D23; executing
+  workflows was a non-goal until then).
 - Running nodes in-process (ComfyScript "real mode").
 - A GUI, MCP server, or custom-node management.
 
@@ -44,6 +51,9 @@ differences in §7.4.
 | stepupgaming/comfy-workflows | Graph IR; index-based slot identity; drift detection by snapshot hash; file-like combos produce warnings | Exact-string type matching; widgets that can't take links; output filtering that shifts indices; dropping defaults; untyped transpiler output |
 | @saintno/comfyui-sdk | Phantom-branded refs; `input_order`; the `["COMBO",{options}]` form | Bare-tuple refs (`["1",0]` fits anywhere); codegen that needs a live server; mixed mutable and immutable builder methods |
 | StableCanvas/comfyui-client | A transpiler as the way users adopt the library | Untyped outputs |
+| @comfyorg/sdk (official, Comfy's hosted API) | The job record decides the outcome; events as an async iterable; `AbortSignal` on every call; previews as bytes with a node id | Node-only, runtime dependencies, `JSON.stringify` (rounds seeds); needs a proxy for a plain ComfyUI |
+| comfyui-node, @saintno/comfyui-sdk, StableCanvas (as clients) | Injected `fetch` and `WebSocket` | Subscribing after queueing, trusting the event stream, unattributed previews, unbounded reconnects |
+| ComfyScript's runtime | Results looked up by the builder's own reference (D25) | A process-wide socket; a global interrupt as cancel |
 | ComfyUI frontend 1.55.17 (GPL-3.0), the version ComfyUI 0.41 installs | The **specification** of serialization rules (§7.4, §11, §12) | Copying code |
 | ComfyUI backend 0.41 `_io.py`, `execution.py` | Ground truth for V3 dynamic inputs, type compatibility, validation | — |
 
@@ -73,6 +83,9 @@ differences in §7.4.
 | D20 | **Fill the schema's defaults, never invent one** (§7.2) | Prompts match the frontend's wherever a value is stated; the frontend's fallbacks (`0`, the first checkpoint) pick values silently and can break `min` |
 | D21 | **`toApi` validates by default and throws `ValidationError`**; `exportApi` returns warnings (§8) | The default path can't produce a prompt the backend rejects for a reason the schema states; a library has nowhere to print warnings |
 | D22 | **The public API is pinned by declaration reports** in `docs/api/`, checked by `bun run check` (§13) | Every API change shows as a reviewed diff; TS 7.0 has no compiler API for API Extractor |
+| D23 | **An execution client, `@tscomfy/client`** (§17). Runtime-agnostic through the WHATWG globals only (`lib: ["es2024", "webworker"]`); `core` as a peer, no other dependency; ComfyUI 0.26+. Real-server runs only on the owner's machine (`test:live`, the capture script) | Running a prompt is the step every user writes, and it is easy to get wrong (missed events, lost reconnects, rounded seeds). No existing client fits (`docs/research/comfyui-execution.md` §9). **[verified]**: protocol, runtimes and type declarations |
+| D24 | **The job record decides the outcome; events are a view** (§17.5). The client mints the prompt id and subscribes before posting; server-reported outcomes are data; an abort cancels on the server and rejects with `signal.reason` | The socket has no heartbeat or replay, and a same-id reconnect can silently unregister it; a blocked node reports an error and continues; a pending cancel sends nothing. **[verified]** in the 0.41 source and against the local server |
+| D25 | **The build function may return handles**, kept as `Workflow.handles` | Outputs are looked up by the builder's own handles instead of ids repeated as strings |
 
 ## 4. Architecture
 
@@ -97,13 +110,17 @@ differences in §7.4.
   ui/           UI workflows: importUi (as the frontend queues them), toUi (flat, format 0.4)
 
 @tscomfy/layout        pure: positions for toUi (layered, left to right)
+
+@tscomfy/client        fetch · WebSocket (WHATWG globals only); core as a peer      [Phase 10]
+  connect · submit · uploadFile · fetchFile (§17)
 ```
 
 **Dependency rules**:
 - Dependencies point downward only.
 - Inside `core`, nothing outside `object-info/` reads raw object_info.
 - `codegen` returns `{ path, contents }[]` and never touches the filesystem.
-- The CLI is the only package with I/O.
+- Only `cli` and `client` do I/O: the CLI through Node's APIs, the client through the WHATWG
+  globals (D3, D23). `core`, `codegen` and `layout` are pure.
 
 ### 4.1 Data flow
 
@@ -121,6 +138,7 @@ workflow(local, ({ n, raw }) => …) ─► Workflow { schema, graph }
 prompt JSON (text) ─► importApi(text, schema) ─► { workflow, diagnostics }
 UI JSON (text) ─► importUi(text, schema) ─► { workflow, diagnostics }
 workflow ─► toUi(wf, { positions: layout(wf) }) ─► { workflow: UI JSON object, ids, diagnostics }
+connect(server) ─► Connection ─► submit(connection, wf) ─► Job { id, events, outcome, cancel() }   (§17)
 ```
 
 The core API is free functions over immutable data, so every operation is pure and composable
@@ -452,6 +470,8 @@ const body = stringify({ prompt: toApi(txt2img({ prompt: "a cat", seed: 42n })) 
   from `n`, so no `class_type` can collide with it. Its inputs are wire keys and are exported as
   given, without defaults or flattening; `raw(…).output(slot)` is an `Out<"*">`, which fits any
   socket. Validation checks raw nodes like any other (§8): an unknown class is an error.
+- **Handles** (D25, Phase 10): the build function may return a value, usually an object of node
+  handles, kept as `workflow.handles`; the client looks outputs up by them (§17).
 - **Results** follow the generated types exactly: the rule for which outputs are also reachable by
   name (`namedOutputs`) lives in core and serves both codegen and the builder. Results and output
   references are frozen; references are instances only the builder creates.
@@ -921,6 +941,7 @@ tscomfy/
     codegen/               # @tscomfy/codegen
     cli/                   # @tscomfy/cli
     layout/                # @tscomfy/layout: positions for toUi
+    client/                # @tscomfy/client: runs prompts on a server (Phase 10, §17)
     */README.md  */LICENSE #   what npm shows; src/ ships too, so the maps resolve
   examples/                # txt2img, hires-fix: projects typed by your server; tests generate from the mocks
   internal/                # private workspace packages, never published
@@ -928,9 +949,13 @@ tscomfy/
       src/index.ts         #   readMockObjectInfo(name), listCorpus(section)
       mocks/object-info/   #   committed hand-written mocks, one theme per file
       mocks/workflows/     #   committed mock API and UI workflows, and the frontend's prompts for the UI ones
+      mocks/protocol/      #   committed protocol traces of runs, distilled from captures (Phase 10)
       scripts/frontend.ts  #   asks the server's own frontend, in headless Chromium, what it would queue
+      scripts/capture.ts   #   records the frames and HTTP exchanges of runs on the owner's server (Phase 10)
       corpus/              #   local real data; only its README is committed
       src/exec.ts          #   process and scratch-project helpers for tests and scripts
+      src/protocol.ts      #   readMockProtocol(name), for the protocol mocks
+      src/fake-server.ts   #   FakeServer: a fake ComfyUI (HTTP and websocket) playing them (Phase 10)
     bench/                 # @tscomfy/bench: bench:types, synthetic schemas from the mocks
     api-report/            # @tscomfy/api-report: docs/api/ from the declarations (D22)
     pack-test/             # @tscomfy/pack-test: test:pack, the published packages as a user installs them
@@ -940,7 +965,7 @@ tscomfy/
     diagnostics.md         # every diagnostic code
     plan.md                # this document
     decisions/             # one short ADR per decision in §3
-    research/              # ComfyUI serialization ground truth, UI format, prior-art review
+    research/              # ComfyUI serialization ground truth, UI format, execution protocol, prior-art review
 ```
 
 **tsconfig.base.json** **[verified]**:
@@ -954,7 +979,8 @@ tscomfy/
 Configs per package:
 - **Build** (`tsconfig.json`): `composite`, `rootDir: src`, `outDir: dist`,
   `tsBuildInfoFile: dist/.tsbuildinfo` (so deleting `dist` triggers a rebuild), plus `references`.
-  `cli` adds `types: ["node"]` (`@types/node` 24), so its source can't use Bun's APIs.
+  `cli` adds `types: ["node"]` (`@types/node` 24), so its source can't use Bun's APIs. `client`
+  sets `lib: ["es2024", "webworker"]`: the WHATWG globals without `document` or `window` (D23).
 - **Test** (`test/tsconfig.json`): `noEmit`, non-composite, `incremental`, `types: ["bun"]`,
   **no references**. References in a noEmit config cause TS2878.
 
@@ -966,14 +992,16 @@ Configs per package:
 **Scripts**:
 - `build`: `tsc -b`
 - `clean`: remove the `dist` directories, `internal/*/tsconfig.tsbuildinfo` and `internal/bench/.out` (tsc never deletes stale outputs)
-- `test`: `bun test --conditions=@tscomfy/source`, skipping corpus tests
+- `test`: `bun test --conditions=@tscomfy/source`, skipping corpus and live tests
 - `test:corpus`: only the corpus tests (`*.corpus.test.ts`)
+- `test:live` (Phase 10): the client against the owner's server; queues model-free prompts; local only
 - `lint`: `oxlint --type-aware`
 - `format`: `oxfmt` (format and sort imports); `format:check`: `oxfmt --check`
 - `bench:types`: the type-check budget (§6.6)
 - `api:update` / `api:check`: write or check the API-surface reports in `docs/api/` (D22)
 - `test:pack`: cleans, builds, packs every package, installs the tarballs offline with npm, runs
-  the CLI under Node and Bun and type-checks and runs a consumer; not part of `check`
+  the CLI under Node and Bun, type-checks and runs a consumer, and runs the client's consumer
+  against the fake server under Node and Bun; not part of `check`
 - `generate:fixtures`: regenerates `packages/codegen/test/generated/` from the mocks
 - **`check`**: `tsc -b`, then lint, `format:check`, `api:check` and test
 
@@ -1117,6 +1145,47 @@ rather than by hand.
 Exit: `check`, `test:corpus`, `bench:types` and `test:pack` pass; the guides' code type-checks
 against real generated types; the packed packages install and run under Node and Bun.
 
+**Phase 10: execution client** (done; D23–D25, §17)
+- Core first: `Workflow.handles` (D25) with type tests, and the diagnostic codes for the server's
+  validation errors (§17.4), each with a negative test. The core change is additive only:
+  - every existing test, generated fixture and API report entry stays as it is, apart from the
+    new property and codes;
+  - a type test passes a workflow with handles to every public function of core and codegen
+    that takes a `Workflow` (`layout` takes `Workflow` too, which fits any handles).
+- Capture: `internal/fixtures/scripts/capture.ts` runs prompts on the owner's server and records
+  every frame and HTTP exchange into the corpus (gitignored). The runs cover:
+  - success, and a cached rerun;
+  - a node error, an interrupt and a pending cancel;
+  - a rejection and a partial acceptance;
+  - `SaveImageWebsocket`, and a sampler's latent2rgb previews (needs a model);
+  - a reconnect during a run.
+
+  Each run is distilled by hand into a protocol mock (`mocks/protocol/`), as for every corpus
+  finding (§13). A blocked node and progress text need a custom or partner node, so their mock
+  (`blocked.json`) is hand-written from the source; taesd previews weren't captured (the same
+  frames as latent2rgb, from another decoder).
+- A fake server for tests (`Bun.serve`, HTTP and websocket) that replays protocol mocks, with
+  faults to inject:
+  - events before the POST response;
+  - a dropped socket and a missed final event;
+  - the same-id hazard;
+  - a job that vanishes while pending;
+  - a silent worker.
+- The package (§17); its guide (`docs/guides/running-workflows.md`); `examples/txt2img` gains a
+  script that runs the workflow and saves the image.
+- `test:live`: the client against the owner's server with model-free workflows (empty images,
+  blurs, text). Local only, never in CI.
+- Packaging: root `tsconfig.json` references, the oxlint import ban, `test:pack` (a client
+  consumer type-checked with the DOM lib's web types, and a run against the fake server under
+  Node and Bun), the release workflow's package list, and the API report. The client has no
+  version constant: nothing it writes names its version.
+
+Exit:
+- Every protocol mock replays to its expected events and outcome.
+- Every injected fault settles the outcome correctly, or rejects it as ADR-0024 says.
+- `test:live` passes on the local server, and the example saves an image from it.
+- `check`, `test:corpus`, `test:pack` and `bench:types` pass.
+
 ## 15. Risks
 
 | Risk | Mitigation |
@@ -1129,6 +1198,9 @@ against real generated types; the packed packages install and run under Node and
 | oxfmt churn (still 0.x) | Pinned exactly; an upgrade that reformats code lands as its own change. The formatter is replaceable without touching code |
 | TS 7 ecosystem gaps (no compiler API before 7.1) | Not needed; API-surface checks use `.d.ts` snapshots |
 | GPL code entering the project | Upstream code is read as a specification only |
+| ComfyUI's execution protocol changes (the job API, feature flags and `progress_state` are recent) | Feature flags are negotiated; unknown messages and fields are ignored; the job record, not the stream, decides outcomes (D24); the capture is rerun after ComfyUI updates; tested server versions go in §16 |
+| A run hangs (the server's worker thread can die without a final event) | Documented; the caller's `AbortSignal.timeout(…)` ends the wait and cancels the job |
+| Tests touching the owner's server | Only `test:live` and the capture script queue prompts, with model-free workflows where possible; neither runs in CI |
 
 ## 16. Verification log
 
@@ -1188,3 +1260,214 @@ Checked from 2026-10-17 to 2026-10-18 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and
 | Guides | Every snippet in `docs/guides/` type-checks against types generated from the corpus server (1,758 classes), the four compile errors getting-started promises included; the runtime-schema snippet validates with one expected warning |
 | Frontend 1.55.18 | The server updated its frontend from 1.55.17 to 1.55.18 during Phase 9. Captured again on 1.55.18, every committed mock prompt (`ui-api/`, `ui-export/`) is identical. The `ui-extensions` captures were made on 1.55.18, with the mock's definitions registered in the page and the server's file lists answered by the probe (a remote combo's saved file listed), so no capture holds the server's files. The frontend queues exactly `toApi`'s prompt for `examples/hires-fix`'s UI workflow, its bypassed LoRA included |
 | Publishing (D12) | Packed with `bun pm pack` (Bun 1.4.3): tarballs `tscomfy-<name>-<version>.tgz`, `workspace:*` rewritten to the exact version and `workspace:^` to `^<version>`. A fresh npm project installing them, generating from the `basic-pipeline` mock with `--import-extension .ts` and the README's `tsconfig.json`, type-checks the README's opening example with TypeScript 5.9, rejects `"eular"` (TS2820), runs under Node 26.11.1 and Bun 1.4.3 with no build step, and transpiles a UI workflow that type-checks. npm's trusted publishing needs npm 11.5.1+ and Node 22.14+, `id-token: write`, a `repository.url` matching the repository, and a package that already exists (`npm help trust`, npm 12.2.1). Released 2026-10-18: 0.1.0 of each package published by hand (each tarball's integrity equals the local `bun pm pack` output), trusted publishers configured, and a fresh npm project installs all four and runs `tscomfy --version`. Running `npm trust` before a package exists makes npm create it with a `0.0.0-stage` stub version. The first `check.yml` run passed (`check`, `test:pack` under Node 24 and 26); the `v0.1.0` run of `release.yml` passed and skipped the four versions already on npm. Released 0.1.1 the same day from CI (run 39126534615): the `build` job checked and packed with read-only permissions, the `publish` job published all four over OIDC with provenance (SLSA v1 attestations on npm), and a fresh npm project installs them and runs `tscomfy --version` (0.1.1) |
+| Execution protocol (D23, D24, §17) | Read in ComfyUI 0.41.0+19 (`v0.41.0-19-g872eb6a3`): `server.py`, `execution.py`, `main.py`, `protocol.py`, `comfy_execution/{progress,jobs,asset_enrichment,media_enrichment}.py`, `comfy_api/feature_flags.py`, `latent_preview.py`. Read-only probes of the local server: the `status` and `feature_flags` handshake, `/features`, `/api/jobs` (404 for an unknown id), `/queue`, the origin check (403 for a foreign `Origin` on HTTP and on the websocket handshake). Reproduced: two sockets on one `clientId`, the first closed, leave the second unregistered. Feature commits mapped to tags: client `prompt_id` (July 2025), the job API (0.6.0), per-prompt preview method (0.5.0), UUID-only prompt ids (0.25.0), per-job cancel (0.26.0). Core's `parse` reads Python's `NaN`/`Infinity` (as null, `W_NON_FINITE_NUMBER`) and big integers. Details: `docs/research/comfyui-execution.md` |
+| Frontend client (§17) | Frontend 1.55.18 (`api.ts`, `executionStore.ts`, `queueStore.ts`, from the bundle's source maps), compared with upstream 1.58.0: the feature flags it sends first, binary decoding of types 1, 3 and 4, a fixed 300 ms reconnect, the jobs API for queue and history, `/api/jobs/{id}/cancel`, upload widget values. It never sends `prompt_id` |
+| Client runtimes (D23) | Bun 1.4.3, Node 24.22.0 (undici 7.29.1) and Node 26.11.1 against the local server and a local echo server: global `WebSocket` and `fetch` in all three; Bun's default `binaryType` is `nodebuffer`; `new WebSocket(url, { headers })` sends the headers in Bun and Node; credentials in a URL become Basic auth in Bun, are dropped by Node's websocket and refused by Node's fetch |
+| Client declarations (D23) | TS 7.0.2, scratch project: a library built with `lib: ["es2024", "webworker"]` compiles code using `fetch`, `WebSocket`, `AbortSignal`, `FormData`, `Blob`, `crypto` and `TextDecoder`, and rejects `document`. Its declarations naming `fetch`, `WebSocket` and `AbortSignal` type-check in consumers with `@types/node` 24.19.2 and with the DOM lib (`skipLibCheck: false`), and with Bun's types (`skipLibCheck: true`, because the workspace store holds two `@types/node` versions that collide); a consumer with no runtime types fails, as expected |
+| Execution prior art (D23) | `@comfyorg/sdk` 0.5.0, `comfyui-node` 1.11.1, `@saintno/comfyui-sdk` 0.3.1, `@stable-canvas/comfyui-client` 1.5.9, ComfyScript, `comfy_api_simplified` 1.6.0, hosted APIs: read from source, nothing installed or run (`docs/research/comfyui-execution.md` §9) |
+| Phase 10 captures (§17) | `scripts/capture.ts` on ComfyUI 0.41.0 (model-free): success, a cached rerun, `SaveImageWebsocket` and PreviewAny, three rejections, a partial acceptance, a node error (`ComfyMathExpression` dividing by zero, after an output ran), a running cancel, a pending cancel, a reconnect mid-run. Confirmed: `executing {node: null}` comes after `execution_success` and after the record is written (up to ~300 ms later); a cached output node sends `executed` again; a job cancelled while queued sends no event and its record is a 404 `{"error": "Job not found"}`; the cancel interrupts at the next node with `execution_interrupted` and a `cancelled` record with empty outputs; `SaveImageWebsocket` sends one type-4 PNG frame; a failed record keeps the outputs of nodes that finished. Nodes that resize or catch their errors (ImageBatch with RGB and RGBA, JoinImageWithAlpha, RegexMatch with an invalid pattern) don't fail |
+| Client against the fake server (§17) | 54 tests (after the review below) over the protocol mocks and injected faults: events before the POST answer, a dropped socket, the same-id hazard (settles by polling), a cancel while queued by this client or another (a status broadcast, read at the end of the throttle interval; the first version dropped it and hung), an abort while the POST is in flight (cancelled once the answer came; the first version aborted the POST and could orphan the job), a dead worker ended by `AbortSignal.timeout`, a closed connection |
+| Client against the live server (§17) | `test:live`, 7 tests on ComfyUI 0.41.0, model-free: a workflow with handles run end to end and its saved PNG downloaded; a 2⁶³−1 integer sent to `PrimitiveInt` and read back exactly from PreviewAny; `SaveImageWebsocket` as a preview of its node; the server's own validation as `E_SERVER_VALIDATION` at `[node, "inputs", input]`; a node error; a running and a queued job cancelled; an uploaded image (to `temp`) fed to `LoadImage`. It found that a node with outputs gives an `Out`, not a handle (`outputOf` came from that), and that 0.41's `SaveImage` has an `IMAGE` output |
+| Client packaging (D23) | `test:pack`: the client tarball installs offline, its declarations type-check in a consumer with `lib: ["es2024", "dom"]` and `skipLibCheck: false`, and the consumer runs a workflow on the fake server under Node 26.11.1 and Bun 1.4.3 (`client success 8 run_00001_.png image/png`). The public declarations name no internal module (`docs/api/client.md`) |
+| Phase 10 review | An independent review found 10 bugs, each reproduced, all fixed with tests (`lifecycle.test.ts`, `parts.test.ts`): `close()` while the socket was down or reopening still posted the prompt and left a socket open; concurrent submits after a drop opened several sockets with one client id; reconnect backoff, poll chains (one more per reconnect) and record-read retries kept timers that outlived `close()` by up to 30 s (a subprocess test now checks the process exits at once); progress text was coalesced and coalescing reordered events; a second `next()` before the first settled was lost; a 200 with a non-JSON body made the job uncancellable; `connect` checked for 0.6, not 0.26. Also from it: `supports_progress_text_metadata` announced, a 404 after start is a `ClientError`, live outputs win over the record's, outputs frozen, and `Server.fetch` typed as a call (a wrapper failed against Bun's `typeof fetch`) |
+| Sampler capture (§17) | `capture.ts sampler` on ComfyUI 0.41.0 with a local SD checkpoint, 6 steps at 512², `preview_method: latent2rgb`: per step a `progress_state`, then a type-4 JPEG preview (36–47 KB, 512 px), then `progress`, as the hand-written mock had it; the 2⁶⁴−1 seed was accepted and echoed exactly in the history. It replaced the hand-written `sampler.json`; the blocked node and progress text stay hand-written (`blocked.json`) |
+
+## 17. Execution client (`@tscomfy/client`)
+
+Phase 10 (D23–D25). The protocol facts behind every rule here, with citations, are in
+`docs/research/comfyui-execution.md`; `docs/api/client.md` pins the names (D22).
+
+### 17.1 Shape
+
+```ts
+import { connect, fetchFile, outputFiles, submit } from "@tscomfy/client";
+
+const wf = workflow(local, ({ n }) => {
+  // …
+  const save = n.SaveImage({ images, filename_prefix: "out" });
+  return { save };                                      // D25: kept as wf.handles
+});
+
+const comfy = await connect({ url: "http://127.0.0.1:8188" });
+const job = submit(comfy, wf, { previews: "taesd", signal: AbortSignal.timeout(600_000) });
+for await (const event of job.events) {
+  if (event.type === "progress") showProgress(event.node, event.value, event.max);
+  if (event.type === "preview") showPreview(event.mime, event.bytes);
+}
+const outcome = await job.outcome;
+if (outcome.status === "success") {
+  for (const file of outputFiles(outcome, wf.handles.save)) {
+    writeFile(file.filename, (await fetchFile(comfy, file)).bytes);
+  }
+}
+await comfy.close();
+```
+
+- **Plain data and free functions.** The calls are free functions over plain data, as in core.
+- **Two values hold state:**
+  - a `Connection`, which owns a websocket;
+  - a `Job`, which is a live view of one run.
+
+  Everything that needs no socket takes a `Server`, and a `Connection` is one.
+
+### 17.2 Values and functions
+
+- **`Server`**: `{ url, headers?, fetch?, webSocket? }`, plain data. `fetch` is typed as the call
+  the client makes, `(url: URL, init: RequestInit) => Promise<Response>`, not `typeof fetch`:
+  Bun's `fetch` type has a `preconnect` member, which a wrapper function lacks.
+  - `url` is the http(s) base. It may carry a path prefix and a query, which every request and the
+    websocket URL keep (the CLI's `endpoint` rule).
+  - `headers` apply to HTTP only: a browser can't set websocket headers.
+  - `webSocket?: (url) => WebSocket` is a factory for runtimes that can send handshake headers
+    (Bun, Node, Deno).
+  - `fetch` replaces the global: the global itself, or a wrapper.
+  - Credentials in the URL are refused with a `TypeError`, because runtimes disagree on them.
+- **`connect(server, { signal? }) → Promise<Connection>`**:
+  - opens the socket with a fresh client id (a UUID from `getRandomValues`);
+  - sets `binaryType` to `"arraybuffer"`;
+  - sends `supports_preview_metadata` and `supports_progress_text_metadata` as the first message
+    and waits for the server's flags;
+  - treats a server that doesn't answer as unsupported (`ClientError`);
+  - checks the server: `comfyui_version` from `/system_stats` at least 0.26.0 (when it parses;
+    `/api/jobs` alone exists since 0.6), and the job API.
+
+  One socket at a time: every caller waiting for it shares one opening. `close()` stops what the
+  connection started (sockets, handshakes, backoff waits, polls, retries), so nothing keeps the
+  process running after it.
+
+  A `Connection` is a `Server` plus `clientId`, the server's `features` and `close()`. Several
+  jobs share its one socket and are told apart by prompt id. There is no `await using` support
+  yet: `Symbol.asyncDispose` isn't in `lib: es2024`, so naming it would need every consumer to
+  have `esnext.disposable` types.
+- **`submit(connection, input, options?) → Job`** is synchronous.
+  - A `Workflow` goes through `toApi`, which validates and throws `ValidationError` (D21). An
+    `ApiPrompt` is sent as given.
+  - `options.previews` is `"auto" | "latent2rgb" | "taesd" | "none"`, sent as
+    `extra_data.preview_method`. When absent, the server's default applies, which is `none`.
+  - `options.targets` is a list of `NodeRef`s, sent as `partial_execution_targets`.
+  - `options.front` queues the job ahead of others.
+  - `options.extraData` takes more `extra_data`, such as partner-node keys. The keys the client
+    sets itself are a `TypeError`.
+  - `options.signal` aborts the job (§17.5).
+- **`Job`** is `{ id, events, outcome, cancel() }`: the minted prompt id, an `AsyncIterable` of
+  `JobEvent` (§17.3), a `Promise` of the `Outcome` (§17.4), and the server-side cancel.
+- **`uploadFile(server, { name, bytes, mime? }, { subfolder?, type?, overwrite?, signal? })`**
+  returns `{ filename, subfolder, type, value }`, a `FileRef` plus `value`.
+  - `filename` is the server's name for the file, which differs from the one sent after a clash.
+  - `value` is the widget value a loader node takes: `subfolder/name`, with ` [temp]` or
+    ` [output]` appended outside `input`.
+- **`fetchFile(server, file, { signal? })`** returns `{ bytes: Uint8Array, mime }`.
+  **`fileUrl(server, file)`** returns the `/view` URL, for `<img src>` on a page the server
+  allows (same origin, or `--enable-cors-header`).
+- **`outputFiles(outcome, ...nodes)`** returns the output files of the given nodes, or of every
+  output node when none is given, in prompt order. **`outputOf(outcome, node)`** returns one
+  node's `NodeOutput`. A `NodeRef` is a `NodeId`, a `NodeHandle` or an `Out`. Taking all three
+  matters: a node with outputs gives its builder an `Out`, not a handle, and on 0.41 `SaveImage`
+  has an `IMAGE` output.
+
+Browsers: a default ComfyUI refuses pages from another origin with 403, the websocket included.
+The guide documents `--enable-cors-header <origin>` and a same-origin proxy (research §7).
+
+### 17.3 Events
+
+| `type` | From | Fields |
+|---|---|---|
+| `started` | `execution_start` | |
+| `cached` | `execution_cached` | `nodes` |
+| `executing` | `executing` with a node | `node` |
+| `progress` | `progress_state`, the nodes that changed | `node`, `value`, `max` |
+| `preview` | binary type 4 | `node`, `mime`, `bytes` (`Uint8Array`) |
+| `output` | `executed` with an output | `node`, `output` (`NodeOutput`) |
+| `text` | binary type 3, while this job's prompt runs | `node`, `text` |
+| `blocked` | `execution_error` of type `ExecutionBlocked` | `node`, `message` |
+
+- **Node ids** are display ids, which equal the builder's ids for tscomfy prompts (research
+  §3.2).
+- **One consumer.** The iterable has one consumer; a second iteration is a `TypeError`.
+- **Buffering.** Events are buffered from `submit`. When the consumer lags, only the latest
+  preview and progress per node are kept, so memory stays bounded.
+- **The end.** The iterable ends when the outcome settles; it never throws for a job's failure.
+- **Unknown input.** Unknown message types and fields are ignored.
+
+### 17.4 Outcome
+
+```ts
+type Outcome =
+  | { status: "success"; outputs: Outputs; diagnostics: readonly Diagnostic[] }
+  | { status: "rejected"; diagnostics: readonly Diagnostic[] }
+  | { status: "failed"; error: ExecutionError; outputs: Outputs; diagnostics: readonly Diagnostic[] }
+  | { status: "cancelled"; outputs: Outputs; diagnostics: readonly Diagnostic[] };
+```
+
+- **`Outputs`** is a `ReadonlyMap<NodeId, NodeOutput>` in prompt order.
+  - `NodeOutput` is `{ node, files, text, ui }`; `ui` keeps the raw record, read with core's lossless
+    `parse`.
+  - `OutputFile` is `{ filename, subfolder, type, kind, animated, key, width?, height? }`.
+  - `kind` is `image`, `video`, `audio`, `3d` or `file`, decided by the server's `metadata.kind`,
+    then the extension, then the key, because videos come under `images` (research §5).
+- **`ExecutionError`** is `{ node, classType, exceptionType, message, traceback, executed }`.
+- **`diagnostics`** on every outcome: a rejection's errors; otherwise the node errors of a partial
+  acceptance and the blocked nodes.
+- **New diagnostic codes** (core's registry, D14), each with a negative test:
+  - `E_PROMPT_REJECTED`: the server's top-level error; path `[]`, or `[node]` for an unknown
+    class.
+  - `E_SERVER_VALIDATION`: one per node error; path `[node, "inputs", input]` or `[node]`; the
+    message names the server's error type.
+  - `W_NODE_BLOCKED`: a blocked node.
+- **Rejections:** the outcome rejects only with the abort's `signal.reason` or a `ClientError`
+  (ADR-0024).
+
+### 17.5 Lifecycle
+
+1. `submit` mints the prompt id and registers the job with the connection (reconnecting first if
+   needed), then posts `stringify({ prompt, client_id, prompt_id, extra_data, … })`. The POST
+   isn't abortable: once sent, the prompt may be queued, and only the answer says so. An abort
+   during it cancels the job once the answer has come.
+2. The POST response:
+   - 400: the outcome is `rejected`;
+   - 200 with `node_errors`: they become the outcome's diagnostics;
+   - anything else: a `ClientError`.
+3. Events for the prompt id feed `job.events` and fill in the outputs as they come.
+4. **Settling.** On `executing {node: null}` for the job, the client reads `GET /api/jobs/{id}`
+   and settles from it:
+   - `completed` gives `success`, with the outputs taken from the record;
+   - `failed` gives `failed`, with the record's `execution_error`;
+   - `cancelled` gives `cancelled`;
+   - a 404 before the job started also gives `cancelled` (cancelled while pending); after it
+     started, a 404 means the server lost the record (a restart), and the outcome rejects with a
+     `ClientError`, since nothing says how the job ended.
+
+   Outputs come from the record, except a node's output the client saw live, which wins: the
+   record rewrites some entries (research §5). `outputs` is a read-only map and every `ui` record
+   is deep-frozen.
+5. **Reading the record at other times.**
+   - On queue changes while the job hasn't started, at most once a second; a change inside the
+     second is read at its end, not dropped.
+   - After every reconnect, then polled (1 s growing to 10 s) until the job settles: events sent
+     while the socket was down are gone, and the same-id hazard can leave the new socket deaf.
+6. **Reconnecting.** A dropped socket reconnects only while jobs are open, with jittered
+   exponential backoff:
+   - it waits for the old socket's `close` before reusing the id;
+   - it re-sends the flags first;
+   - it gives up with a `ClientError` after the budget, while the server stays unreachable.
+7. **`job.cancel()`** posts `/api/jobs/{id}/cancel`; the outcome then settles from the record,
+   normally as `cancelled`.
+
+   **Aborting** `options.signal` does the same and rejects the outcome with `signal.reason`.
+8. **`close()`** rejects open outcomes with a `ClientError`; their jobs keep running on the
+   server. There is no default timeout (ADR-0024).
+
+### 17.6 Tests
+
+- **Fake server:** protocol mocks replayed by a fake server built on `Bun.serve`, with injected
+  faults (Phase 10). Tests load mocks through `@tscomfy/fixtures`, as all tests do.
+- **Real server:** `test:live` runs against the owner's server, and the capture script records
+  new traces. Both are local only.
+
+### 17.7 Not in the first version
+
+- `SaveImageWebsocket` images as outputs. They arrive as `preview` events of that node.
+- UI outputs typed per class. `/object_info` doesn't describe them, so `NodeOutput.ui` stays a raw
+  record beside the typed `files` and `text`.
+- Queue and history browsing, pools, Comfy's hosted API, and partner-node sign-in (the keys can
+  go in `extraData`).
