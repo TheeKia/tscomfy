@@ -1,6 +1,6 @@
 {
   "name": "@tscomfy/codegen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Generates TypeScript node types and the runtime schema module for tscomfy from a ComfyUI server's node definitions, and transpiles workflows to code.",
   "keywords": [
     "codegen",

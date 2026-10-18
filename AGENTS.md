@@ -15,7 +15,7 @@ GUIs, MCP servers. Don't add these.
 **Status:** all phases (0–9 in `docs/plan.md` §14) are done: the normalizer and schema model,
 the type emitter, the builder and API export, the CLI (`generate`, `check`, `transpile`),
 validation, API import and the transpiler, bypass, mute and graph operations, the UI format and
-`@tscomfy/layout`, and the polish phase (guides, examples, API reports, packaging). 0.1.1 is
+`@tscomfy/layout`, and the polish phase (guides, examples, API reports, packaging). 0.1.2 is
 published on npm. New work starts from a decision in the plan and its ADR.
 
 ## Where things are
