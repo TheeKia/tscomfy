@@ -157,7 +157,8 @@ workflow(local, ({ n, raw }) => {
 });
 ```
 
-Its inputs are wire keys, sent as given: no defaults, no flattening. Only an output reference
+Its inputs are wire keys, sent as given: no defaults, no flattening (one exception: a widget whose
+link a bypass or mute resolves to nothing sends its default, as on any node). Only an output reference
 (`.output(slot)`, or a node's result) makes a link, as everywhere; a list is a value, sent
 wrapped as `{"__value__": [...]}` (so `["1", 0]` is not a link). `output(slot)` is an `Out<"*">`,
 which fits any input. Validation still checks raw nodes against the schema, so an

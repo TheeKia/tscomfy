@@ -76,14 +76,20 @@ jobs:
           name: packages
           path: ${{ runner.temp }}/release
 
-      # A version already on npm is skipped, so a release that failed halfway can be re-run.
+      # A version already on npm is skipped, so a release that failed halfway can be re-run. A
+      # prerelease (`v0.2.0-rc.1`) goes out as `next`, so `latest` stays the last release; npm 12
+      # refuses one without a tag.
       - name: Publish
         run: |
           version="${GITHUB_REF_NAME#v}"
+          case "$version" in
+            *-*) tag=next ;;
+            *) tag=latest ;;
+          esac
           for name in $PACKAGES; do
             if npm view "@tscomfy/$name@$version" version > /dev/null 2>&1; then
               echo "@tscomfy/$name@$version is already published"
             else
-              npm publish "$RUNNER_TEMP/release/tscomfy-$name-$version.tgz"
+              npm publish --tag "$tag" "$RUNNER_TEMP/release/tscomfy-$name-$version.tgz"
             fi
           done

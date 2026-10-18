@@ -379,6 +379,22 @@ describe("slots as the frontend has them", () => {
     ]);
   });
 
+  test("gives a raw node's widget its value too when its link resolves to nothing", () => {
+    // The frontend's node has the widget, holding that value. And the transpiler writes a node
+    // the types can't express as raw, which must export as the node did.
+    const typed = workflow(schema, ({ n }) => {
+      const muted = n["Pass"]!({}, { id: "m", mode: "mute" });
+      n["Seeded"]?.({ seed: muted[0]! }, { id: "s" });
+    });
+    const rawNode = workflow(schema, ({ n, raw }) => {
+      const muted = n["Pass"]!({}, { id: "m", mode: "mute" });
+      raw("Seeded", { seed: muted[0]! }, { id: "s" });
+    });
+    const prompt = exportApi(typed, { validate: false }).prompt;
+    expect(prompt["s"]?.inputs).toEqual({ seed: 7 });
+    expect(exportApi(rawNode, { validate: false }).prompt).toEqual(prompt);
+  });
+
   test("sends no default for a widget the frontend never sends when its link resolves to nothing", () => {
     const { prompt, diagnostics } = exportApi(
       workflow(schema, ({ n }) => {
