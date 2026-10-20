@@ -9,8 +9,11 @@ export function nodeIdOf(node: NodeRef): NodeId {
   return node.id;
 }
 
-/** A node's UI output read leniently: anything unrecognized stays in `ui` only. */
-export function readNodeOutput(node: NodeId, ui: JsonObject): NodeOutput {
+/**
+ * A run's UI output read leniently: anything unrecognized stays in `ui` only. `node` is the node
+ * the run is displayed as, `id` the server's id for the run.
+ */
+export function readNodeOutput(node: NodeId, id: string, ui: JsonObject): NodeOutput {
   const flags = ui["animated"];
   const animated = isList(flags) && flags.includes(true);
   const files: OutputFile[] = [];
@@ -27,24 +30,31 @@ export function readNodeOutput(node: NodeId, ui: JsonObject): NodeOutput {
     : [];
   return Object.freeze({
     node,
+    id,
     files: Object.freeze(files),
     text: Object.freeze(text),
     ui: deepFreeze(ui),
   });
 }
 
-/** Builds the outputs map, in the order of `order` (the prompt's node order), unknown ids last. */
-export function outputsInOrder(
-  outputs: ReadonlyMap<NodeId, NodeOutput>,
-  order: readonly NodeId[],
-): Outputs {
+/**
+ * Builds the outputs map from runs in the order they ran: grouped by node, the nodes in the order
+ * of `order` (the prompt's node order), unknown ids last.
+ */
+export function outputsInOrder(runs: Iterable<NodeOutput>, order: readonly NodeId[]): Outputs {
+  const byNode = new Map<NodeId, NodeOutput[]>();
+  for (const run of runs) {
+    const known = byNode.get(run.node);
+    if (known === undefined) byNode.set(run.node, [run]);
+    else known.push(run);
+  }
   const position = new Map(order.map((id, index) => [id, index]));
-  const sorted = [...outputs.values()].toSorted(
-    (a, b) =>
-      (position.get(a.node) ?? Number.MAX_SAFE_INTEGER) -
-      (position.get(b.node) ?? Number.MAX_SAFE_INTEGER),
+  // Stable: unknown ids keep the order they ran in.
+  const sorted = [...byNode].toSorted(
+    ([a], [b]) =>
+      (position.get(a) ?? Number.MAX_SAFE_INTEGER) - (position.get(b) ?? Number.MAX_SAFE_INTEGER),
   );
-  return new FrozenMap(sorted.map((output) => [output.node, output]));
+  return new FrozenMap(sorted.map(([node, list]) => [node, Object.freeze(list)]));
 }
 
 /** A map nobody can change: what `outcome.outputs` is. */

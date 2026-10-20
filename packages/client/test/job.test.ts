@@ -6,6 +6,7 @@ import {
   type JobEvent,
   type Outcome,
   outputFiles,
+  outputsOf,
   submit,
 } from "@tscomfy/client";
 import {
@@ -168,6 +169,45 @@ describe("a successful run", () => {
     expect([...outcome.outputs.keys()]).toEqual(["3", "4"]);
   });
 
+  test("a loop keeps every run: nodes in prompt order, each node's runs in the order they ran", async () => {
+    const run = runOf(await trace("loop"));
+    const prompt = await promptOf("loop");
+    fake.expect(run);
+    const job = submit(comfy, prompt);
+    const events = await collect(job.events);
+    const outcome = expectStatus(await job.outcome, "success");
+
+    expect([...outcome.outputs.keys()]).toEqual(["shown", "preview"]);
+    expect(outputsOf(outcome, "preview").map((output) => [output.node, output.id])).toEqual([
+      ["preview", "start.0.0.0_preview"],
+      ["preview", "start.0.0.1_preview"],
+      ["preview", "start.0.0.2_preview"],
+    ]);
+    expect(outputFiles(outcome).map((file) => file.filename)).toEqual([
+      "ComfyUI_temp_xxruu_00001_.png",
+      "ComfyUI_temp_kvond_00001_.png",
+      "ComfyUI_temp_uymei_00001_.png",
+      "ComfyUI_temp_yxlkm_00001_.png",
+    ]);
+    expect(events.filter((event) => event.type === "output").map((event) => event.node)).toEqual([
+      "shown",
+      "preview",
+      "preview",
+      "preview",
+    ]);
+    // Each copy's progress once per change, under the node it is displayed as: the copies don't
+    // undo each other's.
+    const progress = (node: string): string[] =>
+      events.flatMap((event) =>
+        event.type === "progress" && event.node === node
+          ? [`${String(event.value)}/${String(event.max)}`]
+          : [],
+      );
+    expect(progress("preview")).toEqual(["0/1", "1/1", "0/1", "1/1", "0/1", "1/1"]);
+    // `start` and the seven nodes it expands into (iteration_<i>, progress_<i>, result).
+    expect(progress("start")).toHaveLength(16);
+  });
+
   test("events that arrive before the answer to the POST are kept", async () => {
     const run = runOf(await trace("success"));
     const prompt = await promptOf("success");
@@ -225,7 +265,9 @@ describe("previews and progress", () => {
       80, 78, 71,
     ]);
     const outcome = expectStatus(await job.outcome, "success");
-    expect(outcome.outputs.get("3")?.text).toEqual(["tensor([[[[0.2000, 0.4000, 0.8000]]]])"]);
+    expect(outputsOf(outcome, "3").map((output) => output.text)).toEqual([
+      ["tensor([[[[0.2000, 0.4000, 0.8000]]]])"],
+    ]);
   });
 
   test("a real sampler run: step progress and a latent preview per step", async () => {

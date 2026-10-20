@@ -179,7 +179,9 @@ describe("servers that answer oddly", () => {
     ]);
     if (outcome.status === "rejected") throw new Error();
     expect(Reflect.get(outcome.outputs, "set")).toBeUndefined();
-    expect(Object.isFrozen(outcome.outputs.get("4")?.ui)).toBeTrue();
-    expect(Object.isFrozen(outcome.outputs.get("4")?.ui["images"])).toBeTrue();
+    const [output] = outcome.outputs.get("4") ?? [];
+    expect(Object.isFrozen(outcome.outputs.get("4"))).toBeTrue();
+    expect(Object.isFrozen(output?.ui)).toBeTrue();
+    expect(Object.isFrozen(output?.ui["images"])).toBeTrue();
   });
 });

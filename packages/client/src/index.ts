@@ -47,7 +47,7 @@ export {
   type NodeRef,
   type OutputFile,
   outputFiles,
-  outputOf,
   type Outputs,
+  outputsOf,
 } from "./outputs.ts";
 export type { Server } from "./server.ts";

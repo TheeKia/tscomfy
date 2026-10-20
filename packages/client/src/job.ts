@@ -162,10 +162,12 @@ class JobRun implements JobListener {
   readonly #signal: AbortSignal | undefined;
   readonly #events = new EventQueue();
   readonly #diagnostics: Diagnostic[] = [];
-  readonly #outputs = new Map<NodeId, NodeOutput>();
+  /** The runs' outputs seen live, by the server's node id, in the order they ran. */
+  readonly #outputs = new Map<string, NodeOutput>();
   /** The node a server node id is displayed as (they differ for nodes expanded at run time). */
   readonly #display = new Map<string, NodeId>();
-  readonly #progress = new Map<NodeId, string>();
+  /** The last progress sent, by the server's node id: copies of one node progress apart. */
+  readonly #progress = new Map<string, string>();
   readonly #accepted: Promise<boolean>;
   #accept: (accepted: boolean) => void = () => undefined;
   #resolve: (outcome: Outcome) => void = () => undefined;
@@ -345,13 +347,19 @@ class JobRun implements JobListener {
     for (const [key, entry] of Object.entries(nodes)) {
       if (!isObject(entry)) continue;
       const { value, max } = entry;
-      const display = entry["display_node_id"] ?? entry["node_id"] ?? key;
-      if (typeof value !== "number" || typeof max !== "number" || typeof display !== "string") {
+      const id = entry["node_id"] ?? key;
+      const display = entry["display_node_id"] ?? id;
+      if (
+        typeof value !== "number" ||
+        typeof max !== "number" ||
+        typeof id !== "string" ||
+        typeof display !== "string"
+      ) {
         continue;
       }
       const seen = `${String(value)}/${String(max)}`;
-      if (this.#progress.get(display) === seen) continue;
-      this.#progress.set(display, seen);
+      if (this.#progress.get(id) === seen) continue;
+      this.#progress.set(id, seen);
       this.#events.push({ type: "progress", node: display, value, max });
     }
   }
@@ -363,8 +371,8 @@ class JobRun implements JobListener {
     this.#display.set(node, display);
     // A cached node without UI output reports `null`.
     if (!isObject(data["output"])) return;
-    const output = readNodeOutput(display, data["output"]);
-    this.#outputs.set(display, output);
+    const output = readNodeOutput(display, node, data["output"]);
+    this.#outputs.set(node, output);
     this.#events.push({ type: "output", node: display, output });
   }
 
@@ -464,26 +472,25 @@ class JobRun implements JobListener {
   }
 
   /**
-   * The record's outputs, by the nodes they are displayed as, in prompt order. A node whose
-   * output the client saw live keeps that one: the record rewrites some entries (any string
-   * with a 3D file extension becomes a file, `text` included), the live output is as the node
-   * reported it.
+   * The record's outputs, by the nodes they are displayed as, in prompt order. The record lists
+   * each run under the server's id, in the order they ran. A run whose output the client saw
+   * live keeps that one: the record rewrites some entries (any string with a 3D file extension
+   * becomes a file, `text` included), the live output is as the node reported it.
    */
   #recordOutputs(record: JsonObject): Outputs {
-    const outputs = new Map<NodeId, NodeOutput>();
+    const runs: NodeOutput[] = [];
     const recorded = record["outputs"];
     if (isObject(recorded)) {
       for (const [id, ui] of Object.entries(recorded)) {
         if (!isObject(ui)) continue;
-        const node = this.#display.get(id) ?? id;
-        outputs.set(node, this.#outputs.get(node) ?? readNodeOutput(node, ui));
+        runs.push(this.#outputs.get(id) ?? readNodeOutput(this.#display.get(id) ?? id, id, ui));
       }
     }
-    return outputsInOrder(outputs, this.#order);
+    return outputsInOrder(runs, this.#order);
   }
 
   #liveOutputs(): Outputs {
-    return outputsInOrder(this.#outputs, this.#order);
+    return outputsInOrder(this.#outputs.values(), this.#order);
   }
 
   #settle(outcome: Outcome): void {

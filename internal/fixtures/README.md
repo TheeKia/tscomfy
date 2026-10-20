@@ -68,9 +68,9 @@ Each file holds runs: the prompt, the answer to `POST /prompt`, the websocket ev
 and the job record (`GET /api/jobs/{id}`) at the end. `PROMPT_ID`
 stands for the prompt id the client chose; binary frames are `{ "binary": 4, "metadata", "image" }`
 (base64) or `{ "binary": 3, "node", "text" }`. They are distilled from captures of ComfyUI 0.41.0
-(`scripts/capture.ts`, into `corpus/protocol/`): tracebacks cut to two frames, the server's
-paths and model names generalized, image bytes replaced by a tiny image. Adding a file
-means adding its name to `MOCK_PROTOCOL_NAMES`; a test enforces this.
+(`loop.json`: 0.42.0) (`scripts/capture.ts`, into `corpus/protocol/`): tracebacks cut to two
+frames, the server's paths and model names generalized, image bytes replaced by a tiny image.
+Adding a file means adding its name to `MOCK_PROTOCOL_NAMES`; a test enforces this.
 
 | File | Covers |
 |---|---|
@@ -80,6 +80,7 @@ means adding its name to `MOCK_PROTOCOL_NAMES`; a test enforces this.
 | `partial.json` | A 200 with `node_errors`: one output refused, the other run |
 | `error.json` | A node raising after an output ran: `execution_error`, a failed record with that output |
 | `cancel.json` | A running job cancelled: `execution_interrupted`, a cancelled record |
+| `loop.json` | A loop (`StartLoop`, 3 iterations) after a preview outside it: each copy of the body runs and reports under its own id, displayed as the body's node; the record lists every copy |
 | `pending.json` | A job cancelled while queued: no event, then a 404 record |
 | `sampler.json` | A real sampler run (captured with a model, its name generalized): six latent previews as type-4 JPEG frames, step progress, a 2⁶⁴−1 seed echoed exactly |
 | `blocked.json` | Hand-written from the source, since no core node does it without a model or a partner account: progress text (type 3) and a blocked node |

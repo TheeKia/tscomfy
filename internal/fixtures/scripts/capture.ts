@@ -160,6 +160,31 @@ const SCENARIOS: Record<string, (session: Session) => Promise<void>> = {
     await record(session, id);
     await waitForRecord(session, id);
   },
+  /**
+   * A loop: the server runs a copy of the body per iteration, each with its own id, displayed as
+   * the body's node. A preview outside the loop comes first in the prompt.
+   */
+  async loop(session) {
+    // A fresh size, so no copy is cached from an earlier run.
+    const width = 8 + Math.floor(Math.random() * 56);
+    await run(session, {
+      single: image(width, 8),
+      shown: { class_type: "PreviewImage", inputs: { images: ["single", 0] } },
+      start: {
+        class_type: "StartLoop",
+        inputs: { mode: "simple", "mode.num_iterations": 3, cache_iterations: false },
+      },
+      img: {
+        class_type: "EmptyImage",
+        inputs: { width, height: 8, batch_size: 1, color: ["start", 0] },
+      },
+      preview: { class_type: "PreviewImage", inputs: { images: ["img", 0] } },
+      end: {
+        class_type: "EndLoop",
+        inputs: { accumulate: false, "terminations.termination0": ["preview", 0] },
+      },
+    });
+  },
   /** Latent previews from a sampler; needs a checkpoint (pass --ckpt <name>). */
   async sampler(session) {
     const ckptFlag = args.indexOf("--ckpt");

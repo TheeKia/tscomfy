@@ -1273,6 +1273,7 @@ Checked from 2026-10-17 to 2026-10-18 with Bun 1.4.3, Node 26.11.1, TS 7.0.2 and
 | Client packaging (D23) | `test:pack`: the client tarball installs offline, its declarations type-check in a consumer with `lib: ["es2024", "dom"]` and `skipLibCheck: false`, and the consumer runs a workflow on the fake server under Node 26.11.1 and Bun 1.4.3 (`client success 8 run_00001_.png image/png`). The public declarations name no internal module (`docs/api/client.md`) |
 | Phase 10 review | An independent review found 10 bugs, each reproduced, all fixed with tests (`lifecycle.test.ts`, `parts.test.ts`): `close()` while the socket was down or reopening still posted the prompt and left a socket open; concurrent submits after a drop opened several sockets with one client id; reconnect backoff, poll chains (one more per reconnect) and record-read retries kept timers that outlived `close()` by up to 30 s (a subprocess test now checks the process exits at once); progress text was coalesced and coalescing reordered events; a second `next()` before the first settled was lost; a 200 with a non-JSON body made the job uncancellable; `connect` checked for 0.6, not 0.26. Also from it: `supports_progress_text_metadata` announced, a 404 after start is a `ClientError`, live outputs win over the record's, outputs frozen, and `Server.fetch` typed as a call (a wrapper failed against Bun's `typeof fetch`) |
 | Sampler capture (§17) | `capture.ts sampler` on ComfyUI 0.41.0 with a local SD checkpoint, 6 steps at 512², `preview_method: latent2rgb`: per step a `progress_state`, then a type-4 JPEG preview (36–47 KB, 512 px), then `progress`, as the hand-written mock had it; the 2⁶⁴−1 seed was accepted and echoed exactly in the history. It replaced the hand-written `sampler.json`; the blocked node and progress text stay hand-written (`blocked.json`) |
+| Loops (§17.4, 2026-10-20) | ComfyUI 0.42.0's core `StartLoop` runs a copy of the loop body per iteration, under ids such as `start.0.0.1_preview` displayed as the body's node (`comfy_extras/nodes_loop.py`, `set_override_display_id`). `capture.ts loop` (3 iterations, a preview outside the loop first): an `executed` per copy, and a record listing each copy's output under its own id, in execution order (`/history` has the display ids in `meta`; `/api/jobs` doesn't). The client kept one output per displayed node, the last: 2 of 4 files. It also deduplicated progress by display id, so the copies undid each other's: 44 `progress` events for `start` where its 8 server nodes make 16. Both fixed: outputs hold every run (`outputsOf`), progress is tracked per server node; `loop.json` is the mock |
 | Release 0.2.0 (2026-10-18) | `@tscomfy/client` 0.1.2 published by hand so its trusted publisher could be set up, then deprecated (it needs core's handles and codes, which 0.1.2 lacks); 0.2.0 of all five packages released from CI (`v0.2.0`) |
 | Live reliability tests (2026-10-19) | `test:live` grew to 18 tests (about 13 s), all on ComfyUI 0.41.0, model-free. **Reconnects:** a clean close mid-run; a network cut through a TCP proxy (`TcpProxy` in fixtures) that the server sees at once; and one it notices two seconds late, followed by another job on the same connection. That last case hung the next job until its timeout, reproducing the deaf socket of ADR-0024 §7. Fixed with a fresh client id per socket and a 30 s poll of every open job; now it passes. **Output kinds:** animated WEBP and PNG (`image`, animated), MP4 with audio and WEBM (`video`, listed under `images`, 64×48 measured), FLAC and previewed audio (`audio`), each downloaded with the right MIME type and signature (`RIFF…WEBP` with `ANIM`, PNG with `acTL`, `ftyp`, EBML, `fLaC`). **Browser:** headless Chromium on another origin, against a server started with `--enable-cors-header`: core normalizes `/object_info` and builds the workflow; the client runs it with events and a decodable preview; `fetchFile`, `fileUrl` in an `<img>` and `uploadFile` all work. **Soak:** 40 jobs on one connection through the proxy (successes, node errors, rejections, long jobs, cancels while queued and running, aborts), with two cuts, one noticed late. Every outcome is what was asked and agrees with the server's record; aborted jobs are cancelled on the server; the process exits at once after `close()` |
 
@@ -1365,8 +1366,9 @@ await comfy.close();
   **`fileUrl(server, file)`** returns the `/view` URL, for `<img src>` on a page the server
   allows (same origin, or `--enable-cors-header`).
 - **`outputFiles(outcome, ...nodes)`** returns the output files of the given nodes, or of every
-  output node when none is given, in prompt order. **`outputOf(outcome, node)`** returns one
-  node's `NodeOutput`. A `NodeRef` is a `NodeId`, a `NodeHandle` or an `Out`. Taking all three
+  output node when none is given, in prompt order, with each node's files from every run.
+  **`outputsOf(outcome, node)`** returns one node's runs, each a `NodeOutput`. A `NodeRef` is a
+  `NodeId`, a `NodeHandle` or an `Out`. Taking all three
   matters: a node with outputs gives its builder an `Out`, not a handle, and on 0.41 `SaveImage`
   has an `IMAGE` output.
 
@@ -1387,7 +1389,8 @@ The guide documents `--enable-cors-header <origin>` and a same-origin proxy (res
 | `blocked` | `execution_error` of type `ExecutionBlocked` | `node`, `message` |
 
 - **Node ids** are display ids, which equal the builder's ids for tscomfy prompts (research
-  §3.2).
+  §3.2). A loop's copies report as the node they copy. Progress is tracked per server node, so
+  copies shown as one node don't undo each other's.
 - **One consumer.** The iterable has one consumer; a second iteration is a `TypeError`.
 - **Buffering.** Events are buffered from `submit`. When the consumer lags, only the latest
   preview and progress per node are kept, so memory stays bounded.
@@ -1404,8 +1407,12 @@ type Outcome =
   | { status: "cancelled"; outputs: Outputs; diagnostics: readonly Diagnostic[] };
 ```
 
-- **`Outputs`** is a `ReadonlyMap<NodeId, NodeOutput>` in prompt order.
-  - `NodeOutput` is `{ node, files, text, ui }`; `ui` keeps the raw record, read with core's lossless
+- **`Outputs`** is a `ReadonlyMap<NodeId, readonly NodeOutput[]>` in prompt order: each node's
+  runs, in the order they ran. A node runs more than once when the server expands it at run time:
+  core's `StartLoop` (0.42) runs a copy of the loop body per iteration, each under its own id
+  (research §3.2).
+  - `NodeOutput` is `{ node, id, files, text, ui }`. `id` is the server's id for the run, which
+    is `node` unless the node was expanded. `ui` keeps the raw record, read with core's lossless
     `parse`.
   - `OutputFile` is `{ filename, subfolder, type, kind, animated, key, width?, height? }`.
   - `kind` is `image`, `video`, `audio`, `3d` or `file`, decided by the server's `metadata.kind`,
@@ -1442,9 +1449,12 @@ type Outcome =
      started, a 404 means the server lost the record (a restart), and the outcome rejects with a
      `ClientError`, since nothing says how the job ended.
 
-   Outputs come from the record, except a node's output the client saw live, which wins: the
-   record rewrites some entries (research §5). `outputs` is a read-only map and every `ui` record
-   is deep-frozen.
+   Outputs come from the record, except a run's output the client saw live, which wins: the
+   record rewrites some entries (research §5). The record lists runs by the server's id, in the
+   order they ran. The node a copy is displayed as comes from its `executed` event, since
+   `/api/jobs` carries no display ids. A copy the client never saw (its events went to a
+   dropped socket) is listed under the server's id. `outputs` is a read-only map, its lists are
+   frozen, and every `ui` record is deep-frozen.
 5. **Reading the record at other times.**
    - On queue changes while the job hasn't started, at most once a second; a change inside the
      second is read at its end, not dropped.

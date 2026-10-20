@@ -10,7 +10,7 @@ import {
   fetchFile,
   type Outcome,
   outputFiles,
-  outputOf,
+  outputsOf,
   submit,
   uploadFile,
 } from "@tscomfy/client";
@@ -76,7 +76,9 @@ describe("against a real server", () => {
     });
     const outcome = await submit(comfy, built).outcome;
     if (outcome.status !== "success") throw new Error(outcome.status);
-    expect(outputOf(outcome, built.handles.shown)?.text).toEqual([big.toString()]);
+    expect(outputsOf(outcome, built.handles.shown).map((run) => run.text)).toEqual([
+      [big.toString()],
+    ]);
   });
 
   test("SaveImageWebsocket's image arrives as a preview of its node", async () => {

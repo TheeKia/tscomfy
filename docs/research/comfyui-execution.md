@@ -160,6 +160,14 @@ Failures:
 - **Other events:** `progress_state` and preview metadata carry `display_node_id`;
   `execution_error` and `execution_interrupted` carry the original node id. `progress.node` may be
   ephemeral.
+- **Loops:** core's `StartLoop` (0.42) runs a copy of the loop body per iteration, under ids such
+  as `start.0.0.1_preview`, each displayed as the body's node (`set_override_display_id`,
+  comfy_extras/nodes_loop.py:41-45). Its own steps run as ephemeral nodes displayed as `start`
+  (`start.0.0.iteration_<i>`, `progress_<i>`, `result`). Every copy sends its own `executing`,
+  `executed` and `progress_state` entry, and the record lists each copy's output under its own
+  id, in execution order (execution.py:829-836). So one displayed node can report several
+  outputs, and a `progress_state` can hold several entries for it at different values.
+  **[captured]** on 0.42.0: `capture.ts loop`, `mocks/protocol/loop.json`.
 - **tscomfy prompts:** these are flat, so `display_node` is the builder's node id; graph ids equal
   prompt ids (plan §7.3).
 

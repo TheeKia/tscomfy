@@ -58,12 +58,16 @@ The build function can return the nodes you care about; they come back as `wf.ha
 |---|---|
 | `outputFiles(outcome, wf.handles.save)` | The files that node produced. Each has a `filename`, `subfolder` and `type` (`output` or `temp`); a `kind` (`image`, `video`, `audio`, `3d` or `file`); `animated`; the `key` it was listed under (`images`, `audio`, …); and, when the server measured it, `width` and `height` |
 | `outputFiles(outcome)` | Every node's files, in prompt order |
-| `outputOf(outcome, node)` | Everything one node reported: `files`, `text` (PreviewAny and other text previews) and the raw `ui` record |
+| `outputsOf(outcome, node)` | Everything one node reported, one entry per run: `files`, `text` (PreviewAny and other text previews) and the raw `ui` record |
 | `fetchFile(server, file)` | `{ bytes, mime }` |
 | `fileUrl(server, file)` | A `/view` URL, for `<img src>` on a page the server allows |
 
 Any reference to a node works: its handle, one of its outputs (as on servers where `SaveImage`
 also has an `IMAGE` output), or its id as a string.
+
+A node inside a loop (`StartLoop` … `EndLoop`) runs once per iteration, so it has one run per
+iteration, in the order they ran, and `outputFiles` gives the files of all of them. Each run's
+`id` is the server's id for that copy (`start.0.0.1_preview`); its `node` is your node's id.
 
 Videos come back as files of kind `video`. Core's video nodes list them under `images` with an
 `animated` flag; the client reads the extension and the server's metadata.
@@ -77,7 +81,7 @@ Videos come back as files of kind `video`. Core's video nodes list them under `i
 | `executing` | A node started | `node` |
 | `progress` | A node advanced: sampler steps, say | `node`, `value`, `max` |
 | `preview` | A live preview, or a `SaveImageWebsocket` image | `node`, `mime`, `bytes` |
-| `output` | A node finished and reported files or text | `node`, `output` |
+| `output` | A node finished and reported files or text (once per run in a loop) | `node`, `output` |
 | `text` | Progress text from a running node | `node`, `text` |
 | `blocked` | A node blocked execution; the rest goes on | `node`, `message` |
 

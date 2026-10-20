@@ -31,10 +31,16 @@ export interface OutputFile extends FileRef {
   readonly height?: number;
 }
 
-/** What one node reported when it ran: its files, its text, and the raw record. */
+/** What one run of a node reported: its files, its text, and the raw record. */
 export interface NodeOutput {
   /** The node, by its id in the prompt (the builder's id for tscomfy workflows). */
   readonly node: NodeId;
+  /**
+   * The server's id for this run: {@link NodeOutput.node}, unless the server expanded the node at
+   * run time. A loop runs a copy of its body per iteration, each under its own id
+   * (`start.0.0.1_preview`), and each copy reports output of its own.
+   */
+  readonly id: string;
   /** Every file entry under any key, in the order the node listed them. */
   readonly files: readonly OutputFile[];
   /** The strings under `text` (PreviewAny, text previews). */
@@ -43,27 +49,32 @@ export interface NodeOutput {
   readonly ui: JsonObject;
 }
 
-/** Every node's output, by node id, in prompt order. */
-export type Outputs = ReadonlyMap<NodeId, NodeOutput>;
+/**
+ * Every node's outputs, by node id, in prompt order. A node's runs are in the order they ran: one,
+ * unless a loop ran the node once per iteration.
+ */
+export type Outputs = ReadonlyMap<NodeId, readonly NodeOutput[]>;
 
 /** A node: its id, its handle (`n.SaveImage(…)`), or one of its outputs. */
 export type NodeRef = NodeId | NodeHandle | Out<string>;
 
 /**
- * What a node (by id, handle or output) reported, or `undefined` when it reported nothing, didn't
- * run, or the job was rejected.
+ * What a node (by id, handle or output) reported, one entry per run in the order they ran. Empty
+ * when it reported nothing, didn't run, or the job was rejected.
  */
-export function outputOf(outcome: Outcome, node: NodeRef): NodeOutput | undefined {
-  return outcome.status === "rejected" ? undefined : outcome.outputs.get(nodeIdOf(node));
+export function outputsOf(outcome: Outcome, node: NodeRef): readonly NodeOutput[] {
+  return outcome.status === "rejected" ? [] : (outcome.outputs.get(nodeIdOf(node)) ?? []);
 }
 
 /**
  * The files of the given nodes (by id, handle or output), or of every node when none is given, in
- * prompt order. Empty for a rejected job, which has no outputs.
+ * prompt order; a node's files from every run, in the order they ran. Empty for a rejected job,
+ * which has no outputs.
  */
 export function outputFiles(outcome: Outcome, ...nodes: readonly NodeRef[]): readonly OutputFile[] {
   if (outcome.status === "rejected") return [];
   const outputs = outcome.outputs;
-  if (nodes.length === 0) return [...outputs.values()].flatMap((output) => output.files);
-  return nodes.flatMap((node) => outputs.get(nodeIdOf(node))?.files ?? []);
+  const runs =
+    nodes.length === 0 ? [...outputs.values()] : nodes.map((node) => outputsOf(outcome, node));
+  return runs.flat().flatMap((output) => output.files);
 }

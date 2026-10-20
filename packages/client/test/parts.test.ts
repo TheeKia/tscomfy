@@ -4,15 +4,15 @@ import {
   fetchFile,
   fileUrl,
   outputFiles,
-  outputOf,
+  outputsOf,
   uploadFile,
 } from "@tscomfy/client";
-import { workflow } from "@tscomfy/core";
+import { type JsonObject, workflow } from "@tscomfy/core";
 import { FakeServer, readMockObjectInfo } from "@tscomfy/fixtures";
 import { EventQueue } from "../src/event-queue.ts";
 import type { JobEvent } from "../src/events.ts";
 import { decodeFrame } from "../src/frames.ts";
-import { readNodeOutput } from "../src/read-outputs.ts";
+import { outputsInOrder, readNodeOutput } from "../src/read-outputs.ts";
 import { serverDiagnostics } from "../src/server-errors.ts";
 import { randomUuid } from "../src/uuid.ts";
 import { looseSchema } from "./loose.ts";
@@ -84,6 +84,11 @@ describe("binary frames", () => {
   });
 });
 
+/** A UI output listing one image. */
+const imageOutput = (filename: string, type: "output" | "temp"): JsonObject => ({
+  images: [{ filename, subfolder: "", type }],
+});
+
 const names = (files: readonly { readonly filename: string }[]): string[] =>
   files.map((file) => file.filename);
 
@@ -96,7 +101,7 @@ const progress = (node: string, value: number): JobEvent => ({
 
 describe("outputs", () => {
   test("files are found under any key, their kind by metadata, extension or key", () => {
-    const output = readNodeOutput("9", {
+    const output = readNodeOutput("9", "9", {
       images: [
         {
           filename: "a.png",
@@ -132,7 +137,7 @@ describe("outputs", () => {
   });
 
   test("entries that aren't files are skipped", () => {
-    const output = readNodeOutput("1", {
+    const output = readNodeOutput("1", "1", {
       images: [
         { filename: "", subfolder: "", type: "output" },
         { filename: "x.png", subfolder: "", type: "elsewhere" },
@@ -143,32 +148,36 @@ describe("outputs", () => {
     expect(output.files.map((file) => [file.filename, file.subfolder])).toEqual([["y.png", ""]]);
   });
 
-  test("outputFiles looks nodes up by id, handle or output reference", async () => {
+  test("outputFiles and outputsOf look nodes up by id, handle or output reference", async () => {
     const schema = looseSchema(await readMockObjectInfo("basic-pipeline"));
     const handles = workflow(schema, ({ n }) => {
       const vae = n["VAELoader"]!({ vae_name: "pixel_space" }, { id: "2" });
       const save = n["SaveImage"]!({ images: n["VAEDecode"]!({ vae }, { id: "3" }) }, { id: "1" });
       return { vae, save };
     }).handles;
-    const outputs = new Map([
+    const outputs = outputsInOrder(
       [
-        "1",
-        readNodeOutput("1", { images: [{ filename: "one.png", subfolder: "", type: "output" }] }),
+        readNodeOutput("2", "2", imageOutput("two.png", "temp")),
+        readNodeOutput("1", "loop.0.0.0_1", imageOutput("one-a.png", "output")),
+        readNodeOutput("1", "loop.0.0.1_1", imageOutput("one-b.png", "output")),
       ],
-      [
-        "2",
-        readNodeOutput("2", { images: [{ filename: "two.png", subfolder: "", type: "temp" }] }),
-      ],
-    ]);
+      ["1", "2", "3"],
+    );
     const outcome = { status: "success", outputs, diagnostics: [] } as const;
-    expect(names(outputFiles(outcome, handles.save))).toEqual(["one.png"]);
+    expect([...outputs.keys()]).toEqual(["1", "2"]);
+    expect(names(outputFiles(outcome, handles.save))).toEqual(["one-a.png", "one-b.png"]);
     expect(names(outputFiles(outcome, handles.vae))).toEqual(["two.png"]);
-    expect(names(outputFiles(outcome, "2", "1"))).toEqual(["two.png", "one.png"]);
-    expect(names(outputFiles(outcome))).toEqual(["one.png", "two.png"]);
+    expect(names(outputFiles(outcome, "2", "1"))).toEqual(["two.png", "one-a.png", "one-b.png"]);
+    expect(names(outputFiles(outcome))).toEqual(["one-a.png", "one-b.png", "two.png"]);
     expect(outputFiles({ status: "rejected", diagnostics: [] })).toEqual([]);
-    expect(outputOf(outcome, handles.vae)?.node).toBe("2");
-    expect(outputOf(outcome, "3")).toBeUndefined();
-    expect(outputOf({ status: "rejected", diagnostics: [] }, "1")).toBeUndefined();
+    expect(outputsOf(outcome, handles.save).map((run) => [run.node, run.id])).toEqual([
+      ["1", "loop.0.0.0_1"],
+      ["1", "loop.0.0.1_1"],
+    ]);
+    expect(outputsOf(outcome, handles.vae).map((run) => run.id)).toEqual(["2"]);
+    expect(outputsOf(outcome, "3")).toEqual([]);
+    expect(outputsOf({ status: "rejected", diagnostics: [] }, "1")).toEqual([]);
+    expect(Object.isFrozen(outputs.get("1"))).toBeTrue();
   });
 });
 

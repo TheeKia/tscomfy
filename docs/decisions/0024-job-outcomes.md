@@ -1,6 +1,7 @@
 # ADR-0024: The job record decides the outcome; events are a view
 
-Status: accepted, 2026-10-18; updated 2026-10-19 (a fresh client id per socket, and a slow poll)
+Status: accepted, 2026-10-18; updated 2026-10-19 (a fresh client id per socket, and a slow poll);
+updated 2026-10-20 (outputs per run)
 
 ## Context
 
@@ -50,6 +51,11 @@ issue trackers of the surveyed clients are full of both (docs/research/comfyui-e
 
    Every outcome carries `diagnostics`. A 200 that still reports node errors (partial acceptance)
    puts them there, since those outputs will never arrive.
+
+   Outputs are kept per run, by the node they are displayed as: `ReadonlyMap<NodeId, readonly
+   NodeOutput[]>`. A node the server expands at run time, such as a loop's body (one copy per
+   iteration), runs several times under ids of its own, and each run reports its own files.
+   Keying by the displayed node alone kept only the last run's.
 5. **The caller's abort rejects.** Aborting the `AbortSignal` passed when queueing cancels the
    job on the server and rejects the outcome with `signal.reason`, as `fetch` does. `job.cancel()`
    asks the server to cancel; the outcome then settles from the record, normally as `cancelled`
@@ -98,3 +104,4 @@ docs/research/comfyui-execution.md:
 - §3.1 gives the event order and the blocked-node case (execution.py:525-541).
 - §6 covers the job record and cancel (comfy_execution/jobs.py, execution.py:1377-1416).
 - The same-id reconnect hazard was reproduced against the local server (§1, fact 5).
+- §3.2 covers loops; `capture.ts loop` recorded a loop's copies on ComfyUI 0.42.0 (plan §16).

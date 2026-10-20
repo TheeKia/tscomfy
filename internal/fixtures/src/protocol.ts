@@ -10,6 +10,7 @@ export const MOCK_PROTOCOL_NAMES = [
   "blocked",
   "cancel",
   "error",
+  "loop",
   "partial",
   "pending",
   "rejected",
