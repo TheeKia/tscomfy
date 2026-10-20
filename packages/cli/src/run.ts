@@ -4,7 +4,7 @@ import { CliError, type Io } from "./io.ts";
 import { TRANSPILE_USAGE, transpileCommand } from "./transpile.ts";
 
 /** The CLI's version. A test keeps it equal to package.json. */
-export const CLI_VERSION = "0.2.1";
+export const CLI_VERSION = "0.3.0";
 
 /** `tscomfy --help`. */
 const USAGE = `Usage: tscomfy <command> [options]

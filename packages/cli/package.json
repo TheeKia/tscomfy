@@ -1,6 +1,6 @@
 {
   "name": "@tscomfy/cli",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "The tscomfy command: generate types from a ComfyUI server, check them for drift, and transpile API prompts and UI workflows to code.",
   "keywords": [
     "cli",

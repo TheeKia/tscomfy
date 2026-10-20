@@ -24,7 +24,7 @@ export { transpile, transpileNameProblem, type TranspileOptions, type TranspileR
 ```ts
 import { type Diagnostic, type Schema } from "@tscomfy/core";
 /** The version written into generated headers. A test keeps it equal to package.json. */
-export declare const CODEGEN_VERSION = "0.2.1";
+export declare const CODEGEN_VERSION = "0.3.0";
 /** A file to write, as data: codegen never touches the filesystem. */
 export interface GeneratedFile {
     /** Relative to the output directory. */
